@@ -1,0 +1,15 @@
+type: object
+properties:
+  id:
+    type: string
+    readOnly: true
+  name:
+    type: string
+  streets:
+    type: array
+    items:
+      type: string
+  startDate:
+    type: date
+  endDate:
+    type: date

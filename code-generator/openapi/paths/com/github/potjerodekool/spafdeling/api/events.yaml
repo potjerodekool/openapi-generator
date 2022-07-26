@@ -1,0 +1,43 @@
+openapi: 3.0.2
+paths:
+  /events:
+    get:
+      summary: Returns a list of events.
+      description: List of events.
+      operationId: 'getEvents'
+      parameters:
+        - in: query
+          name: year
+          schema:
+            type: integer
+            format: int32
+          required: true
+          description: year
+        - in: query
+          name: month
+          schema:
+            type: integer
+            format: int32
+          required: true
+          description: year
+      responses:
+        '200':    # status code
+          description: A JSON array of events
+          content:
+            application/json:
+              schema:
+                $ref: '../../../../../../schemas/com/github/potjerodekool/spafdeling/api/model/eventsResponse.yml'
+  /events/ofDay:
+    get:
+      parameters:
+        - in: query
+          name: date
+          schema:
+            type: date
+          required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '../../../../../../schemas/com/github/potjerodekool/spafdeling/api/model/eventListResponse.yml'

@@ -1,0 +1,11 @@
+openapi: "3.0.2"
+paths:
+  /departments:
+    get:
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '../../../../../../schemas/com/github/potjerodekool/spafdeling/api/model/departmentListResponse.yml'

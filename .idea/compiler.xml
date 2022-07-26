@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <annotationProcessing>
+      <profile default="true" name="Default" enabled="true" />
+      <profile name="Maven default annotation processors profile" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <module name="mapper-generator" />
+        <module name="maven-plugin" />
+      </profile>
+      <profile name="Annotation profile for openapi-generator-parent" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processor name="org.checkerframework.checker.nullness.NullnessChecker" />
+        <processor name="org.checkerframework.checker.regex.RegexChecker" />
+        <processor name="org.checkerframework.checker.formatter.FormatterChecker" />
+        <processor name="org.checkerframework.framework.util.PurityChecker" />
+        <processorPath useClasspath="false">
+          <entry name="$MAVEN_REPOSITORY$/org/checkerframework/checker/3.22.2/checker-3.22.2.jar" />
+          <entry name="$MAVEN_REPOSITORY$/org/checkerframework/checker-qual/3.22.2/checker-qual-3.22.2.jar" />
+          <entry name="$MAVEN_REPOSITORY$/org/checkerframework/checker-util/3.22.2/checker-util-3.22.2.jar" />
+        </processorPath>
+        <module name="code-generator" />
+      </profile>
+    </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="code-generator" target="17" />
+      <module name="mapper-generator" target="17" />
+      <module name="maven-plugin" target="17" />
+      <module name="openapi-generator" target="17" />
+      <module name="openapi-generator-parent" target="1.5" />
+    </bytecodeTargetLevel>
+  </component>
+  <component name="JavacSettings">
+    <option name="ADDITIONAL_OPTIONS_OVERRIDE">
+      <module name="code-generator" options="-J--add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED -J--add-exports=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED -J--add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED -J--add-exports=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED -J--add-exports=jdk.compiler/com.sun.tools.javac.model=ALL-UNNAMED -J--add-exports=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED -J--add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED -J--add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED -J--add-opens=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED" />
+    </option>
+  </component>
+</project>
