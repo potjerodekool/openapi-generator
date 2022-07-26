@@ -11,9 +11,30 @@
 
     <artifactId>code-generator</artifactId>
     <packaging>jar</packaging>
-    <name>${project.artifactId}</name>
+    <name>${project.groupId}:${project.artifactId}</name>
     <description>Open api code generator for Springboot</description>
-    <url>https://github.com/potjerodekool/openapi</url>
+    <url>https://github.com/potjerodekool/openapi-generator</url>
+
+    <licenses>
+        <license>
+            <name>The Apache License, Version 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <name>Evert Tigchelaar</name>
+            <email>everttigchelaar@gmail.com</email>
+            <organizationUrl>https://github.com/potjerodekool</organizationUrl>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:git://github.com/potjerodekool/openapi-generator.git</connection>
+        <developerConnection>scm:git:ssh://github.com:potjerodekool/openapi-generator.git</developerConnection>
+        <url>http://github.com/potjerodekool/openapi-generator/tree/master</url>
+    </scm>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -203,11 +224,11 @@
                 <artifactId>maven-install-plugin</artifactId>
                 <version>3.0.1</version>
                 <configuration>
-                    <file>C:\projects\openapi-generator\code-generator\target\code-generator-1.0-SNAPSHOT.jar</file>
+                    <file>${project.build.directory}\${project.artifactId}-${project.version}.jar</file>
                     <groupId>${project.groupId}</groupId>
                     <artifactId>${project.artifactId}</artifactId>
                     <version>${project.version}</version>
-                    <packaging>jar</packaging>
+                    <packaging>${project.packaging}</packaging>
                     <createChecksum>true</createChecksum>
                 </configuration>
                 <executions>
@@ -219,7 +240,6 @@
                     </execution>
                 </executions>
             </plugin>
-
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-gpg-plugin</artifactId>

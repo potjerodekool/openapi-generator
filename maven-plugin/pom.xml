@@ -10,6 +10,30 @@
     <modelVersion>4.0.0</modelVersion>
     <packaging>maven-plugin</packaging>
     <artifactId>open-api-maven-plugin</artifactId>
+    <name>${project.groupId}:${project.artifactId}</name>
+    <description>Open api code generator for Springboot</description>
+    <url>https://github.com/potjerodekool/openapi-generator</url>
+
+    <licenses>
+        <license>
+            <name>The Apache License, Version 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <name>Evert Tigchelaar</name>
+            <email>everttigchelaar@gmail.com</email>
+            <organizationUrl>https://github.com/potjerodekool</organizationUrl>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:git://github.com/potjerodekool/openapi-generator.git</connection>
+        <developerConnection>scm:git:ssh://github.com:potjerodekool/openapi-generator.git</developerConnection>
+        <url>http://github.com/potjerodekool/openapi-generator/tree/master</url>
+    </scm>
 
     <properties>
         <java.version>17</java.version>
@@ -87,6 +111,45 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
                 <version>3.4.0</version>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-install-plugin</artifactId>
+                <version>3.0.1</version>
+                <configuration>
+                    <file>${project.build.directory}\${project.artifactId}-${project.version}.jar</file>
+                    <groupId>${project.groupId}</groupId>
+                    <artifactId>${project.artifactId}</artifactId>
+                    <version>${project.version}</version>
+                    <packaging>${project.packaging}</packaging>
+                    <createChecksum>true</createChecksum>
+                </configuration>
+                <executions>
+                    <execution>
+                        <phase>install</phase>
+                        <goals>
+                            <goal>install-file</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-gpg-plugin</artifactId>
+                <version>3.0.1</version>
+                <configuration>
+                    <keyname>${gpg.keyname}</keyname>
+                    <passphraseServerId>${gpg.keyname}</passphraseServerId>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>sign-artifacts</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>sign</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
