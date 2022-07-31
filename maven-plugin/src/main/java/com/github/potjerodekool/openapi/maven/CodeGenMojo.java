@@ -42,12 +42,6 @@ public class CodeGenMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project.build.directory}/generated-sources", required = true)
     private File generatedSourceDirectory;
 
-    @Parameter(property = "model-package")
-    private String modelPackage;
-
-    @Parameter(property = "api-package")
-    private String apiPackageName;
-
     @Parameter(property = "openApiFile", required = true)
     private String openApiFile;
 
@@ -57,10 +51,10 @@ public class CodeGenMojo extends AbstractMojo {
     @Parameter(property = "generateModels", defaultValue = "true")
     private boolean generateModels;
 
-    @Parameter(property = "generateApiDefintions", defaultValue = "true")
-    private boolean generateApiDefintions;
+    @Parameter(property = "generateApiDefinitions", defaultValue = "true")
+    private boolean generateApiDefinitions;
 
-    @Parameter(property = "generateApiImplementations", defaultValue = "true")
+    @Parameter(property = "generateApiImplementations", defaultValue = "false")
     private boolean generateApiImplementations;
 
     @Parameter(property = "jakarta.servlet")
@@ -74,17 +68,7 @@ public class CodeGenMojo extends AbstractMojo {
 
     @Override
     public void execute() {
-        getLog().info("compile artifacts " + project.getCompileArtifacts().size());
-
-        project.getCompileArtifacts().forEach(artifact -> {
-            getLog().info("artifact" + artifact);
-        });
-
-        getLog().info("dependencies " + project.getDependencies().size());
-
-        project.getDependencies().forEach(dependency -> {
-            getLog().info("dependency" + dependency);
-        });
+        getLog().info("CodeGenMojo");
 
         if (openApiFile.isEmpty()) {
             getLog().warn(""" 
@@ -100,32 +84,35 @@ public class CodeGenMojo extends AbstractMojo {
 
         LoggerFactory.setLoggerProvider(this::getLogger);
 
-        final var hasCheckerDependency = hasDependency("org.checkerframework", "checker-qual");
+
 
         final var config = new OpenApiGeneratorConfig(
                 new File(openApiFile),
                 generatedSourceDirectory
         );
 
-        config.setAddCheckerAnnotations(hasCheckerDependency);
+        final var hasCheckerDependency = hasDependency("org.checkerframework", "checker-qual");
+
         config.setConfigPackageName(configPackageName);
-        config.setGenerateApiDefinitions(generateApiDefintions);
+        config.setGenerateApiDefinitions(generateApiDefinitions);
         config.setGenerateApiImplementations(generateApiImplementations);
         config.setGenerateModels(generateModels);
-
-        if (jakartaServlet != null) {
-            config.setUseJakartaServlet(Boolean.TRUE.equals(jakartaServlet));
-        } else {
-            config.setUseJakartaServlet(hasDependency("jakarta.servlet", "jakarta.servlet-api"));
-        }
-
-        if (jakartaValidation != null) {
-            config.setUseJakartaValidation(Boolean.TRUE.equals(jakartaValidation));
-        } else {
-            config.setUseJakartaValidation(hasDependency("jakarta.validation", "jakarta.validation-api"));
-        }
+        config.setAddCheckerAnnotations(hasCheckerDependency);
+        config.setUseJakartaServlet(
+                enableFeature(jakartaServlet, "jakarta.servlet", "jakarta.servlet-api"));
+        config.setUseJakartaValidation(
+                enableFeature(jakartaValidation, "jakarta.validation", "jakarta.validation-api")
+        );
 
         new Generator().generate(config);
+    }
+
+    private boolean enableFeature(final Boolean value,
+                                  final String groupId,
+                                  final String artifact) {
+        return value != null
+                ? value
+                : hasDependency(groupId, artifact);
     }
 
     private boolean hasDependency(final String groupId,
@@ -135,85 +122,6 @@ public class CodeGenMojo extends AbstractMojo {
                         && artifactId.equals(dependency.getArtifactId()));
     }
 
-    /*
-    private List<String> resolveDependencies() throws DependencyGraphBuilderException {
-        final var dependencies = new ArrayList<String>();
-
-        final var buildingRequest = new DefaultProjectBuildingRequest(new DefaultProjectBuildingRequest());
-        buildingRequest.setRepositorySession(repoSession);
-        buildingRequest.setProject(project);
-
-        final var artifactFilter = new ScopeArtifactFilter("compile");
-
-        final var rootNode = dependencyGraphBuilder.buildDependencyGraph( buildingRequest, artifactFilter);
-
-        rootNode.getChildren().forEach( child ->
-                visitChild(child, dependencies)
-        );
-
-        return dependencies;
-    }
-
-    private void visitChild(final DependencyNode node, final List<String> dependencies) {
-        final var artifactRequest = createArtifactRequest(
-                node.getArtifact().getGroupId(),
-                node.getArtifact().getArtifactId(),
-                node.getArtifact().getType(),
-                node.getArtifact().getVersion()
-        );
-
-        final var artifact = resolveArtifact(artifactRequest);
-
-        if (artifact.getFile() != null) {
-            dependencies.add(artifact.getFile().getAbsolutePath());
-        }
-
-        node.getChildren().forEach( child ->
-                visitChild(child, dependencies)
-        );
-    }
-
-    private ArtifactRequest createArtifactRequest(final String groupId,
-                                                  final String artifactId,
-                                                  final String type,
-                                                  final String version) {
-        return new ArtifactRequest(
-                new DefaultArtifact(
-                        groupId,
-                        artifactId,
-                        type,
-                        version
-                ),
-                List.of(),
-                null
-        );
-    }
-
-    private @Nullable Artifact resolveArtifact(final ArtifactRequest artifactRequest) {
-        try {
-            final var artifactResults = this.repoSystem.resolveArtifacts(this.repoSession, List.of(artifactRequest));
-            return artifactResults.get(0).getArtifact();
-        } catch (final ArtifactResolutionException e) {
-            //TODO throw exception
-            return null;
-        }
-    }
-
-     */
-
-/*
-    private fun parseDynamicModels(): List<String> {
-        val dModels = dynamicModels
-
-        if (dModels == null) {
-            return emptyList()
-        } else {
-            return dModels.replace("\r", "")
-                    .split("\n")
-                    .toList()
-        }
-    }
-*/
     private Logger getLogger(final String name) {
         return new MavenLogger(this, name);
     }

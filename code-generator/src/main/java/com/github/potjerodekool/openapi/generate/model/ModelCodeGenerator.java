@@ -8,14 +8,10 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.stmt.BlockStmt;
-import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.Type;
-import com.github.potjerodekool.openapi.Filer;
-import com.github.potjerodekool.openapi.HttpMethod;
-import com.github.potjerodekool.openapi.OpenApiGeneratorConfig;
-import com.github.potjerodekool.openapi.RequestCycleLocation;
+import com.github.potjerodekool.openapi.*;
 import com.github.potjerodekool.openapi.generate.CodeGenerator;
 import com.github.potjerodekool.openapi.generate.GenerateHelper;
 import com.github.potjerodekool.openapi.generate.JavaTypes;
@@ -31,13 +27,14 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 import static com.github.javaparser.ast.NodeList.nodeList;
 import static com.github.potjerodekool.openapi.generate.GenerateHelper.createAnnotation;
 import static com.github.potjerodekool.openapi.generate.GenerateHelper.getDefaultValue;
 
 public class ModelCodeGenerator implements CodeGenerator {
+
+    private static final Logger LOGGER = Logger.getLogger(ModelCodeGenerator.class.getName());
 
     private final Types types = new JavaTypes();
     private final OpenApiGeneratorConfig config;
@@ -135,17 +132,22 @@ public class ModelCodeGenerator implements CodeGenerator {
 
             final var clazz = cu.addClass(name);
 
-            ot.properties().forEach((propertyName, property) -> addField(propertyName, property, clazz, httpMethod));
+            ot.properties().forEach((propertyName, property) -> addField(propertyName, property, clazz, httpMethod, requestCycleLocation));
 
-            generateConstructors(ot, clazz, httpMethod);
+            generateConstructors(ot, clazz, httpMethod, requestCycleLocation);
 
-            ot.properties().forEach((propertyName, property) -> {
-                addGetter(propertyName, property, clazz, httpMethod, requestCycleLocation);
+            ot.properties()
+                    .forEach((propertyName, property) -> {
+                        if (property.readOnly() && requestCycleLocation == RequestCycleLocation.REQUEST) {
+                            return;
+                        }
 
-                if (!hasFinalField(clazz, propertyName)) {
-                    addSetter(propertyName, property, clazz, false, httpMethod);
-                    addSetter(propertyName, property, clazz, true, httpMethod);
-                }
+                        addGetter(propertyName, property, clazz, httpMethod, requestCycleLocation);
+
+                        if (!hasFinalField(clazz, propertyName)) {
+                            addSetter(propertyName, property, clazz, false, httpMethod);
+                            addSetter(propertyName, property, clazz, true, httpMethod);
+                        }
             });
 
             try {
@@ -176,13 +178,17 @@ public class ModelCodeGenerator implements CodeGenerator {
 
     private void generateConstructors(final OpenApiObjectType ot,
                                       final ClassOrInterfaceDeclaration clazz,
-                                      final HttpMethod httpMethod) {
+                                      final HttpMethod httpMethod, RequestCycleLocation requestCycleLocation) {
         final var constructor = clazz.addConstructor(Modifier.Keyword.PUBLIC);
 
         final var initPropertyNames = new HashSet<String>();
 
         ot.properties().forEach((propertyName, property) -> {
             final var isFieldFinal = hasFinalField(clazz, propertyName);
+
+            if (property.readOnly() && requestCycleLocation == RequestCycleLocation.REQUEST) {
+                return;
+            }
 
             if (property.required() || isFieldFinal) {
                 final var paramType = types.createType(property.type(), property.nullable());
@@ -221,7 +227,11 @@ public class ModelCodeGenerator implements CodeGenerator {
     private void addField(final String propertyName,
                           final OpenApiProperty property,
                           final ClassOrInterfaceDeclaration clazz,
-                          final HttpMethod httpMethod) {
+                          final HttpMethod httpMethod, RequestCycleLocation requestCycleLocation) {
+        if (property.readOnly() && requestCycleLocation == RequestCycleLocation.REQUEST) {
+            return;
+        }
+
         final var propertyType = property.type();
         var fieldType = types.createType(propertyType, property.nullable());
 
@@ -315,25 +325,28 @@ public class ModelCodeGenerator implements CodeGenerator {
         final var isPrimitiveType = returnType.isPrimitiveType();
         final var isListType = GenerateHelper.isListType(returnType);
 
+        final var returnTypeAnnotations = new NodeList<AnnotationExpr>();
+
         if (httpMethod == HttpMethod.PATCH) {
             returnType = types.createType("org.openapitools.jackson.nullable.JsonNullable")
                     .setTypeArguments(returnType);
         }
 
-        if (!property.required() && config.isAddCheckerAnnotations() && httpMethod != HttpMethod.PATCH) {
-            returnType.setAnnotations(
-                    nodeList(
-                            new MarkerAnnotationExpr(new Name("org.checkerframework.checker.nullness.qual.Nullable"))
-                    )
-            );
+        if (!returnType.isPrimitiveType() &&
+                !property.required() && config.isAddCheckerAnnotations() && httpMethod != HttpMethod.PATCH) {
+            returnTypeAnnotations.add(new MarkerAnnotationExpr(new Name("org.checkerframework.checker.nullness.qual.Nullable")));
         }
 
         if (!property.nullable() && !isPrimitiveType && !isListType) {
-            method.addAnnotation(notNullAnnotationClassName);
+            returnTypeAnnotations.add(new MarkerAnnotationExpr(notNullAnnotationClassName));
         }
 
         if (requestCycleLocation == RequestCycleLocation.REQUEST && property.type().format() != null) {
             method.addAnnotation(validAnnotationClassName);
+        }
+
+        if (!returnTypeAnnotations.isEmpty()) {
+            returnType.setAnnotations(returnTypeAnnotations);
         }
 
         method.setType(returnType);
@@ -397,20 +410,6 @@ public class ModelCodeGenerator implements CodeGenerator {
             body.addStatement(new ReturnStmt(new ThisExpr()));
             method.setType(types.createType(clazz.getName().toString()));
         }
-
-        if (config.isAddCheckerAnnotations()) {
-
-
-            /*
-            method.addAnnotation(
-                    new SingleMemberAnnotationExpr(
-                            new Name("SuppressWarnings"),
-                            new StringLiteralExpr("nullness")
-                    )
-            );
-            */
-        }
-
 
         method.setBody(body);
     }

@@ -10,3 +10,5 @@ properties:
     type: date-time
   end:
     type: date-time
+required:
+  - id

@@ -4,21 +4,20 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Modifier;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
-import com.github.javaparser.ast.expr.FieldAccessExpr;
-import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.NameExpr;
-import com.github.javaparser.ast.stmt.BlockStmt;
-import com.github.javaparser.ast.stmt.ReturnStmt;
-import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.*;
+import com.github.javaparser.ast.stmt.*;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.potjerodekool.openapi.*;
 import com.github.potjerodekool.openapi.generate.GenerateHelper;
 import com.github.potjerodekool.openapi.generate.JavaTypes;
 import com.github.potjerodekool.openapi.generate.Types;
 import com.github.potjerodekool.openapi.tree.*;
+import com.github.potjerodekool.openapi.type.OpenApiStandardType;
 import com.github.potjerodekool.openapi.util.GenerateException;
 import com.github.potjerodekool.openapi.util.Utils;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.File;
 import java.io.IOException;
@@ -45,8 +44,14 @@ public class SpringApiImplementationGenerator extends AbstractSpringGenerator {
 
     @Override
     public void generate(final OpenApi api) {
-        api.paths().forEach(this::processPath);
+        final var paths = api.paths();
+        paths.forEach(this::processPath);
         generateCode();
+
+        if (!paths.isEmpty()) {
+            generateApiUtils(api.paths().get(0));
+        }
+
     }
 
     private void generateCode() {
@@ -70,8 +75,8 @@ public class SpringApiImplementationGenerator extends AbstractSpringGenerator {
         final var packageName = packageNameAndName.first();
         final var name = packageNameAndName.second();
         final var apiName = Utils.firstUpper(name) + "Api";
-
         final var implName = Utils.firstUpper(name) + "Impl";
+        final var delegatename = Utils.firstUpper(name) + "Delegate";
         final var qualifiedImplName = packageName + "." + implName;
 
         final var cu = this.compilationUnitMap.computeIfAbsent(qualifiedImplName, (key) -> {
@@ -82,15 +87,31 @@ public class SpringApiImplementationGenerator extends AbstractSpringGenerator {
             }
 
             final var implClass = newCU.addClass(implName);
+            implClass.addImplementedType(apiName);
+            implClass.addMarkerAnnotation("org.springframework.web.bind.annotation.RestController");
+            implClass.addMarkerAnnotation("org.springframework.web.bind.annotation.CrossOrigin");
 
-            try {
+            final var delegateType = new ClassOrInterfaceType().setName(delegatename);
 
-                implClass.addImplementedType(apiName);
-                implClass.addMarkerAnnotation("org.springframework.web.bind.annotation.RestController");
-                implClass.addMarkerAnnotation("org.springframework.web.bind.annotation.CrossOrigin");
-            } catch (Exception e) {
-                throw e;
-            }
+            implClass.addField(
+                    delegateType,
+                    "delegate",
+                    Modifier.Keyword.PRIVATE, Modifier.Keyword.FINAL
+            );
+
+            final var constructor = implClass.addConstructor(Modifier.Keyword.PUBLIC);
+            final var parameter = new Parameter(delegateType, "delegate").addModifier(Modifier.Keyword.FINAL);
+
+            constructor.addParameter(parameter);
+            final var body = new BlockStmt();
+
+            body.addStatement(new AssignExpr(
+                    new FieldAccessExpr(new ThisExpr(), "delegate"),
+                    new NameExpr("delegate"),
+                    AssignExpr.Operator.ASSIGN
+            ));
+
+            constructor.setBody(body);
 
             return newCU;
         });
@@ -104,54 +125,227 @@ public class SpringApiImplementationGenerator extends AbstractSpringGenerator {
         processOperation(HttpMethod.DELETE, openApiPath.path(), openApiPath.delete(), clazz);
     }
 
-    private void processOperation(final HttpMethod httpMethod,
-                                  final String path,
-                                  final @Nullable OpenApiOperation operation,
-                                  final ClassOrInterfaceDeclaration clazz) {
-        if (operation == null) {
-            return;
-        }
-
-        final var operationId = operation.operationId();
-        final var method = clazz.addMethod(operationId, Modifier.Keyword.PUBLIC);
-        createParameters(operation).stream()
-                .map(parameter -> parameter.addModifier(Modifier.Keyword.FINAL))
-                .forEach(method::addParameter);
-
+    @Override
+    protected void postProcessOperation(final HttpMethod httpMethod,
+                                        final String path,
+                                        final OpenApiOperation operation,
+                                        final ClassOrInterfaceDeclaration clazz,
+                                        final MethodDeclaration method) {
+        final var responseType = method.getType();
         final var returnType = types.createType("org.springframework.http.ResponseEntity");
-        final var okResponseOptional = find2XXResponse(operation.responses());
 
-        final var responseType =  okResponseOptional
-                .map(this::getResponseType)
-                .orElseGet(() -> types.createType("java.lang.Void"));
+        returnType.setTypeArguments(
+                responseType.isVoidType()
+                        ? types.createType("java.lang.Void")
+                        : responseType
+        );
 
-        returnType.setTypeArguments(responseType);
         method.setType(returnType);
+        method.addModifier(Modifier.Keyword.PUBLIC);
         method.addMarkerAnnotation("java.lang.Override");
 
+        NodeList<Expression> parameterNames = method.getParameters()
+                .stream()
+                .map(parameter -> new NameExpr(parameter.getNameAsString()))
+                .collect(NodeListCollectors.collector());
+
+        final var delegateCall = new MethodCallExpr(
+                new FieldAccessExpr(
+                        new ThisExpr(),
+                        "delegate"
+                ),
+                method.getName(),
+                parameterNames
+        );
+
+        switch (httpMethod) {
+            case POST -> {
+                if (hasCreateResponseCode(operation.responses())) {
+                    fillBodyForCreated(
+                            operation,
+                            delegateCall,
+                            method
+                    );
+                } else {
+                    fillBodyForPost(
+                            delegateCall,
+                            method
+                    );
+                }
+            }
+            case GET -> {
+                final var body = new BlockStmt();
+                body.addStatement(
+                        new ReturnStmt(
+                                new MethodCallExpr(
+                                        new NameExpr("ResponseEntity"),
+                                        "ok",
+                                        NodeList.nodeList(delegateCall)
+                                )
+                        )
+                );
+                method.setBody(body);
+            }
+            case PUT, PATCH, DELETE -> {
+                final var body = new BlockStmt();
+                body.addStatement(delegateCall);
+                body.addStatement(
+                        new ReturnStmt(
+                                new MethodCallExpr(
+                                        new MethodCallExpr(new NameExpr("ResponseEntity"), "noContent"),
+                                        "build"
+                                )
+                        )
+                );
+                method.setBody(body);
+            }
+        }
+    }
+
+    private void fillBodyForCreated(final OpenApiOperation operation,
+                                    final MethodCallExpr delegateCall,
+                                    final MethodDeclaration methodDeclaration) {
         final var body = new BlockStmt();
-        body.addStatement(new ReturnStmt(
-                new MethodCallExpr(
+
+        /* ResponseEntity.created(
+                            ApiUtils.createLocation(delegate.createSomething(arg, arg2))
+                           ).build();
+                         */
+        final var requestBody = operation.requestBody();
+
+        if (requestBody != null) {
+            final var requestBodyType = Utils.requireNonNull(ApiCodeGeneratorUtils.findJsonMediaType(
+                    requestBody.contentMediaType()
+            ));
+
+            final var idProperty = Utils.requireNonNull(requestBodyType.properties().get("id"));
+            final var idType = idProperty.type();
+
+            final var idVar = new VariableDeclarationExpr(
+                    types.createType(idType, idProperty.nullable()),
+                    "id"
+            );
+
+            idVar.getVariable(0)
+                    .setInitializer(delegateCall);
+
+            body.addStatement(idVar);
+
+            final var returnStmt = new ReturnStmt(
+                    new MethodCallExpr(
+                            new MethodCallExpr(
+                                    new NameExpr("ResponseEntity"),
+                                    "unprocessableEntity"
+                            ),
+                            "build"
+                    )
+            );
+
+            if (idProperty.nullable()) {
+                final var ifStmt = new IfStmt()
+                        .setCondition(
+                                new BinaryExpr(
+                                        new NameExpr("id"),
+                                        new NullLiteralExpr(),
+                                        BinaryExpr.Operator.EQUALS
+                                )
+                        ).setThenStmt(new BlockStmt(NodeList.nodeList(returnStmt)));
+                body.addStatement(ifStmt);
+            } else {
+                if (idType instanceof OpenApiStandardType st) {
+                    if ("integer".equals(st.type())) {
+                        if ("int64".equals(st.format())) {
+                            final var ifStmt = new IfStmt()
+                                    .setCondition(
+                                            new BinaryExpr(
+                                                    new NameExpr("id"),
+                                                    new LongLiteralExpr(),
+                                                    BinaryExpr.Operator.EQUALS
+                                            )
+                                    ).setThenStmt(new BlockStmt(NodeList.nodeList(returnStmt)));
+                            body.addStatement(ifStmt);
+                        } else {
+                            final var ifStmt = new IfStmt()
+                                    .setCondition(
+                                            new BinaryExpr(
+                                                    new NameExpr("id"),
+                                                    new IntegerLiteralExpr(),
+                                                    BinaryExpr.Operator.EQUALS
+                                            )
+                                    ).setThenStmt(new BlockStmt(NodeList.nodeList(returnStmt)));
+                            body.addStatement(ifStmt);
+                        }
+                    }
+                }
+            }
+
+            body.addStatement(
+                    new ReturnStmt(
+                            new MethodCallExpr(
+                                    new MethodCallExpr(
+                                            new NameExpr("ResponseEntity"),
+                                            "created",
+                                            NodeList.nodeList(
+                                                    new MethodCallExpr(
+                                                            new NameExpr("ApiUtils"),
+                                                            "createLocation",
+                                                            NodeList.nodeList(
+                                                                    new NameExpr("request"),
+                                                                    new NameExpr("id")
+                                                            )
+                                                    )
+                                            )
+                                    ),
+                                    "build"
+                            )
+                    )
+            );
+        } else {
+            body.addStatement(new ExpressionStmt(delegateCall));
+            body.addStatement(
+                new ReturnStmt(new MethodCallExpr(
                         new MethodCallExpr(
-                                new NameExpr("org.springframework.http.ResponseEntity"),
+                                new NameExpr("ResponseEntity"),
                                 "status",
-                                new NodeList<>(
+                                NodeList.nodeList(
                                         new FieldAccessExpr(
-                                                new NameExpr("org.springframework.http.HttpStatus"),
-                                                "NOT_IMPLEMENTED"
+                                                new NameExpr("HttpStatus"),
+                                                "CREATED"
                                         )
                                 )
                         ),
                         "build"
+                ))
+            );
+        }
+
+        methodDeclaration.setBody(body);
+    }
+
+    private void fillBodyForPost(final MethodCallExpr delegateCall,
+                                 final MethodDeclaration methodDeclaration) {
+        final var body = new BlockStmt();
+
+        // return ResponseEntity.ok().build()
+
+        body.addStatement(delegateCall);
+        body.addStatement(new ReturnStmt(
+                new MethodCallExpr(
+                        new MethodCallExpr(
+                                new NameExpr("ResponseEntity"),
+                                "ok"
+                        ),
+                        "build"
                 )
         ));
-        method.setBody(body);
+        methodDeclaration.setBody(body);
     }
 
     @Override
     protected Parameter createParameter(final OpenApiParameter openApiParameter) {
         final var parameter = super.createParameter(openApiParameter);
 
+        /*
         final var annotation = requireNonNull(switch (openApiParameter.in()) {
             case QUERY -> {
                 final var members = new HashMap<String, Object>();
@@ -173,8 +367,8 @@ public class SpringApiImplementationGenerator extends AbstractSpringGenerator {
                 final var members = new HashMap<String, Object>();
                 members.put("name", openApiParameter.name());
 
-                if (openApiParameter.required()) {
-                    members.put("required", true);
+                if (!openApiParameter.required()) {
+                    members.put("required", false);
                 }
 
                 yield GenerateHelper.createAnnotation("org.springframework.web.bind.annotation.PathVariable", members);
@@ -182,5 +376,128 @@ public class SpringApiImplementationGenerator extends AbstractSpringGenerator {
         });
 
         return parameter.addAnnotation(annotation);
+         */
+        return parameter;
+    }
+
+    private void generateApiUtils(final OpenApiPath openApiPath) {
+        final var pathUri = this.pathsDir.toURI().toString();
+        final var creatingReference = openApiPath.creatingReference();
+        final var ref = creatingReference.substring(pathUri.length());
+        final var packageNameAndName = Utils.resolvePackageNameAndName(ref);
+        var packageName = packageNameAndName.first();
+
+        //Try to make the package name end with .api
+        if (!packageName.endsWith(".api")) {
+            final var index = packageName.lastIndexOf(".api.");
+            if (index > 0) {
+                packageName = packageName.substring(0, index + 4);
+            }
+        }
+
+        final var cu = new CompilationUnit();
+        cu.setPackageDeclaration(packageName);
+        cu.addImport("java.net.URI");
+
+        final var clazz = cu.addClass("ApiUtils", Modifier.Keyword.PUBLIC, Modifier.Keyword.FINAL);
+        clazz.addConstructor(Modifier.Keyword.PRIVATE);
+
+        final var createLocationMethod = clazz.addMethod("createLocation", Modifier.Keyword.PUBLIC, Modifier.Keyword.STATIC);
+        createLocationMethod.setType(types.createType("java.net.URI"));
+        createLocationMethod.addParameter(
+                new Parameter(
+                        types.createType("javax.servlet.http.HttpServletRequest"),
+                        "request"
+                ).addModifier(Modifier.Keyword.FINAL)
+        );
+        createLocationMethod.addParameter(
+                new Parameter(
+                        types.createType("java.lang.Object"),
+                        "id"
+                ).addModifier(Modifier.Keyword.FINAL)
+        );
+
+        // final StringBuffer location = request.getRequestURL();
+        final var body = new BlockStmt();
+        body.addStatement(
+                new VariableDeclarationExpr(
+                        new VariableDeclarator(
+                                types.createType("java.lang.StringBuffer"),
+                                new SimpleName("locationBuffer"),
+                                new MethodCallExpr(
+                                        new NameExpr("request"),
+                                        "getRequestURL"
+                                )
+                        ),
+                        Modifier.finalModifier()
+                )
+        );
+
+        /* if (location.charAt(location.length() - 1) != '/') {
+              location.append('/');
+           }*/
+        body.addStatement(
+                new IfStmt().setCondition(
+                        new BinaryExpr(
+                                new MethodCallExpr(
+                                        new NameExpr("locationBuffer"),
+                                        "charAt",
+                                        NodeList.nodeList(
+                                                new BinaryExpr(
+                                                        new MethodCallExpr(new NameExpr("locationBuffer"), "length"),
+                                                        new IntegerLiteralExpr("-1"),
+                                                        BinaryExpr.Operator.MINUS
+                                                )
+                                        )
+                                ),
+                                new CharLiteralExpr('/'),
+                                BinaryExpr.Operator.NOT_EQUALS
+                        )
+                ).setThenStmt(
+                        new BlockStmt(
+                                NodeList.nodeList(
+                                        new ExpressionStmt(new MethodCallExpr(
+                                                new NameExpr("locationBuffer"),
+                                                "append",
+                                                NodeList.nodeList(new CharLiteralExpr('/'))
+                                            )
+                                        )
+                                )
+                        )
+                )
+        );
+
+        // return Uri.create(location.append(id).toString())
+        body.addStatement(
+            new ReturnStmt(
+                    new MethodCallExpr(
+                            new NameExpr("URI"),
+                            "create",
+                            NodeList.nodeList(
+                                    new MethodCallExpr(
+                                            new MethodCallExpr(
+                                                    new NameExpr("locationBuffer"),
+                                                    "append",
+                                                    NodeList.nodeList(new NameExpr("id"))
+                                            ),
+                                            "toString"
+                                    )
+                            )
+                    )
+            )
+        );
+
+        createLocationMethod.setBody(body);
+
+        try {
+            filer.write(cu);
+        } catch (final IOException e) {
+            LOGGER.log(LogLevel.SEVERE, "Fail to generate code for ApiUtils", e);
+        }
+    }
+
+    @Override
+    protected boolean shouldAddAnnotationsOnParameters() {
+        return false;
     }
 }

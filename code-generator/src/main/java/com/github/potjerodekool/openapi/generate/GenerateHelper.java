@@ -26,12 +26,8 @@ public final class GenerateHelper {
         return createAnnotation(name, Map.of(memberName, value));
     }
 
-    public static AnnotationExpr createAnnotation(final String name,
+    public static NormalAnnotationExpr createAnnotation(final String name,
                                                   final Map<String, Object> members) {
-        if (members.isEmpty()) {
-            return createAnnotation(name);
-        }
-
         final var pairs = new NodeList<MemberValuePair>();
 
         members.entrySet().stream()
@@ -117,16 +113,6 @@ public final class GenerateHelper {
         } else {
             final var declaredType = (ClassOrInterfaceType) type;
             return declaredType.getNameWithScope().equals("java.util.List");
-        }
-    }
-
-    public static boolean isClassOrInterfaceType(final Type type,
-                                                 final String name) {
-        if (!type.isClassOrInterfaceType()) {
-            return false;
-        } else {
-            final var declaredType = (ClassOrInterfaceType) type;
-            return declaredType.getNameWithScope().equals(name);
         }
     }
 }

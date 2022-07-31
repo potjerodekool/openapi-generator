@@ -4,19 +4,19 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Modifier;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.stmt.BlockStmt;
-import com.github.javaparser.ast.stmt.ReturnStmt;
-import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.ast.stmt.ThrowStmt;
+import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.potjerodekool.openapi.*;
 import com.github.potjerodekool.openapi.generate.GenerateHelper;
 import com.github.potjerodekool.openapi.tree.OpenApi;
+import com.github.potjerodekool.openapi.tree.OpenApiHeader;
 import com.github.potjerodekool.openapi.tree.OpenApiOperation;
 import com.github.potjerodekool.openapi.tree.OpenApiPath;
-import com.github.potjerodekool.openapi.tree.OpenApiResponse;
 import com.github.potjerodekool.openapi.util.MapBuilder;
 import com.github.potjerodekool.openapi.util.Utils;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.File;
 import java.io.IOException;
@@ -24,7 +24,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import static com.github.potjerodekool.openapi.generate.api.ApiCodeGeneratorUtils.find2XXResponse;
 import static com.github.potjerodekool.openapi.util.Utils.requireNonNull;
 
 public class SpringApiDefinitionGenerator extends AbstractSpringGenerator {
@@ -91,20 +90,32 @@ public class SpringApiDefinitionGenerator extends AbstractSpringGenerator {
         return GenerateHelper.createAnnotation("io.swagger.annotations.ApiOperation", members);
     }
 
-    private AnnotationExpr createApiResponsesAnnotation(final OpenApiOperation operation) {
+    private NormalAnnotationExpr createApiResponsesAnnotation(final OpenApiOperation operation) {
         final var responses = operation.responses().entrySet().stream()
+                .filter(it -> !"default".equals(it.getKey()))
                         .map(entry -> {
                             final var response = entry.getValue();
                             final var type = getResponseType(response);
                             final var message = response.description();
 
+                            final var mapBuilder = new MapBuilder<String, Object>()
+                                    .entry("code", Integer.parseInt(entry.getKey()))
+                                    .entry("message", message != null ? message : "");
+
+                            if (!type.isVoidType()) {
+                                mapBuilder.entry("response", new ClassExpr(type));
+                            }
+
+                            final var headersMap = response.headers();
+
+                            if (headersMap.size() > 0) {
+                                final var responseHeaders = headers(headersMap);
+                                mapBuilder.entry("responseHeaders", responseHeaders);
+                            }
+
                             return GenerateHelper.createAnnotation(
                                     "io.swagger.annotations.ApiResponse",
-                                    new MapBuilder<String, Object>()
-                                            .entry("code", Integer.parseInt(entry.getKey()))
-                                            .entry("message", message != null ? message : "")
-                                            .entry("response", new ClassExpr(type))
-                                            .build()
+                                    mapBuilder.build()
                             );
                         })
                 .toList();
@@ -114,6 +125,33 @@ public class SpringApiDefinitionGenerator extends AbstractSpringGenerator {
                         "value", GenerateHelper.createArrayInitializerExpr(responses)
                 ));
     }
+
+    private ArrayInitializerExpr headers(final Map<String, OpenApiHeader> headersMap) {
+        final NodeList<Expression> headers =  headersMap.entrySet().stream()
+                        .map(entry -> {
+                            final var header = entry.getValue();
+                            final var type = entry.getValue().type();
+
+                            final var headerType =
+                                    types.createType(
+                                            entry.getValue().type(),
+                                            true
+                                    );
+
+                            return GenerateHelper.createAnnotation(
+                                    "ResponseHeader",
+                                    Map.of(
+                                            "name", entry.getKey(),
+                                            "response", new ClassExpr(headerType)
+                                    )
+                            );
+                        }).collect(NodeListCollectors.collector());
+
+        return new ArrayInitializerExpr(
+                headers
+        );
+    }
+
 
     private AnnotationExpr createMappingAnnotation(final HttpMethod httpMethod,
                                                    final String path,
@@ -153,61 +191,71 @@ public class SpringApiDefinitionGenerator extends AbstractSpringGenerator {
         );
     }
 
-    private void processOperation(final HttpMethod httpMethod,
-                                  final String path,
-                                  final @Nullable OpenApiOperation operation,
-                                  final ClassOrInterfaceDeclaration clazz) {
-        if (operation == null) {
-            return;
-        }
+    @Override
+    protected void postProcessOperation(final HttpMethod httpMethod,
+                                        final String path,
+                                        final OpenApiOperation operation,
+                                        final ClassOrInterfaceDeclaration clazz,
+                                        final MethodDeclaration method) {
+        final var responseType = method.getType();
+        final var returnType = types.createType("org.springframework.http.ResponseEntity");
+
+        returnType.setTypeArguments(
+                responseType.isVoidType()
+                        ? types.createType("java.lang.Void")
+                        : responseType
+        );
+
+        method.setType(returnType);
+        method.addModifier(Modifier.Keyword.DEFAULT);
 
         final var summary = operation.summary();
         final var operationId = operation.operationId();
         final var tags = GenerateHelper.createArrayInitializerExpr(operation.tags());
 
-        if (operationId == null || "".equals(operationId)) {
-            throw new IllegalArgumentException();
-        }
-
-        final var method = clazz.addMethod(operationId, Modifier.Keyword.DEFAULT);
-        createParameters(operation)
-                .forEach(method::addParameter);
-
-        final var returnType = types.createType("org.springframework.http.ResponseEntity");
-        final var okResponseOptional = find2XXResponse(operation.responses());
-
-        final var responseType =  okResponseOptional
-                .map(this::getResponseType)
-                .orElseGet(() -> types.createType("java.lang.Void"));
-
-        returnType.setTypeArguments(responseType);
-        method.setType(returnType);
-
         method.addAnnotation(createApiOperationAnnotation(new MapBuilder<String, Object>()
-            .entry("value", summary != null ? summary : "")
-            .entry("nickname", operationId)
-            .entry("tags", tags)
-            .build()
+                .entry("value", summary != null ? summary : "")
+                .entry("nickname", operationId)
+                .entry("tags", tags)
+                .build()
         ));
-        method.addAnnotation(createApiResponsesAnnotation(operation));
+
+        final var apiResponsesAnnotation = createApiResponsesAnnotation(operation);
+
+        method.addAnnotation(apiResponsesAnnotation);
         method.addAnnotation(createMappingAnnotation(httpMethod, path, operation));
 
         final var body = new BlockStmt();
-        body.addStatement(new ReturnStmt(
-                new MethodCallExpr(
+
+        clazz.findCompilationUnit().ifPresent(cu -> {
+            cu.addImport("org.springframework.web.client.HttpServerErrorException");
+            cu.addImport("org.springframework.http.HttpStatus");
+            cu.addImport("org.springframework.http.HttpHeaders");
+        });
+
+        body.addStatement(
+                new ThrowStmt(
                         new MethodCallExpr(
-                                new NameExpr("org.springframework.http.ResponseEntity"),
-                                "status",
-                                new NodeList<>(
+                                new NameExpr("HttpServerErrorException"),
+                                "create",
+                                NodeList.nodeList(
                                         new FieldAccessExpr(
-                                                new NameExpr("org.springframework.http.HttpStatus"),
+                                                new NameExpr("HttpStatus"),
                                                 "NOT_IMPLEMENTED"
-                                        )
+                                        ),
+                                        new StringLiteralExpr("not implemented"),
+                                        new ObjectCreationExpr().setType(
+                                                types.createType("HttpHeaders")
+                                        ),
+                                        new ArrayCreationExpr().setElementType(
+                                                PrimitiveType.byteType()
+                                        ),
+                                        new NullLiteralExpr()
                                 )
-                        ),
-                        "build"
+                        )
                 )
-        ));
+        );
+
         method.setBody(body);
     }
 

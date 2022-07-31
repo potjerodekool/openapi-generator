@@ -1,6 +1,7 @@
 package com.github.potjerodekool.openapi.generate;
 
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
+import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import com.github.potjerodekool.openapi.type.OpenApiType;
 

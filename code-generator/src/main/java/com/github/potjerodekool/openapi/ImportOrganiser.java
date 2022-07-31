@@ -250,7 +250,15 @@ public class ImportOrganiser extends GenericVisitorWithDefaults<Object, Object> 
 
     @Override
     public Object visit(final IfStmt n, final Object arg) {
-        return super.visit(n, arg);
+        n.getCondition().accept(this, arg);
+        final var thenStmt = n.getThenStmt();
+
+        if (thenStmt != null) {
+            thenStmt.accept(this, arg);
+        }
+
+        n.getElseStmt().ifPresent(elseStmt -> elseStmt.accept(this, arg));
+        return DEFAULT_RETURN;
     }
 
     @Override
@@ -476,11 +484,20 @@ public class ImportOrganiser extends GenericVisitorWithDefaults<Object, Object> 
 
     @Override
     public Object visit(final VariableDeclarationExpr n, final Object arg) {
+        n.getVariables().forEach(variableDeclarator -> variableDeclarator.accept(this, arg));
         return DEFAULT_RETURN;
     }
 
     @Override
     public Object visit(final VariableDeclarator n, final Object arg) {
+        final var type = n.getType();
+        final var newType = (Type) type.accept(this, arg);
+        if (newType != type) {
+            n.setType(newType);
+        }
+
+        n.getInitializer().ifPresent(initializer -> initializer.accept(this, arg));
+
         return DEFAULT_RETURN;
     }
 

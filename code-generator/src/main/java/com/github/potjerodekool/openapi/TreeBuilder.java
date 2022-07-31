@@ -18,13 +18,13 @@ import java.util.stream.Collectors;
 import static com.github.potjerodekool.openapi.util.Utils.requireNonNull;
 
 public class TreeBuilder {
-
-    private final OpenApiGeneratorConfig config;
     private final File schemaDir;
 
+    private final SchemaBuilder schemaBuilder;
+
     public TreeBuilder(final OpenApiGeneratorConfig config) {
-        this.config = config;
         this.schemaDir = requireNonNull(config.getSchemasDir());
+        this.schemaBuilder = new SchemaBuilder(config);
     }
 
     public OpenApi build(final OpenApi3 openApi,
@@ -135,8 +135,8 @@ public class TreeBuilder {
         return new OpenApiParameter(
                 ParameterLocation.parseIn(parameter.getIn()),
                 parameter.getName(),
-                parameter.isRequired(),
-                !parameter.isRequired() || parameter.isAllowEmptyValue(),
+                parameter.getRequired(),
+                parameter.getAllowEmptyValue(),
                 parameterType,
                 null,
                 parameter.getDescription()
@@ -184,7 +184,8 @@ public class TreeBuilder {
 
         return new OpenApiRequestBody(
                 requestBody.getDescription(),
-                contentMediaType
+                contentMediaType,
+                requestBody.getRequired()
         );
     }
 
@@ -197,9 +198,37 @@ public class TreeBuilder {
                 RequestCycleLocation.RESPONSE,
                 httpMethod);
 
+
+        final var headers = response.getHeaders().entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        it -> createHeader(it.getValue())
+                ));
+
+
         return new OpenApiResponse(
                 response.getDescription(),
-                contentMediaType
+                contentMediaType,
+                headers
+        );
+    }
+
+    private OpenApiHeader createHeader(final Header header) {
+        final var schema = header.getSchema();
+        final var headerType = schemaBuilder.build(
+                schema.getType(),
+                schema.getFormat()
+        );
+
+        return new OpenApiHeader(
+                header.getDescription(),
+                header.getRequired(),
+                header.getDeprecated(),
+                header.getAllowEmptyValue(),
+                header.getStyle(),
+                header.getExplode(),
+                header.getAllowReserved(),
+                headerType
         );
     }
 
@@ -238,7 +267,7 @@ public class TreeBuilder {
         final var createRef = schemaImpl._getCreatingRef();
 
         if (createRef == null) {
-            return new SchemaBuilder(config).build(
+            return schemaBuilder.build(
                     schema.getType(),
                     schema.getFormat()
             );
@@ -252,7 +281,7 @@ public class TreeBuilder {
             throw new GenerateException(refString + " doesn't start with " + absoluteSchemaUri);
         }
 
-        return new SchemaBuilder(config).build(schema, rootDir, schemaContext);
+        return schemaBuilder.build(schema, rootDir, schemaContext);
     }
 
 }

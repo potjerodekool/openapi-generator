@@ -6,7 +6,7 @@ import java.util.Map;
 
 public class MapBuilder<K,V> {
 
-    private List<Map.Entry<K,V>> entries = new ArrayList<>();
+    private final List<Map.Entry<K,V>> entries = new ArrayList<>();
 
     public MapBuilder<K,V> entry(final K key,
                       final V value) {

@@ -7,54 +7,31 @@ import com.github.javaparser.ast.type.Type;
 import com.github.potjerodekool.openapi.type.*;
 import com.github.potjerodekool.openapi.util.Utils;
 
-import java.util.Map;
-
 public class JavaTypes implements Types {
-
-    private static final Map<String, String> TO_PLATFORM_TYPE_MAPPING = Map.of(
-            "string", "java.lang.String",
-            "date-time", "java.time.LocalDateTime",
-            "date", "java.time.LocalDate"
-    );
 
     @Override
     public Type createType(final OpenApiType type,
                            final boolean isNullable) {
         if (type instanceof OpenApiStandardType st) {
-            return switch (st.getStandardTypeEnum()) {
-                case STRING -> createType("java.lang.String");
-                case INTEGER ->
-                        isNullable
-                            ? createType("java.lang.Integer")
-                            : PrimitiveType.intType();
-                case LONG ->
-                        isNullable
+            return switch (st.type()) {
+                case "string" -> createType("java.lang.String");
+                case "integer" -> {
+                    if ("int64".equals(st.format())) {
+                        yield isNullable
                                 ? createType("java.lang.Long")
                                 : PrimitiveType.longType();
-                case DATE -> createType("java.time.LocalDate");
-                case DATE_TIME -> createType("java.time.LocalDateTime");
-            };
-        } else if (type instanceof OpenApiOtherType ot) {
-            final var name = ot.name();
-            final var format = ot.format();
-
-            return switch (name) {
-                case "integer" -> {
-                    final var typeName = "int64".equals(format)
-                            ? "java.lang.Long"
-                            : "java.lang.Integer";
-                    yield createClassOrInterfaceType(typeName);
-                }
-                default -> {
-                    final var platformTypeName = TO_PLATFORM_TYPE_MAPPING.get(name);
-
-                    if (platformTypeName != null) {
-                        yield createClassOrInterfaceType(platformTypeName);
+                    } else {
+                        yield isNullable
+                                ? createType("java.lang.Integer")
+                                : PrimitiveType.intType();
                     }
-
-                    throw new IllegalArgumentException("" + type.name());
                 }
+                case "date" -> createType("java.time.LocalDate");
+                case "date-time" -> createType("java.time.LocalDateTime");
+                default -> throw new UnsupportedOperationException(String.format("unsupported type %s", st.type()));
             };
+        } else if (type instanceof OpenApiOtherType) {
+            throw new IllegalArgumentException("" + type.name());
         } else if (type instanceof OpenApiArrayType at) {
             final var itemsType = createType(at.getItems(), false);
             final var listType = createClassOrInterfaceType("java.util.List");

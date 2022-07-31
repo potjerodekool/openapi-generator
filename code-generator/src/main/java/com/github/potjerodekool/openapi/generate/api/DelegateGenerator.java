@@ -2,23 +2,25 @@ package com.github.potjerodekool.openapi.generate.api;
 
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Modifier;
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.expr.NullLiteralExpr;
-import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.stmt.BlockStmt;
-import com.github.javaparser.ast.stmt.ReturnStmt;
 import com.github.javaparser.ast.stmt.ThrowStmt;
+import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.potjerodekool.openapi.*;
-import com.github.potjerodekool.openapi.generate.GenerateHelper;
 import com.github.potjerodekool.openapi.tree.OpenApi;
 import com.github.potjerodekool.openapi.tree.OpenApiOperation;
 import com.github.potjerodekool.openapi.tree.OpenApiPath;
+import com.github.potjerodekool.openapi.type.OpenApiType;
 import com.github.potjerodekool.openapi.util.Utils;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static com.github.potjerodekool.openapi.util.Utils.requireNonNull;
@@ -82,61 +84,66 @@ public class DelegateGenerator extends AbstractSpringGenerator {
         processOperation(HttpMethod.DELETE, openApiPath.path(), openApiPath.delete(), clazz);
     }
 
-    private void processOperation(final HttpMethod httpMethod,
-                                  final String path,
-                                  final @Nullable OpenApiOperation operation,
-                                  final ClassOrInterfaceDeclaration clazz) {
-        if (operation == null) {
-            return;
+    @Override
+    protected void postProcessOperation(final HttpMethod httpMethod,
+                                        final String path,
+                                        final OpenApiOperation operation,
+                                        final ClassOrInterfaceDeclaration clazz,
+                                        final MethodDeclaration method) {
+        method.addModifier(Modifier.Keyword.DEFAULT);
+        final var body = new BlockStmt();
+
+        clazz.findCompilationUnit().ifPresent(cu -> {
+            cu.addImport("org.springframework.web.client.HttpServerErrorException");
+            cu.addImport("org.springframework.http.HttpStatus");
+            cu.addImport("org.springframework.http.HttpHeaders");
+        });
+
+        body.addStatement(
+                new ThrowStmt(
+                        new MethodCallExpr(
+                                new NameExpr("HttpServerErrorException"),
+                                "create",
+                                NodeList.nodeList(
+                                        new FieldAccessExpr(
+                                                new NameExpr("HttpStatus"),
+                                                "NOT_IMPLEMENTED"
+                                        ),
+                                        new StringLiteralExpr("not implemented"),
+                                        new ObjectCreationExpr().setType(
+                                                types.createType("HttpHeaders")
+                                        ),
+                                        new ArrayCreationExpr().setElementType(
+                                                PrimitiveType.byteType()
+                                        ),
+                                        new NullLiteralExpr()
+                                )
+                        )
+                )
+        );
+
+        method.setBody(body);
+    }
+
+    @Override
+    protected List<OpenApiType> resolveResponseTypes(final HttpMethod httpMethod,
+                                                     final OpenApiOperation operation) {
+        if (httpMethod == HttpMethod.POST) {
+            final var requestBody = operation.requestBody();
+
+            if (requestBody != null) {
+                final var contentMediaType= requestBody.contentMediaType().get("application/json");
+
+                if (contentMediaType != null) {
+                    final var idProperty = contentMediaType.properties().get("id");
+
+                    if (idProperty != null) {
+                        return List.of(idProperty.type());
+                    }
+                }
+            }
         }
 
-        final var operationId = operation.operationId();
-
-        final var method = clazz.addMethod(operationId, Modifier.Keyword.DEFAULT);
-        createParameters(
-                operation
-        ).stream()
-                .map(parameter -> parameter.addModifier(Modifier.Keyword.FINAL))
-                .forEach(method::addParameter);
-
-        final var requestBody = operation.requestBody();
-/*
-        if (httpMethod == HttpMethod.POST
-                && operation.responses().containsKey("201")
-                && requestBody != null) {
-            final var mediaType = ApiCodeGeneratorUtils.findJsonMediaType(
-                    requestBody.contentMediaType());
-
-            if (mediaType != null) {
-                final var idProperty = mediaType.properties().get("id");
-
-                if (idProperty != null) {
-                    final var idType = types.createType(idProperty.type(), idProperty.nullable());
-                    method.setType(idType);
-
-                    final var body = new BlockStmt();
-                    body.addStatement(new ReturnStmt(GenerateHelper.getDefaultValue(idType)));
-                    method.setBody(body);
-                }
-            }
-        } else {
-            */
-            final var okResponseOptional = ApiCodeGeneratorUtils.find2XXResponse(operation.responses());
-
-            if (okResponseOptional.isPresent()) {
-                final var okResponse = okResponseOptional.get();
-                final var mediaType = ApiCodeGeneratorUtils.findJsonMediaType(okResponse.contentMediaType());
-
-                if (mediaType != null) {
-                    final var type = types.createType(mediaType, false);
-                    method.setType(type);
-
-                    final var body = new BlockStmt();
-                    body.addStatement(new ThrowStmt(new ObjectCreationExpr()
-                            .setType(types.createType("java.lang.UnsupportedOperationException"))));
-                    method.setBody(body);
-                }
-            }
-        //}
+        return super.resolveResponseTypes(httpMethod, operation);
     }
 }

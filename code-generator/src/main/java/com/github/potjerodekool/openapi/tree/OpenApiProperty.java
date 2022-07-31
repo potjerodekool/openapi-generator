@@ -4,5 +4,6 @@ import com.github.potjerodekool.openapi.type.OpenApiType;
 
 public record OpenApiProperty(OpenApiType type,
                               boolean required,
-                              boolean nullable) {
+                              boolean nullable,
+                              boolean readOnly) {
 }

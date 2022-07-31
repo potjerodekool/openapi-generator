@@ -17,7 +17,18 @@ public final class ApiCodeGeneratorUtils {
                 .filter(it -> it.getKey().length() == 3 && it.getKey().startsWith("2"))
                 .map(Map.Entry::getValue)
                 .findFirst();
+    }
 
+    public static Optional<OpenApiResponse> findDefaultResponse(final Map<String, OpenApiResponse> responses) {
+        return responses.entrySet().stream()
+                .filter(it -> it.getKey().equals("default"))
+                .map(Map.Entry::getValue)
+                .findFirst();
+    }
+
+    public static boolean hasCreateResponseCode(final Map<String, OpenApiResponse> responses) {
+        return responses.entrySet().stream()
+                .anyMatch(it -> it.getKey().equals("201"));
     }
 
     public static @Nullable OpenApiType findJsonMediaType(final Map<String, OpenApiType> contentMediaType) {

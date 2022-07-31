@@ -27,6 +27,21 @@ paths:
             application/json:
               schema:
                 $ref: '../../../../../../schemas/com/github/potjerodekool/spafdeling/api/model/eventsResponse.yml'
+    post:
+      operationId: 'createEvent'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '../../../../../../schemas/com/github/potjerodekool/spafdeling/api/model/event.yml'
+      responses:
+        '201':
+          description: 'created an event'
+          headers:
+            Location:
+              schema:
+                type: integer
+                format: int64
   /events/ofDay:
     get:
       parameters:

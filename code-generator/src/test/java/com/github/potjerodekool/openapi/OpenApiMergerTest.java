@@ -1,6 +1,5 @@
 package com.github.potjerodekool.openapi;
 
-import com.github.javaparser.StaticJavaParser;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -28,14 +27,7 @@ class OpenApiMergerTest {
 
     @Test
     void merge() {
-        final var code = StaticJavaParser.parse("""
-                public class Test {
-                    char c = 'c';
-                    byte b = 0xa;
-                }                
-                """);
-
-        //final var apiFile = new File("api/spec.yaml");
+        // "petstore/petstore.yaml"
         final var apiFile = new File("openapi/spec.yml");
 
         final var config = new OpenApiGeneratorConfig(

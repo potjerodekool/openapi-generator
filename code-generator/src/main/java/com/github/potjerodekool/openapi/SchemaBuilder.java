@@ -11,6 +11,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.File;
 import java.util.LinkedHashMap;
+import java.util.Map;
 
 import static com.github.potjerodekool.openapi.util.Utils.requireNonNull;
 
@@ -19,11 +20,9 @@ public class SchemaBuilder {
     private static final String SCHEMAS = "schemas";
     private static final String SCHEMAS_SLASH = "schemas/";
 
-    private final OpenApiGeneratorConfig config;
     private final File schemaDir;
 
     public SchemaBuilder(final OpenApiGeneratorConfig config) {
-        this.config = config;
         this.schemaDir = requireNonNull(config.getSchemasDir());
     }
 
@@ -48,7 +47,7 @@ public class SchemaBuilder {
         schema.getProperties().forEach((propertyName, propertySchema) -> {
             final var required = schema.getRequiredFields().contains(propertyName);
             final var propertyType = build(propertySchema, dir, schemaContext);
-            properties.put(propertyName, new OpenApiProperty(propertyType, required, schema.isNullable()));
+            properties.put(propertyName, new OpenApiProperty(propertyType, required, propertySchema.isNullable(), propertySchema.isReadOnly()));
         });
 
         final var additionalProperties = schema.getAdditionalPropertiesSchema();
@@ -58,9 +57,36 @@ public class SchemaBuilder {
                 ? new OpenApiProperty(
                         build(additionalProperties, dir, schemaContext),
                     false,
-                    schema.isNullable()
+                    schema.isNullable(),
+                    schema.isReadOnly()
                   )
                 : null;
+
+        return createType(
+                type,
+                format,
+                schema,
+                properties,
+                openApiAdditionalProperties,
+                schemaContext,
+                dir
+        );
+    }
+
+    private OpenApiType createType(final String type,
+                                   final String format,
+                                   final Schema schema,
+                                   final Map<String, OpenApiProperty> properties,
+                                   final @Nullable OpenApiProperty openApiAdditionalProperties,
+                                   final SchemaContext schemaContext,
+                                   final File dir) {
+
+        if (OpenApiStandardType.isStandardType(type)) {
+            return new OpenApiStandardType(
+                    type,
+                    format
+            );
+        }
 
         return switch (type) {
             case "object" -> postProcessType(
@@ -72,23 +98,13 @@ public class SchemaBuilder {
                 final var items = build(schema.getItemsSchema(), dir, schemaContext);
                 yield new OpenApiArrayType(items);
             }
-            case "string" -> OpenApiStandardType.STRING_TYPE;
             default -> new OpenApiOtherType(type, format, properties, openApiAdditionalProperties);
         };
     }
 
     public OpenApiType build(final String type,
                              final @Nullable String format) {
-        return switch (type) {
-            case "string" -> OpenApiStandardType.STRING_TYPE;
-            case "integer" ->
-                "int64".equals(format)
-                        ? OpenApiStandardType.LONG_TYPE
-                        : OpenApiStandardType.INTEGER_TYPE;
-            case "date" -> OpenApiStandardType.DATE_TYPE;
-            case "date-time" -> OpenApiStandardType.DATE_TIME_TYPE;
-            default -> throw new IllegalArgumentException(type);
-        };
+        return new OpenApiStandardType(type, format);
     }
 
     private OpenApiType postProcessType(final Schema schema,

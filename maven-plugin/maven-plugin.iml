@@ -12,7 +12,7 @@
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
-    <orderEntry type="module" module-name="code-generator" />
+    <orderEntry type="library" name="Maven: com.github.potjerodekool:code-generator:1.0-SNAPSHOT" level="project" />
     <orderEntry type="library" name="Maven: com.github.javaparser:javaparser-core:3.24.2" level="project" />
     <orderEntry type="library" name="Maven: com.reprezen.kaizen:openapi-parser:4.0.4" level="project" />
     <orderEntry type="library" name="Maven: com.reprezen.jsonoverlay:jsonoverlay:4.0.4" level="project" />
