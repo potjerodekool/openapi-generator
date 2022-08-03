@@ -1,7 +1,5 @@
 package com.github.potjerodekool;
 
-import java.util.Map;
-
 public class ObjectMapper {
 
     private final MapperRegistry mapperRegistry;
