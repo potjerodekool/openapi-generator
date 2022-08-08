@@ -11,7 +11,6 @@ import com.github.javaparser.ast.stmt.*;
 import com.github.javaparser.ast.type.*;
 import com.github.javaparser.ast.visitor.GenericVisitorWithDefaults;
 import static io.github.potjerodekool.openapi.util.Utils.asGeneric;
-import static io.github.potjerodekool.openapi.util.Utils.requireNonNull;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -35,6 +34,7 @@ public class ImportOrganiser extends GenericVisitorWithDefaults<Object, Object> 
 
     @Override
     public Object visit(final ClassOrInterfaceDeclaration n, final Object arg) {
+        n.getAnnotations().accept(this, arg);
         n.getMembers().forEach(member -> member.accept(this, arg));
         return DEFAULT_RETURN;
     }

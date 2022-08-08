@@ -30,6 +30,7 @@ public class LoggerFactory {
         return LoggerFactory::devNullLogger;
     }
 
+    @SuppressWarnings("EmptyMethod")
     private static void devNullLogger(final LogLevel level,
                                       final @Nullable String message,
                                       final @Nullable Throwable exception) {

@@ -7,7 +7,7 @@ public record OpenApiStandardType(OpenApiStandardTypeEnum typeEnum,
                                   Boolean nullable) implements OpenApiType {
 
     @Override
-    public @Nullable String name() {
+    public String name() {
         return typeEnum.getTypeName();
     }
 

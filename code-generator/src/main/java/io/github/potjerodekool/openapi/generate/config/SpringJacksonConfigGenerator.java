@@ -12,9 +12,29 @@ import io.github.potjerodekool.openapi.OpenApiGeneratorConfig;
 import io.github.potjerodekool.openapi.generate.Types;
 import io.github.potjerodekool.openapi.tree.OpenApi;
 
+import java.util.List;
+
 public class SpringJacksonConfigGenerator extends AbstractSpringConfigGenerator {
 
     private final DependencyChecker dependencyChecker;
+
+    private final List<JaxsonDependency> dependencies = List.of(
+            new JaxsonDependency(
+                    "com.fasterxml.jackson.module",
+                    "jackson-module-parameter-names",
+                    "com.fasterxml.jackson.module.paramnames.ParameterNamesModule"
+            ),
+            new JaxsonDependency(
+                    "com.fasterxml.jackson.datatype",
+                    "jackson-datatype-jsr310",
+                    "com.fasterxml.jackson.datatype.jsr310.JavaTimeModule"
+            ),
+            new JaxsonDependency(
+                    "com.fasterxml.jackson.datatype",
+                    "jackson-datatype-jdk8",
+                    "com.fasterxml.jackson.datatype.jdk8.Jdk8Module"
+            )
+    );
 
     public SpringJacksonConfigGenerator(final OpenApiGeneratorConfig config,
                                         final Types types,
@@ -32,29 +52,29 @@ public class SpringJacksonConfigGenerator extends AbstractSpringConfigGenerator 
     @Override
     protected void fillClass(final OpenApi api,
                              final ClassOrInterfaceDeclaration clazz) {
+        dependencies.stream()
+                .filter(jaxsonDependency -> dependencyChecker.isDependencyPresent(
+                            jaxsonDependency.groupId(),
+                            jaxsonDependency.artifactId()
+                        )
+                 )
+                .forEach(jaxsonDependency ->
+                        addBeanMethod(clazz, jaxsonDependency.moduleClassName())
+                );
+    }
 
-        if (dependencyChecker.isDependencyPresent(
-                "com.fasterxml.jackson.module",
-                "jackson-module-parameter-names")) {
-            addBeanMethod(clazz, "com.fasterxml.jackson.module.paramnames.ParameterNamesModule");
-        }
-
-        if (dependencyChecker.isDependencyPresent(
-                "com.fasterxml.jackson.datatype",
-                "jackson-datatype-jsr310")) {
-            addBeanMethod(clazz, "com.fasterxml.jackson.datatype.jsr310.JavaTimeModule");
-        }
-
-        if (dependencyChecker.isDependencyPresent(
-                "com.fasterxml.jackson.datatype",
-                "jackson-datatype-jdk8")) {
-            addBeanMethod(clazz, "com.fasterxml.jackson.datatype.jdk8.Jdk8Module");
-        }
+    @Override
+    protected boolean skipGeneration() {
+        return dependencies.stream()
+                .noneMatch(jaxsonDependency -> dependencyChecker.isDependencyPresent(
+                        jaxsonDependency.groupId(),
+                        jaxsonDependency.artifactId()
+                ));
     }
 
     private void addBeanMethod(final ClassOrInterfaceDeclaration clazz,
                                final String moduleClassName) {
-        final var parameterNamesModuleType = types.createType(moduleClassName);
+        final var parameterNamesModuleType = getTypes().createType(moduleClassName);
 
         final var method = clazz.addMethod("parameterNames");
         method.addMarkerAnnotation("org.springframework.context.annotation.Bean");
@@ -69,4 +89,10 @@ public class SpringJacksonConfigGenerator extends AbstractSpringConfigGenerator 
                         .setType(parameterNamesModuleType)))
         ));
     }
+}
+
+record JaxsonDependency(String groupId,
+                        String artifactId,
+                        String moduleClassName) {
+
 }

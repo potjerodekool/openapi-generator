@@ -13,10 +13,6 @@ public final class ClassDeclarationAsserter {
         this.clazz = clazz;
     }
 
-    public static ClassDeclarationAsserter create(final ClassOrInterfaceDeclaration clazz) {
-        return new ClassDeclarationAsserter(clazz);
-    }
-
     public ClassDeclarationAsserter assertField(final String name,
                                                 final Consumer<FieldAsserter> consumer) {
         final var fieldOptional = clazz.getFieldByName(name);

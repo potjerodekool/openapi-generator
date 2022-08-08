@@ -8,6 +8,8 @@ import org.checkerframework.checker.initialization.qual.Initialized;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
@@ -30,17 +32,9 @@ public final class Utils {
         }
     }
 
-    public static <T> List<@NonNull T> requiresNonNullList(final List<T> list) {
-        final @NonNull @Initialized List<@NonNull T> newList = new ArrayList<@NonNull T>();
-
-        list.forEach(item -> {
-            if (item == null) {
-                throw new NullPointerException("List contains null element");
-            }
-            newList.add(item);
-        });
-
-        return newList;
+    public static String getOrDefault(final @Nullable String value,
+                                      final String defaultValue) {
+        return value != null ? value : defaultValue;
     }
 
     public static @Nullable String getCreateRef(final Schema schema) {
@@ -82,5 +76,27 @@ public final class Utils {
 
     public static NodeList<? extends Node> asGeneric(@SuppressWarnings("rawtypes") final NodeList n) {
         return ((NodeList<? extends Node>) n);
+    }
+
+    public static boolean isFalse(final @Nullable Boolean value) {
+        if (value == null) {
+            return false;
+        }
+        return Boolean.FALSE.equals(value);
+    }
+
+    public static boolean isTrue(final @Nullable Boolean value) {
+        if (value == null) {
+            return false;
+        }
+        return Boolean.TRUE.equals(value);
+    }
+
+    public static String toUriString(final File file) {
+        try {
+            return file.getCanonicalFile().toURI().toString();
+        } catch (final IOException e) {
+            throw new GenerateException(e);
+        }
     }
 }

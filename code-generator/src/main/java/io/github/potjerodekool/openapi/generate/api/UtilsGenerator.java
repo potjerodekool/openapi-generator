@@ -40,7 +40,7 @@ public class UtilsGenerator {
 
     public void generate(final OpenApi api) {
         final var openApiPath = api.paths().get(0);
-        final var pathUri = this.pathsDir.toURI().toString();
+        final var pathUri = Utils.toUriString(this.pathsDir);
         final var creatingReference = openApiPath.creatingReference();
         final var ref = creatingReference.substring(pathUri.length());
         final var qualifiedName = Utils.resolveQualified(ref);
@@ -92,9 +92,6 @@ public class UtilsGenerator {
                 )
         );
 
-        /* if (location.charAt(location.length() - 1) != '/') {
-              location.append('/');
-           }*/
         body.addStatement(
                 new IfStmt().setCondition(
                         new BinaryExpr(
@@ -104,7 +101,7 @@ public class UtilsGenerator {
                                         NodeList.nodeList(
                                                 new BinaryExpr(
                                                         new MethodCallExpr(new NameExpr("locationBuffer"), "length"),
-                                                        new IntegerLiteralExpr("-1"),
+                                                        new IntegerLiteralExpr("1"),
                                                         BinaryExpr.Operator.MINUS
                                                 )
                                         )

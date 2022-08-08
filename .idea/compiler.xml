@@ -8,6 +8,7 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name="mapper-generator" />
+        <module name="demo" />
         <module name="maven-plugin" />
       </profile>
       <profile name="Annotation profile for openapi-generator-parent" enabled="true">
@@ -27,16 +28,13 @@
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
-      <module name="code-generator" target="17" />
-      <module name="mapper-generator" target="17" />
-      <module name="maven-plugin" target="17" />
       <module name="openapi-generator" target="17" />
-      <module name="openapi-generator-parent" target="1.5" />
     </bytecodeTargetLevel>
   </component>
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
       <module name="code-generator" options="-J--add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED -J--add-exports=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED -J--add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED -J--add-exports=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED -J--add-exports=jdk.compiler/com.sun.tools.javac.model=ALL-UNNAMED -J--add-exports=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED -J--add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED -J--add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED -J--add-opens=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED" />
+      <module name="demo" options="-parameters" />
       <module name="mapper-generator" options="" />
     </option>
   </component>

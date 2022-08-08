@@ -14,9 +14,9 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class JavaTypesTest {
+class TypesJavaTest {
 
-    private final JavaTypes types = new JavaTypes();
+    private final TypesJava types = new TypesJava();
 
     @Test
     void createTypeStandard() {
@@ -35,10 +35,10 @@ class JavaTypesTest {
         final var integerType = (ClassOrInterfaceType) types.createType(new OpenApiStandardType(OpenApiStandardTypeEnum.INTEGER, "int64", true));
         assertEquals("java.lang.Long", integerType.getNameWithScope());
 
-        final var dateType = (ClassOrInterfaceType) types.createType(new OpenApiStandardType(OpenApiStandardTypeEnum.DATE, null, false));
+        final var dateType = (ClassOrInterfaceType) types.createType(new OpenApiStandardType(OpenApiStandardTypeEnum.STRING, "date", false));
         assertEquals("java.time.LocalDate", dateType.getNameWithScope());
 
-        final var dateTimeType = (ClassOrInterfaceType) types.createType(new OpenApiStandardType(OpenApiStandardTypeEnum.DATE_TIME, null, false));
+        final var dateTimeType = (ClassOrInterfaceType) types.createType(new OpenApiStandardType(OpenApiStandardTypeEnum.STRING, "date-time", false));
         assertEquals("java.time.LocalDateTime", dateTimeType.getNameWithScope());
     }
 
@@ -46,7 +46,7 @@ class JavaTypesTest {
     void createTypeArray() {
         final var itemType = new OpenApiStandardType(OpenApiStandardTypeEnum.STRING, null, true);
         final var arrayType = (ClassOrInterfaceType) types.createType(new OpenApiArrayType(itemType));
-        assertEquals(Constants.LIST_CLASS_NAME, arrayType.getNameWithScope());
+        assertEquals("java.util.List", arrayType.getNameWithScope());
 
         final var typeArgumentsOptional = arrayType.getTypeArguments();
         assertTrue(typeArgumentsOptional.isPresent());
@@ -64,11 +64,11 @@ class JavaTypesTest {
                 new OpenApiProperty(
                         stringType,
                         true,
-                        false
+                        false,
+                        null
                 )
             ),
-                null
-        ).withPackage(new Package("org.some.api.model"));
+                null).withPackage(new Package("org.some.api.model"));
 
         final var type = (ClassOrInterfaceType) types.createType(objectType);
         assertEquals("org.some.api.model.User", type.getNameWithScope());
@@ -82,11 +82,11 @@ class JavaTypesTest {
                 new OpenApiProperty(
                         stringType,
                         true,
-                        false
+                        false,
+                        null
                 )
         ),
-                null
-        );
+                null);
 
         final var type = (ClassOrInterfaceType) types.createType(objectType);
         assertEquals("User", type.getNameWithScope());
@@ -94,7 +94,7 @@ class JavaTypesTest {
 
     @Test
     void testCreateType() {
-        final var classOrInterfaceType = types.createType(Constants.LIST_CLASS_NAME);
-        assertEquals(Constants.LIST_CLASS_NAME, classOrInterfaceType.getNameWithScope());
+        final var classOrInterfaceType = types.createType("java.util.List");
+        assertEquals("java.util.List", classOrInterfaceType.getNameWithScope());
     }
 }

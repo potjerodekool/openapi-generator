@@ -7,8 +7,10 @@ import java.util.Map;
 
 public interface OpenApiType {
 
-    default @Nullable String name() {
-        return null;
+    String name();
+
+    default String qualifiedName() {
+        return name();
     }
 
     default @Nullable String format() {

@@ -31,7 +31,8 @@ class OpenApiMergerTest {
         //final var apiFile = new File("openapi/spec.yml");
 
         //final var apiFile = new File("auth/openapi/spec.yaml");
-        final var apiFile = new File("C:\\projects\\auth-server\\openapi\\spec.yaml");
+        //final var apiFile = new File("C:\\projects\\auth-server\\openapi\\spec.yaml");
+        final var apiFile = new File("../demo/petstore/petstore.yaml");
 
         final var config = new OpenApiGeneratorConfig(
                 apiFile,

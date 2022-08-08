@@ -8,7 +8,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 
 public class ObjectBuilder {
 
@@ -23,8 +22,9 @@ public class ObjectBuilder {
     public ObjectBuilder property(final String name,
                                   final OpenApiStandardType type,
                                   final Boolean required,
-                                  final Boolean readOnly) {
-        properties.put(name, new OpenApiProperty(type, required, readOnly));
+                                  final @Nullable Boolean readOnly,
+                                  final @Nullable Boolean writeOnly) {
+        properties.put(name, new OpenApiProperty(type, required, readOnly, writeOnly));
         return this;
     }
 

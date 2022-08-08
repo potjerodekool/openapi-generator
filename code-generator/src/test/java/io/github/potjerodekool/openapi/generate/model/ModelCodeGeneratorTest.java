@@ -8,7 +8,9 @@ import io.github.potjerodekool.openapi.HttpMethod;
 import io.github.potjerodekool.openapi.ObjectBuilder;
 import io.github.potjerodekool.openapi.OpenApiGeneratorConfig;
 import static io.github.potjerodekool.openapi.CompilationUnitAsserter.assertClass;
-import io.github.potjerodekool.openapi.generate.JavaTypes;
+
+import io.github.potjerodekool.openapi.generate.GenerateUtilsJava;
+import io.github.potjerodekool.openapi.generate.TypesJava;
 import io.github.potjerodekool.openapi.generate.Types;
 import io.github.potjerodekool.openapi.tree.*;
 import io.github.potjerodekool.openapi.type.OpenApiStandardType;
@@ -31,7 +33,7 @@ import static org.mockito.Mockito.verify;
 
 class ModelCodeGeneratorTest {
 
-    private final Types types = new JavaTypes();
+    private final Types types = new TypesJava();
     private final Filer filter = Mockito.mock(Filer.class);
 
     @SuppressWarnings("method.invocation")
@@ -40,6 +42,7 @@ class ModelCodeGeneratorTest {
     private final ModelCodeGenerator generator = new ModelCodeGenerator(
             config,
             types,
+            new GenerateUtilsJava(types),
             filter
     );
 
@@ -92,14 +95,14 @@ class ModelCodeGeneratorTest {
     }
 
     private OpenApiResponse createResponse(final OpenApiType responseType) {
-        return new OpenApiResponse("", Map.of("application/json", responseType), Map.of());
+        return new OpenApiResponse("", Map.of("application/json", new OpenApiContent(responseType, Map.of())), Map.of());
     }
 
     @Test
     void checkIfFieldIsPrimitiveIntAndFinal() throws IOException {
         final var responseType = new ObjectBuilder()
                 .name("user")
-                .property("id", new OpenApiStandardType(OpenApiStandardTypeEnum.INTEGER, null, false), true, true)
+                .property("id", new OpenApiStandardType(OpenApiStandardTypeEnum.INTEGER, null, false), true, true, null)
                 .build();
 
         final var response = createResponse(responseType);
@@ -108,7 +111,7 @@ class ModelCodeGeneratorTest {
                 "/",
                 new OpenApiOperation("", "", "get", List.of(), List.of(), null, Map.of("200", response)));
 
-        final var openApi = new OpenApi(createInfo(), List.of(path));
+        final var openApi = new OpenApi(createInfo(), List.of(path), Map.of(), List.of());
 
         generator.generate(openApi);
 

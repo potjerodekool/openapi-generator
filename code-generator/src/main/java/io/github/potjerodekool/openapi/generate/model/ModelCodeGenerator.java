@@ -9,13 +9,11 @@ import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
-import com.github.javaparser.ast.type.ClassOrInterfaceType;
-import com.github.javaparser.ast.type.Type;
 import io.github.potjerodekool.openapi.Filer;
 import io.github.potjerodekool.openapi.HttpMethod;
 import io.github.potjerodekool.openapi.OpenApiGeneratorConfig;
 import io.github.potjerodekool.openapi.RequestCycleLocation;
-import io.github.potjerodekool.openapi.generate.GenerateHelper;
+import io.github.potjerodekool.openapi.generate.GenerateUtils;
 import io.github.potjerodekool.openapi.generate.Types;
 import io.github.potjerodekool.openapi.tree.*;
 import io.github.potjerodekool.openapi.type.OpenApiArrayType;
@@ -28,31 +26,27 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.IOException;
 import java.util.HashSet;
 
-import static com.github.javaparser.ast.NodeList.nodeList;
-import static io.github.potjerodekool.openapi.generate.GenerateHelper.createAnnotation;
-import static io.github.potjerodekool.openapi.generate.GenerateHelper.getDefaultValue;
+import static io.github.potjerodekool.openapi.generate.GenerateHelper.*;
 
 public class ModelCodeGenerator {
 
-    private final OpenApiGeneratorConfig config;
+    private static final String JSON_NULLABLE_CLASS_NAME = "org.openapitools.jackson.nullable.JsonNullable";
+
     private final Types types;
+
+    private final GenerateUtils generateUtils;
     private final Filer filer;
 
-    private final String notNullAnnotationClassName;
-    private final String validAnnotationClassName;
+    private final ModelAdapter modelAdapter;
 
     public ModelCodeGenerator(final OpenApiGeneratorConfig config,
                               final Types types,
+                              final GenerateUtils generateUtils,
                               final Filer filer) {
-        this.config = config;
         this.types = types;
+        this.generateUtils = generateUtils;
         this.filer = filer;
-        notNullAnnotationClassName = config.isUseJakartaValidation()
-            ? "jakarta.validation.constraints.NotNull"
-            : "javax.validation.constraints.NotNull";
-        validAnnotationClassName = config.isUseJakartaValidation()
-            ? "jakarta.validation.Valid"
-            : "javax.validation.Valid";
+        this.modelAdapter = new CombinedModelAdapter(config, types, generateUtils);
     }
 
     public void generate(final OpenApi api) {
@@ -84,7 +78,7 @@ public class ModelCodeGenerator {
         }
 
         requestBody.contentMediaType().values()
-                .forEach(mt -> processMediaType(httpMethod, mt, RequestCycleLocation.REQUEST));
+                .forEach(content -> processMediaType(httpMethod, content.schema(), RequestCycleLocation.REQUEST));
     }
 
 
@@ -95,13 +89,15 @@ public class ModelCodeGenerator {
         }
 
         openApiResponse.contentMediaType().values()
-                .forEach(mt -> processMediaType(httpMethod, mt, RequestCycleLocation.RESPONSE));
+                .forEach(content -> processMediaType(httpMethod, content.schema(), RequestCycleLocation.RESPONSE));
     }
 
     private void processMediaType(final HttpMethod httpMethod,
                                   final OpenApiType type,
                                   final RequestCycleLocation requestCycleLocation) {
-        if (type instanceof OpenApiObjectType ot) {
+        if (type instanceof OpenApiObjectType) {
+            final var ot = (OpenApiObjectType) type;
+
             final var pck = ot.pck();
             final var typeName = ot.name();
 
@@ -130,23 +126,25 @@ public class ModelCodeGenerator {
 
             final var clazz = cu.addClass(name);
 
-            ot.properties().forEach((propertyName, property) -> addField(propertyName, property, clazz, httpMethod, requestCycleLocation));
+            ot.properties().entrySet().stream()
+                    .filter(entry -> propertyFilter(entry.getValue(), requestCycleLocation))
+                    .forEach(entry -> addField(entry.getKey(), entry.getValue(), clazz, httpMethod, requestCycleLocation));
 
             generateConstructors(ot, clazz, httpMethod, requestCycleLocation);
 
-            ot.properties()
-                    .forEach((propertyName, property) -> {
-                        if (property.readOnly() && requestCycleLocation == RequestCycleLocation.REQUEST) {
-                            return;
-                        }
+            ot.properties().entrySet().stream()
+                    .filter(it -> this.propertyFilter(it.getValue(), requestCycleLocation))
+                            .forEach(entry -> {
+                                final var propertyName = entry.getKey();
+                                final var property = entry.getValue();
 
-                        addGetter(propertyName, property, clazz, httpMethod, requestCycleLocation);
+                                addGetter(propertyName, property, clazz, httpMethod, requestCycleLocation);
 
-                        if (!hasFinalField(clazz, propertyName)) {
-                            addSetter(propertyName, property, clazz, false, httpMethod);
-                            addSetter(propertyName, property, clazz, true, httpMethod);
-                        }
-            });
+                                if (!hasFinalField(clazz, propertyName)) {
+                                    addSetter(propertyName, property, clazz, false, httpMethod, requestCycleLocation);
+                                    addSetter(propertyName, property, clazz, true, httpMethod, requestCycleLocation);
+                                }
+                            });
 
             try {
                 filer.write(cu);
@@ -156,6 +154,13 @@ public class ModelCodeGenerator {
         } else if (type instanceof OpenApiArrayType at) {
             processMediaType(httpMethod, at.items(), requestCycleLocation);
         }
+    }
+
+    private boolean propertyFilter(final OpenApiProperty property,
+                                   final RequestCycleLocation requestCycleLocation) {
+        return Boolean.TRUE.equals(property.readOnly())
+                ? requestCycleLocation == RequestCycleLocation.RESPONSE
+                : !Boolean.TRUE.equals(property.writeOnly()) || requestCycleLocation == RequestCycleLocation.REQUEST;
     }
 
     private boolean hasFinalField(final ClassOrInterfaceDeclaration clazz,
@@ -181,21 +186,22 @@ public class ModelCodeGenerator {
 
         final var initPropertyNames = new HashSet<String>();
 
-        ot.properties().forEach((propertyName, property) -> {
-            final var isFieldFinal = hasFinalField(clazz, propertyName);
+        ot.properties().entrySet().stream()
+                .filter(it -> this.propertyFilter(it.getValue(), requestCycleLocation))
+                .forEach(entry -> {
+                    final var propertyName = entry.getKey();
+                    final var property = entry.getValue();
 
-            if (property.readOnly() && requestCycleLocation == RequestCycleLocation.REQUEST) {
-                return;
-            }
+                    final var isFieldFinal = hasFinalField(clazz, propertyName);
 
-            if (property.required() || isFieldFinal) {
-                final var paramType = types.createType(property.type());
-                final var parameter = new Parameter(paramType, propertyName);
-                parameter.addModifier(Modifier.Keyword.FINAL);
-                constructor.addParameter(parameter);
-                initPropertyNames.add(propertyName);
-            }
-        });
+                    if (property.required() || isFieldFinal) {
+                        final var paramType = types.createType(property.type());
+                        final var parameter = new Parameter(paramType, propertyName);
+                        parameter.addModifier(Modifier.Keyword.FINAL);
+                        constructor.addParameter(parameter);
+                        initPropertyNames.add(propertyName);
+                    }
+                });
 
         final var body = new BlockStmt();
 
@@ -206,7 +212,7 @@ public class ModelCodeGenerator {
 
                     if (httpMethod == HttpMethod.PATCH) {
                         value = new MethodCallExpr(
-                                new NameExpr("org.openapitools.jackson.nullable.JsonNullable"),
+                                new NameExpr(JSON_NULLABLE_CLASS_NAME),
                                 "of",
                                 NodeList.nodeList(value)
                         );
@@ -225,11 +231,8 @@ public class ModelCodeGenerator {
     private void addField(final String propertyName,
                           final OpenApiProperty property,
                           final ClassOrInterfaceDeclaration clazz,
-                          final HttpMethod httpMethod, RequestCycleLocation requestCycleLocation) {
-        if (property.readOnly() && requestCycleLocation == RequestCycleLocation.REQUEST) {
-            return;
-        }
-
+                          final HttpMethod httpMethod,
+                          final RequestCycleLocation requestCycleLocation) {
         final var propertyType = property.type();
         var fieldType = types.createType(propertyType);
 
@@ -240,32 +243,23 @@ public class ModelCodeGenerator {
                 fieldType = types.getBoxedType(fieldType);
             }
 
-            fieldType = types.createType("org.openapitools.jackson.nullable.JsonNullable")
+            fieldType = types.createType(JSON_NULLABLE_CLASS_NAME)
                     .setTypeArguments(fieldType);
-        }
-
-        if (!isPatch
-                && fieldType.isClassOrInterfaceType()
-                && config.isAddCheckerAnnotations()) {
-            fieldType.setAnnotations(
-                    nodeList(new MarkerAnnotationExpr(new Name("org.checkerframework.checker.nullness.qual.Nullable")))
-            );
         }
 
         final var field = clazz.addField(fieldType, propertyName, Modifier.Keyword.PRIVATE);
 
         if (property.required()) {
-            field.addAnnotation(createAnnotation("io.swagger.annotations.ApiModelProperty", "required", true));
             field.addModifier(Modifier.Keyword.FINAL);
         } else {
             if (isPatch) {
                 final var defaultValue = new MethodCallExpr(
-                        new NameExpr("JsonNullable"),
+                        new NameExpr(JSON_NULLABLE_CLASS_NAME),
                         "undefined");
                 final var variable = field.getVariable(0);
                 variable.setInitializer(defaultValue);
             } else {
-                final var defaultValue = getDefaultValue(fieldType);
+                final var defaultValue = generateUtils.getDefaultValue(fieldType);
 
                 if (defaultValue != null) {
                     final var variable = field.getVariable(0);
@@ -281,28 +275,13 @@ public class ModelCodeGenerator {
                 elementType = getFirstTypeArg(elementType);
             }
 
-            field.addAnnotation(createAnnotation("io.swagger.v3.oas.annotations.media.ArraySchema", "schema",
-                    createAnnotation(
-                            "io.swagger.v3.oas.annotations.media.Schema", "implementation", new ClassExpr(elementType)))
-            );
+            field.addAnnotation(createArraySchemaAnnotation(elementType));
         } else {
             final var type = types.createType(propertyType);
-
-            field.addAnnotation(
-                    createAnnotation("io.swagger.v3.oas.annotations.media.Schema", "implementation", new ClassExpr(type))
-            );
+            field.addAnnotation(createSchemaAnnotation(type, property.required()));
         }
-    }
 
-    private Type getFirstTypeArg(final Type type) {
-        if (type instanceof ClassOrInterfaceType cType) {
-            return cType.getTypeArguments()
-                    .filter(it -> it.size() > 0)
-                    .map(it -> it.get(0))
-                    .orElseThrow(() -> new GenerateException("Expected a type argument"));
-        } else {
-            return type;
-        }
+        this.modelAdapter.adaptField(httpMethod, requestCycleLocation, property, field);
     }
 
     private void addGetter(final String propertyName,
@@ -319,51 +298,30 @@ public class ModelCodeGenerator {
         final var propertyType = property.type();
         var returnType = types.createType(propertyType);
 
-        final var isPrimitiveType = returnType.isPrimitiveType();
-        final var isListType = GenerateHelper.isListType(returnType);
-
-        final var returnTypeAnnotations = new NodeList<AnnotationExpr>();
-
         if (httpMethod == HttpMethod.PATCH) {
             if (returnType.isPrimitiveType()) {
                 returnType = types.getBoxedType(returnType);
             }
 
-            returnType = types.createType("org.openapitools.jackson.nullable.JsonNullable")
+            returnType = types.createType(JSON_NULLABLE_CLASS_NAME)
                     .setTypeArguments(returnType);
-        }
-
-        if (!returnType.isPrimitiveType() &&
-                !property.required() && config.isAddCheckerAnnotations() && httpMethod != HttpMethod.PATCH) {
-            returnTypeAnnotations.add(new MarkerAnnotationExpr(new Name("org.checkerframework.checker.nullness.qual.Nullable")));
-        }
-
-        if (!isPrimitiveType && !isListType) {
-            returnTypeAnnotations.add(new MarkerAnnotationExpr(notNullAnnotationClassName));
-        }
-
-        if (requestCycleLocation == RequestCycleLocation.REQUEST && property.type().format() != null) {
-            method.addAnnotation(validAnnotationClassName);
-        }
-
-        if (!returnTypeAnnotations.isEmpty()) {
-            returnType.setAnnotations(returnTypeAnnotations);
         }
 
         method.setType(returnType);
 
         final var body = new BlockStmt();
-
         body.addStatement(new ReturnStmt(new FieldAccessExpr(new ThisExpr(), propertyName)));
-
         method.setBody(body);
+
+        modelAdapter.adaptGetter(httpMethod, requestCycleLocation, property, method);
     }
 
     private void addSetter(final String propertyName,
                            final OpenApiProperty property,
                            final ClassOrInterfaceDeclaration clazz,
                            final boolean isBuilder,
-                           final HttpMethod httpMethod) {
+                           final HttpMethod httpMethod,
+                           final RequestCycleLocation requestCycleLocation) {
         final var methodName = isBuilder ? propertyName : "set" + Utils.firstUpper(propertyName);
         final var method = clazz.addMethod(
                 methodName,
@@ -371,19 +329,7 @@ public class ModelCodeGenerator {
         );
 
         final var propertyType = property.type();
-        final var isNullable = propertyType.nullable();
         final var parameterType = types.createType(propertyType);
-
-        if (config.isAddCheckerAnnotations()) {
-            if (Boolean.TRUE.equals(isNullable)) {
-                parameterType.setAnnotations(
-                        nodeList(
-                                new MarkerAnnotationExpr(new Name("org.checkerframework.checker.nullness.qual.Nullable"))
-                        )
-                );
-            }
-        }
-
         final var parameter = new Parameter(parameterType, propertyName);
         parameter.addModifier(Modifier.Keyword.FINAL);
 
@@ -395,7 +341,7 @@ public class ModelCodeGenerator {
 
         if (httpMethod == HttpMethod.PATCH) {
             varExpression = new MethodCallExpr(
-                    new NameExpr("org.openapitools.jackson.nullable.JsonNullable"),
+                    new NameExpr(JSON_NULLABLE_CLASS_NAME),
                     "of",
                     NodeList.nodeList(varExpression)
             );
@@ -413,5 +359,7 @@ public class ModelCodeGenerator {
         }
 
         method.setBody(body);
+
+        modelAdapter.adaptSetter(httpMethod, requestCycleLocation, property, method);
     }
 }

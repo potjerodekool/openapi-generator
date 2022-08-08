@@ -15,9 +15,9 @@ public abstract class AbstractSpringConfigGenerator {
 
     private static final Logger LOGGER = Logger.getLogger(AbstractSpringConfigGenerator.class.getName());
 
-    protected final OpenApiGeneratorConfig config;
-    protected final Types types;
-    protected final Filer filer;
+    private final OpenApiGeneratorConfig config;
+    private final Types types;
+    private final Filer filer;
 
     public AbstractSpringConfigGenerator(final OpenApiGeneratorConfig config,
                                          final Types types,
@@ -27,9 +27,17 @@ public abstract class AbstractSpringConfigGenerator {
         this.filer = filer;
     }
 
+    public Types getTypes() {
+        return types;
+    }
+
     protected abstract String getConfigClassName();
 
     public void generate(final OpenApi api) {
+        if (skipGeneration()) {
+            return;
+        }
+
         final var cu = new CompilationUnit();
 
         final var configPackageName = config.getConfigPackageName();
@@ -51,4 +59,8 @@ public abstract class AbstractSpringConfigGenerator {
 
     protected abstract void fillClass(OpenApi api,
                                       ClassOrInterfaceDeclaration clazz);
+
+    protected boolean skipGeneration() {
+        return false;
+    }
 }

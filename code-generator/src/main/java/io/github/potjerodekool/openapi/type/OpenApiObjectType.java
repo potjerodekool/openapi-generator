@@ -29,4 +29,13 @@ public record OpenApiObjectType(Package pck,
     public OpenApiTypeKind kind() {
         return OpenApiTypeKind.OBJECT;
     }
+
+    @Override
+    public String qualifiedName() {
+        if (pck.isUnnamed()) {
+            return name;
+        } else {
+            return pck.getName() + "." + name;
+        }
+    }
 }

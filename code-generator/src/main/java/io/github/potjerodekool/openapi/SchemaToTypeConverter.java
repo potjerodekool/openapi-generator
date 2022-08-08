@@ -52,7 +52,8 @@ public class SchemaToTypeConverter {
                 ? new OpenApiProperty(
                         build(additionalProperties, dir, schemaContext),
                     false,
-                    schema.isReadOnly()
+                    schema.getReadOnly(),
+                    schema.getWriteOnly()
                   )
                 : null;
 
@@ -74,7 +75,24 @@ public class SchemaToTypeConverter {
         schema.getProperties().forEach((propertyName, propertySchema) -> {
             final var required = schema.getRequiredFields().contains(propertyName);
             final var propertyType = build(propertySchema, dir, schemaContext);
-            properties.put(propertyName, new OpenApiProperty(propertyType, required, propertySchema.isReadOnly()));
+
+            properties.put(propertyName, new OpenApiProperty(
+                    propertyType,
+                    required,
+                    propertySchema.getReadOnly(),
+                    propertySchema.getWriteOnly(),
+                    schema.getMinimum(),
+                    schema.getExclusiveMinimum(),
+                    schema.getMaximum(),
+                    schema.getExclusiveMaximum(),
+                    schema.getMinLength(),
+                    schema.getMaxLength(),
+                    schema.getPattern(),
+                    schema.getMinItems(),
+                    schema.getMaxItems(),
+                    schema.getUniqueItems(),
+                    schema.getEnums()
+            ));
         });
 
         schema.getAllOfSchemas()
@@ -135,7 +153,7 @@ public class SchemaToTypeConverter {
             }
 
             final var refString = creatingRef.getNormalizedRef();
-            final var absoluteSchemaUri = schemaDir.toURI().toString();
+            final var absoluteSchemaUri = Utils.toUriString(schemaDir);
 
             if (!refString.startsWith(absoluteSchemaUri)) {
                 throw new GenerateException(refString + " doesn't start with " + absoluteSchemaUri);

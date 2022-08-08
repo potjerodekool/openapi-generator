@@ -8,7 +8,19 @@ public interface Types {
 
     Type createType(OpenApiType openApiType);
 
-    ClassOrInterfaceType createType(final String name);
+    ClassOrInterfaceType createType(String name);
+
+    ClassOrInterfaceType createListType(Type typeArg);
+
+    ClassOrInterfaceType createObjectType();
+
+    ClassOrInterfaceType createVoidType();
+
+    String getListTypeName();
+
+    boolean isListTypeName(String typeName);
+
+    boolean isStringTypeName(final String typeName);
 
     ClassOrInterfaceType getBoxedType(Type type);
 }

@@ -1,6 +1,7 @@
 package io.github.potjerodekool.openapi;
 
-import io.github.potjerodekool.openapi.generate.JavaTypes;
+import io.github.potjerodekool.openapi.generate.GenerateUtilsJava;
+import io.github.potjerodekool.openapi.generate.TypesJava;
 import io.github.potjerodekool.openapi.generate.api.UtilsGenerator;
 import io.github.potjerodekool.openapi.generate.config.SpringJacksonConfigGenerator;
 import io.github.potjerodekool.openapi.generate.config.SpringOpenApiConfigGenerator;
@@ -27,14 +28,15 @@ public class Generator {
         final var api = builder.build(openApi, rootDir);
 
         final var filer = new Filer(config);
-        final var types = new JavaTypes();
+        final var types = new TypesJava();
+        final var generateUtils = new GenerateUtilsJava(types);
 
         if (config.isGenerateModels()) {
-            new ModelCodeGenerator(config, types, filer).generate(api);
+            new ModelCodeGenerator(config, types, generateUtils, filer).generate(api);
         }
 
         if (config.isGenerateApiDefinitions()) {
-            new SpringApiDefinitionGenerator(config, types, filer).generate(api);
+            new SpringApiDefinitionGenerator(config, types, generateUtils, filer).generate(api);
         }
 
         new UtilsGenerator(config, types, filer).generate(api);

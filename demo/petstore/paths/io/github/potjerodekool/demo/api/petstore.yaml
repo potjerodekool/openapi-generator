@@ -25,13 +25,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "../../../../../schemas/io/swagger/petstore/api/model/pets.yaml"
+                $ref: "../../../../../../schemas/io/github/potjerodekool/demo/api/model/pets.yaml"
         default:
           description: unexpected error
           content:
             application/json:
               schema:
-                $ref: "../../../../../schemas/io/swagger/petstore/api/model/Error.yaml"
+                $ref: "../../../../../../schemas/io/github/potjerodekool/demo/api/model/Error.yaml"
     post:
       summary: Create a pet
       operationId: createPets
@@ -45,7 +45,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "../../../../../schemas/io/swagger/petstore/api/model/Error.yaml"
+                $ref: "../../../../../../schemas/io/github/potjerodekool/demo/api/model/Error.yaml"
   /pets/{petId}:
     get:
       summary: Info for a specific pet
@@ -65,10 +65,14 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "../../../../../schemas/io/swagger/petstore/api/model/Pet.yaml"
+                $ref: "../../../../../../schemas/io/github/potjerodekool/demo/api/model/Pet.yaml"
+              examples:
+                foo:
+                  summary: 'pets response example'
+                  value: '{ "id": 1, "name": "Sylvester", "tag": "cat" }'
         default:
           description: unexpected error
           content:
             application/json:
               schema:
-                $ref: "../../../../../schemas/io/swagger/petstore/api/model/Error.yaml"
+                $ref: "../../../../../../schemas/io/github/potjerodekool/demo/api/model/Error.yaml"

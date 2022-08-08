@@ -8,9 +8,7 @@ public class OpenApiGeneratorConfig {
     private final File schemasDir;
     private final File pathsDir;
     private final File outputDir;
-
     private final String configPackageName;
-
     private boolean addCheckerAnnotations;
     private boolean generateApiDefinitions = true;
     private boolean generateModels = true;

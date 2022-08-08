@@ -7,9 +7,7 @@ public enum OpenApiStandardTypeEnum {
     STRING("string"),
     INTEGER("integer"),
     BOOLEAN("boolean"),
-    NUMBER("number"),
-    DATE("date"),
-    DATE_TIME("date-time");
+    NUMBER("number");
 
     private final String typeName;
 
