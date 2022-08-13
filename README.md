@@ -1,4 +1,4 @@
 # openapi-generator
 Code generation for Springboot based from open api
 
-See the wiki at github for info and explainations.
+See the [wiki](https://github.com/potjerodekool/openapi-generator/wiki) info and explainations.
