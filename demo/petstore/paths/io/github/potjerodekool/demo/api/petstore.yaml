@@ -34,9 +34,14 @@ paths:
                 $ref: "../../../../../../schemas/io/github/potjerodekool/demo/api/model/Error.yaml"
     post:
       summary: Create a pet
-      operationId: createPets
+      operationId: createPet
       tags:
         - pets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "../../../../../../schemas/io/github/potjerodekool/demo/api/model/Pet.yaml"
       responses:
         '201':
           description: Null response
@@ -49,7 +54,7 @@ paths:
   /pets/{petId}:
     get:
       summary: Info for a specific pet
-      operationId: showPetById
+      operationId: getPetById
       tags:
         - pets
       parameters:
@@ -58,7 +63,9 @@ paths:
           required: true
           description: The id of the pet to retrieve
           schema:
-            type: string
+            type: integer
+            format: int64
+            nullable: false
       responses:
         '200':
           description: Expected response to a valid request
@@ -76,3 +83,153 @@ paths:
             application/json:
               schema:
                 $ref: "../../../../../../schemas/io/github/potjerodekool/demo/api/model/Error.yaml"
+    put:
+      summary: Update a pet
+      operationId: updatePet
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          description: The id of the pet to update
+          schema:
+            type: integer
+            format: int64
+            nullable: false
+      tags:
+        - pets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "../../../../../../schemas/io/github/potjerodekool/demo/api/model/Pet.yaml"
+      responses:
+        '204':
+          description: 'No content'
+        '404':
+          description: 'Not found'
+        422:
+          description: 'Unprocessable request'
+          content:
+            application/json:
+              schema:
+                $ref: "../../../../../../schemas/io/github/potjerodekool/demo/api/model/Error.yaml"
+    patch:
+      summary: Patch a pet
+      operationId: patchPet
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          description: The id of the pet to patch
+          schema:
+            type: integer
+            format: int64
+            nullable: false
+      tags:
+        - pets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "../../../../../../schemas/io/github/potjerodekool/demo/api/model/Pet.yaml"
+      responses:
+        '204':
+          description: 'No content'
+        '404':
+          description: 'Not found'
+        422:
+          description: 'Unprocessable request'
+          content:
+            application/json:
+              schema:
+                $ref: "../../../../../../schemas/io/github/potjerodekool/demo/api/model/Error.yaml"
+    delete:
+      summary: Delete a pet
+      operationId: deletePet
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          description: The id of the pet to delete
+          schema:
+            type: integer
+            format: int64
+            nullable: false
+      tags:
+        - pets
+      responses:
+        '204':
+          description: 'No content'
+        '404':
+          description: 'Not found'
+  /pets/{petId}/image:
+    get:
+      summary: Info image for a specific pet
+      operationId: getPetImageById
+      tags:
+        - pets
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          description: The id of the pet of which image to retrieve
+          schema:
+            type: integer
+            format: int64
+            nullable: false
+      responses:
+        '200':
+          description: Expected response to a valid request
+          content:
+            '*/*':
+              schema:
+                type: 'string'
+                format: 'binary'
+    put:
+      summary: Update image of pet
+      operationId: updatePetImage
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          description: The id of the pet to update
+          schema:
+            type: integer
+            format: int64
+            nullable: false
+      tags:
+        - pets
+      requestBody:
+        content:
+          'multipart/form-data':
+            schema:
+              required: ["image"]
+              type: object
+              properties:
+                image:
+                  type: string
+                  format: binary
+  /pets/{petId}/details:
+    get:
+      summary: Details for a specific pet
+      operationId: getPetDetailsById
+      tags:
+        - pets
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          description: The id of the pet of which details to retrieve
+          schema:
+            type: integer
+            format: int64
+            nullable: false
+      responses:
+        '200':
+          description: Expected response to a valid request
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: object

@@ -28,14 +28,9 @@ public class WebSecurity {
                 .antMatchers("/swagger-ui.html").permitAll()
                 .antMatchers("/swagger-ui/**").permitAll()
                 .antMatchers("/v3/api-docs/**").permitAll()
-                //.antMatchers(UrlMapping.AUTH + UrlMapping.SIGN_UP).permitAll()
-                //.antMatchers(UrlMapping.AUTH + UrlMapping.LOGIN).permitAll()
-                //.antMatchers(UrlMapping.VALIDATE_JWT).permitAll()
-                //.antMatchers("/api/test/**").permitAll()
+                .antMatchers("/login").permitAll()
                 .anyRequest().authenticated();
-
         http.addFilterBefore(authenticationJwtTokenFilter, UsernamePasswordAuthenticationFilter.class);
-
         return http.build();
     }
 }

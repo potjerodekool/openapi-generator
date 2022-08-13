@@ -3,15 +3,15 @@ package io.github.potjerodekool.openapi.generate.model;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Modifier;
 import com.github.javaparser.ast.type.PrimitiveType;
-import io.github.potjerodekool.openapi.Filer;
-import io.github.potjerodekool.openapi.HttpMethod;
-import io.github.potjerodekool.openapi.ObjectBuilder;
-import io.github.potjerodekool.openapi.OpenApiGeneratorConfig;
+import io.github.potjerodekool.openapi.*;
+import io.github.potjerodekool.openapi.internal.Filer;
+
 import static io.github.potjerodekool.openapi.CompilationUnitAsserter.assertClass;
 
-import io.github.potjerodekool.openapi.generate.GenerateUtilsJava;
-import io.github.potjerodekool.openapi.generate.TypesJava;
-import io.github.potjerodekool.openapi.generate.Types;
+import io.github.potjerodekool.openapi.internal.generate.GenerateUtilsJava;
+import io.github.potjerodekool.openapi.internal.generate.TypesJava;
+import io.github.potjerodekool.openapi.internal.generate.Types;
+import io.github.potjerodekool.openapi.internal.generate.model.ModelCodeGenerator;
 import io.github.potjerodekool.openapi.tree.*;
 import io.github.potjerodekool.openapi.type.OpenApiStandardType;
 import io.github.potjerodekool.openapi.type.OpenApiStandardTypeEnum;
@@ -21,13 +21,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.potjerodekool.openapi.type.OpenApiType;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
 import org.mockito.Mockito;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.mockito.Mockito.verify;
 
@@ -37,17 +40,30 @@ class ModelCodeGeneratorTest {
     private final Filer filter = Mockito.mock(Filer.class);
 
     @SuppressWarnings("method.invocation")
-    private final OpenApiGeneratorConfig config = config();
+    private final OpenApiGeneratorConfigImpl config = config();
+
+    private final DependencyChecker dependencyCheckerMock = new DependencyChecker() {
+        @Override
+        public boolean isDependencyPresent(String groupId, String artifactId) {
+            return false;
+        }
+
+        @Override
+        public Stream<Artifact> getProjectArtifacts() {
+            return Stream.empty();
+        }
+    };
 
     private final ModelCodeGenerator generator = new ModelCodeGenerator(
             config,
             types,
+            dependencyCheckerMock,
             new GenerateUtilsJava(types),
             filter
     );
 
-    private OpenApiGeneratorConfig config() {
-        return new OpenApiGeneratorConfig(
+    private OpenApiGeneratorConfigImpl config() {
+        return new OpenApiGeneratorConfigImpl(
                 new File("test.yaml"),
                 new File("target/ut-generated-sources"),
                 "org.some.config"
@@ -109,7 +125,7 @@ class ModelCodeGeneratorTest {
         final var path = createPath(
                 HttpMethod.GET,
                 "/",
-                new OpenApiOperation("", "", "get", List.of(), List.of(), null, Map.of("200", response)));
+                new OpenApiOperation("", "", "get", List.of(), List.of(), null, Map.of("200", response), null));
 
         final var openApi = new OpenApi(createInfo(), List.of(path), Map.of(), List.of());
 
@@ -125,4 +141,5 @@ class ModelCodeGeneratorTest {
                     assertEquals(PrimitiveType.intType(), fieldAsserter.fieldDeclaration().getVariable(0).getType());
                 });
     }
+
 }

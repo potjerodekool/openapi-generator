@@ -10,6 +10,7 @@ public record OpenApiOperation(String summary,
                                List<String> tags,
                                List<OpenApiParameter> parameters,
                                @Nullable OpenApiRequestBody requestBody,
-                               java.util.Map<String, OpenApiResponse> responses) {
+                               java.util.Map<String, OpenApiResponse> responses,
+                               @Nullable List<OpenApiSecurityRequirement> securityRequirements) {
 
 }

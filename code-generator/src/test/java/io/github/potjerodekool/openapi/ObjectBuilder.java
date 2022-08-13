@@ -3,7 +3,7 @@ package io.github.potjerodekool.openapi;
 import io.github.potjerodekool.openapi.tree.OpenApiProperty;
 import io.github.potjerodekool.openapi.type.OpenApiObjectType;
 import io.github.potjerodekool.openapi.type.OpenApiStandardType;
-import io.github.potjerodekool.openapi.util.Utils;
+import io.github.potjerodekool.openapi.internal.util.Utils;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.HashMap;

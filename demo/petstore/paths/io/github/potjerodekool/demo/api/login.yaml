@@ -1,0 +1,22 @@
+openapi: "3.0.0"
+paths:
+  /login:
+    post:
+      summary: Login
+      operationId: login
+      security:
+        - {}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "../../../../../../schemas/io/github/potjerodekool/demo/api/model/login.yaml"
+      responses:
+        '200':
+          description: 'Login success response'
+          content:
+            application/json:
+              schema:
+                $ref: "../../../../../../schemas/io/github/potjerodekool/demo/api/model/loginResponse.yaml"
+        '401':
+          description: 'Unauthorised'

@@ -2,6 +2,7 @@ package io.github.potjerodekool.openapi.generate;
 
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
+import io.github.potjerodekool.openapi.internal.generate.TypesJava;
 import io.github.potjerodekool.openapi.tree.OpenApiProperty;
 import io.github.potjerodekool.openapi.tree.Package;
 import io.github.potjerodekool.openapi.type.OpenApiArrayType;

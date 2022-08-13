@@ -1,38 +1,19 @@
 package io.github.potjerodekool.openapi.maven;
 
 import io.github.potjerodekool.openapi.Generator;
-import io.github.potjerodekool.openapi.OpenApiGeneratorConfig;
+import io.github.potjerodekool.openapi.OpenApiGeneratorConfigImpl;
 import io.github.potjerodekool.openapi.Logger;
 import io.github.potjerodekool.openapi.LoggerFactory;
-//import org.apache.maven.artifact.resolver.filter.ScopeArtifactFilter;
 import org.apache.maven.plugin.AbstractMojo;
-//import org.apache.maven.plugins.annotations.Component;
-import org.apache.maven.plugins.annotations.LifecyclePhase;
-import org.apache.maven.plugins.annotations.Mojo;
-import org.apache.maven.plugins.annotations.Parameter;
-//import org.apache.maven.project.DefaultProjectBuildingRequest;
-//import org.apache.maven.project.MavenProject;
-//import org.apache.maven.shared.dependency.graph.DependencyGraphBuilder;
-//import org.apache.maven.shared.dependency.graph.DependencyGraphBuilderException;
-//import org.apache.maven.shared.dependency.graph.DependencyNode;
+import org.apache.maven.plugins.annotations.*;
 import org.apache.maven.project.MavenProject;
-//import org.sonatype.aether.RepositorySystem;
-//import org.sonatype.aether.RepositorySystemSession;
-//import org.sonatype.aether.artifact.Artifact;
-//import org.sonatype.aether.resolution.ArtifactRequest;
-//import org.sonatype.aether.resolution.ArtifactResolutionException;
-//import org.sonatype.aether.util.artifact.DefaultArtifact;
-//import org.apache.maven.project.MavenProject;
-//import org.apache.maven.shared.dependency.graph.DependencyGraphBuilder;
-//import org.eclipse.aether.DefaultRepositorySystemSession;
-//import org.eclipse.aether.RepositorySystem;
-//import org.eclipse.aether.RepositorySystemSession;
 
 import java.io.File;
 
 @Mojo(
         name = "generate",
-        defaultPhase = LifecyclePhase.GENERATE_SOURCES
+        defaultPhase = LifecyclePhase.GENERATE_SOURCES,
+        requiresDependencyCollection = ResolutionScope.COMPILE_PLUS_RUNTIME
 )
 public class CodeGenMojo extends AbstractMojo {
 
@@ -60,13 +41,14 @@ public class CodeGenMojo extends AbstractMojo {
     @Parameter(property = "jakarta.validation")
     private Boolean jakartaValidation;
 
+    @Parameter(property = "checker")
+    private Boolean checker;
+
     @Parameter(property = "dynamicModels")
     private String dynamicModels;
 
     @Override
     public void execute() {
-        getLog().info("CodeGenMojo");
-
         if (openApiFile.isEmpty()) {
             getLog().warn(""" 
                 No files specified to process.
@@ -81,41 +63,32 @@ public class CodeGenMojo extends AbstractMojo {
 
         LoggerFactory.setLoggerProvider(this::getLogger);
 
-
-
-        final var config = new OpenApiGeneratorConfig(
+        final var config = new OpenApiGeneratorConfigImpl(
                 new File(openApiFile),
                 generatedSourceDirectory,
                 configPackageName
         );
 
-        final var hasCheckerDependency = hasDependency("org.checkerframework", "checker-qual");
+
+
+        final var dependencyChecker = new MavenDependencyChecker(this.project);
 
         config.setGenerateApiDefinitions(generateApiDefinitions);
         config.setGenerateModels(generateModels);
-        config.setAddCheckerAnnotations(hasCheckerDependency);
-        config.setUseJakartaServlet(
-                enableFeature(jakartaServlet, "jakarta.servlet", "jakarta.servlet-api"));
-        config.setUseJakartaValidation(
-                enableFeature(jakartaValidation, "jakarta.validation", "jakarta.validation-api")
-        );
 
-        new Generator().generate(config, this::hasDependency);
-    }
+        if (jakartaServlet != null) {
+            config.setFeatureValue(OpenApiGeneratorConfigImpl.FEATURE_JAKARTA_SERVLET, jakartaServlet);
+        }
 
-    private boolean enableFeature(final Boolean value,
-                                  final String groupId,
-                                  final String artifact) {
-        return value != null
-                ? value
-                : hasDependency(groupId, artifact);
-    }
+        if (jakartaValidation != null) {
+            config.setFeatureValue(OpenApiGeneratorConfigImpl.FEATURE_JAKARTA_VALIDATION, jakartaValidation);
+        }
 
-    private boolean hasDependency(final String groupId,
-                                  final String artifactId) {
-        return project.getDependencies().stream()
-                .anyMatch(dependency -> groupId.equals(dependency.getGroupId())
-                        && artifactId.equals(dependency.getArtifactId()));
+        if (checker != null) {
+            config.setFeatureValue(OpenApiGeneratorConfigImpl.FEATURE_CHECKER, checker);
+        }
+
+        new Generator().generate(config, dependencyChecker);
     }
 
     private Logger getLogger(final String name) {
