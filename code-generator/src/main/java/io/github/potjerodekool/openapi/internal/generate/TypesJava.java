@@ -124,6 +124,12 @@ public class TypesJava implements Types {
                             : PrimitiveType.floatType();
                 }
             }
+            case BYTE -> isNullOrTrue(st.nullable())
+                    ? createType("java.lang.Byte")
+                    : PrimitiveType.byteType();
+            case SHORT ->  isNullOrTrue(st.nullable())
+                    ? createType("java.lang.Short")
+                    : PrimitiveType.shortType();
         };
     }
 
@@ -147,8 +153,13 @@ public class TypesJava implements Types {
     }
 
     @Override
+    public ClassOrInterfaceType createListType() {
+        return createType(LIST_CLASS_NAME);
+    }
+
+    @Override
     public ClassOrInterfaceType createListType(final Type typeArg) {
-        return createType(LIST_CLASS_NAME).setTypeArguments(typeArg);
+        return createListType().setTypeArguments(typeArg);
     }
 
     @Override
@@ -202,6 +213,11 @@ public class TypesJava implements Types {
         }
 
         return "";
+    }
+
+    @Override
+    public boolean isStringType(final Type type) {
+        return STRING_CLASS_NAME.equals(getTypeName(type));
     }
 
     @Override
@@ -275,4 +291,16 @@ public class TypesJava implements Types {
         cu.setData(Node.SYMBOL_RESOLVER_KEY, symbolResolver);
         return cu;
     }
+
+    @Override
+    public boolean isBooleanType(final Type type) {
+        if (type.isPrimitiveType()) {
+            return type.asPrimitiveType().getType() == PrimitiveType.Primitive.BOOLEAN;
+        } else if (type.isClassOrInterfaceType()) {
+            return "java.lang.Boolean".equals(type.asClassOrInterfaceType().getNameWithScope());
+        } else {
+            return false;
+        }
+    }
+
 }

@@ -1,6 +1,5 @@
 package io.github.potjerodekool.openapi.internal.generate.api;
 
-import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Modifier;
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.Parameter;
@@ -12,8 +11,8 @@ import com.github.javaparser.ast.stmt.IfStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import io.github.potjerodekool.openapi.OpenApiGeneratorConfig;
 import io.github.potjerodekool.openapi.internal.Filer;
-import io.github.potjerodekool.openapi.LogLevel;
-import io.github.potjerodekool.openapi.Logger;
+import io.github.potjerodekool.openapi.log.LogLevel;
+import io.github.potjerodekool.openapi.log.Logger;
 import io.github.potjerodekool.openapi.internal.generate.Types;
 import io.github.potjerodekool.openapi.tree.OpenApi;
 import io.github.potjerodekool.openapi.internal.util.Utils;

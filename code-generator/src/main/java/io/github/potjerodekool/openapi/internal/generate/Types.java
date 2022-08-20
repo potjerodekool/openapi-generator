@@ -14,6 +14,8 @@ public interface Types {
 
     ClassOrInterfaceType createType(String name);
 
+    ClassOrInterfaceType createListType();
+
     ClassOrInterfaceType createListType(Type typeArg);
 
     ClassOrInterfaceType createMapType();
@@ -32,6 +34,8 @@ public interface Types {
 
     String getTypeName(Type type);
 
+    boolean isStringType(final Type type);
+
     boolean isStringTypeName(final String typeName);
 
     ClassOrInterfaceType createStringType();
@@ -47,4 +51,6 @@ public interface Types {
     CompilationUnit createCompilationUnit();
 
     Type createMultipartType();
+
+    boolean isBooleanType(Type type);
 }

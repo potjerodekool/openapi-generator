@@ -1,0 +1,6 @@
+<mappers>
+    <mapper classname="io.github.potjerodekool.demo.mapper.PetRequestDtoToPetMapper"
+            sourceClass="io.github.potjerodekool.demo.api.model.PetRequestDto"
+            targetClass="io.github.potjerodekool.demo.model.Pet"
+    />
+</mappers>

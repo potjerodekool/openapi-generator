@@ -5,23 +5,22 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.MarkerAnnotationExpr;
 import com.github.javaparser.ast.expr.Name;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
-import io.github.potjerodekool.openapi.DependencyChecker;
 import io.github.potjerodekool.openapi.HttpMethod;
 import io.github.potjerodekool.openapi.OpenApiGeneratorConfig;
 import io.github.potjerodekool.openapi.RequestCycleLocation;
-import io.github.potjerodekool.openapi.internal.generate.Types;
+import io.github.potjerodekool.openapi.generate.model.ModelAdapter;
 import io.github.potjerodekool.openapi.tree.OpenApiProperty;
 
 import static com.github.javaparser.ast.NodeList.nodeList;
 
-public class CheckerFrameworkModelAdapter implements InternalModelAdapter {
+public class CheckerFrameworkModelAdapter implements ModelAdapter {
 
     private boolean isEnabled;
 
-    @Override
-    public void init(final OpenApiGeneratorConfig config,
-                     final Types types,
-                     final DependencyChecker dependencyChecker) {
+    public CheckerFrameworkModelAdapter() {
+    }
+
+    public CheckerFrameworkModelAdapter(final OpenApiGeneratorConfig config) {
         this.isEnabled = config.isFeatureEnabled(OpenApiGeneratorConfig.FEATURE_CHECKER);
     }
 

@@ -12,6 +12,11 @@ import javax.servlet.http.HttpServletRequest;
 @RestController
 @CrossOrigin
 public class LoginController implements LoginApi {
+
+    public LoginController() {
+        System.out.println("");
+    }
+
     @Override
     public ResponseEntity<LoginResponseDto> login(final LoginRequestDto body,
                                                   final HttpServletRequest request) {

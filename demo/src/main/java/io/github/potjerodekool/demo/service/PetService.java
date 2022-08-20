@@ -1,7 +1,9 @@
 package io.github.potjerodekool.demo.service;
 
+import com.github.potjerodekool.MapperContext;
 import io.github.potjerodekool.demo.api.model.PetPatchRequestDto;
 import io.github.potjerodekool.demo.api.model.PetRequestDto;
+import io.github.potjerodekool.demo.mapper.PetRequestDtoToPetMapper;
 import io.github.potjerodekool.demo.model.Pet;
 import io.github.potjerodekool.demo.model.ResourceWithMediaType;
 import org.springframework.http.MediaType;
@@ -18,19 +20,23 @@ public class PetService {
 
     private final Map<Long, Pet> pets = new HashMap<>();
 
-    public Long createPet(final PetRequestDto petRequestDto) {
-        final var pet = new Pet();
-        final long id = pets.size() + 1;
-        pet.setId(id);
-        copy(petRequestDto, pet);
-        pets.put(id, pet);
-        return id;
+    private final MapperContext mapperContext;
+    private final PetRequestDtoToPetMapper mapper;
+
+    public PetService(final MapperContext mapperContext,
+                      final PetRequestDtoToPetMapper mapper) {
+        this.mapperContext = mapperContext;
+        this.mapper = mapper;
     }
 
-    private void copy(final PetRequestDto petRequestDto,
-                      final Pet pet) {
-        pet.setName(petRequestDto.getName());
-        pet.setTag(petRequestDto.getTag());
+
+    public Long createPet(final PetRequestDto petRequestDto) {
+        //final var pet = new Pet();
+        final var pet = mapper.map(petRequestDto, mapperContext);
+        final long id = pets.size() + 1;
+        pet.setId(id);
+        pets.put(id, pet);
+        return id;
     }
 
     public Optional<Pet> getPetById(final long petId) {
@@ -55,7 +61,7 @@ public class PetService {
             return CrudOperationResult.notFound();
         }
 
-        copy(petRequestDto, pet);
+        mapper.map(petRequestDto, pet, mapperContext);
         return CrudOperationResult.success();
     }
 

@@ -8,8 +8,11 @@ import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import io.github.potjerodekool.openapi.*;
+import io.github.potjerodekool.openapi.dependency.Artifact;
+import io.github.potjerodekool.openapi.dependency.DependencyChecker;
 import io.github.potjerodekool.openapi.internal.*;
 import io.github.potjerodekool.openapi.internal.generate.Types;
+import io.github.potjerodekool.openapi.log.Logger;
 import io.github.potjerodekool.openapi.tree.OpenApi;
 import io.github.potjerodekool.openapi.internal.util.Utils;
 

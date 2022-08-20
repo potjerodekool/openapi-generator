@@ -3,7 +3,7 @@ package io.github.potjerodekool.openapi.internal;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.printer.configuration.DefaultPrinterConfiguration;
 import com.github.javaparser.printer.configuration.PrinterConfiguration;
-import io.github.potjerodekool.openapi.Logger;
+import io.github.potjerodekool.openapi.log.Logger;
 import io.github.potjerodekool.openapi.OpenApiGeneratorConfig;
 import io.github.potjerodekool.openapi.internal.util.Utils;
 

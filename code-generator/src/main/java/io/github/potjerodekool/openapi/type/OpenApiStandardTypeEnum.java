@@ -7,7 +7,9 @@ public enum OpenApiStandardTypeEnum {
     STRING("string"),
     INTEGER("integer"),
     BOOLEAN("boolean"),
-    NUMBER("number");
+    NUMBER("number"),
+    BYTE("byte"),
+    SHORT("short");
 
     private final String typeName;
 

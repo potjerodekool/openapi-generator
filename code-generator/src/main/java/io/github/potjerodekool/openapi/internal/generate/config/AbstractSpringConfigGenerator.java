@@ -1,11 +1,10 @@
 package io.github.potjerodekool.openapi.internal.generate.config;
 
-import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import io.github.potjerodekool.openapi.OpenApiGeneratorConfig;
 import io.github.potjerodekool.openapi.internal.Filer;
-import io.github.potjerodekool.openapi.LogLevel;
-import io.github.potjerodekool.openapi.Logger;
+import io.github.potjerodekool.openapi.log.LogLevel;
+import io.github.potjerodekool.openapi.log.Logger;
 import io.github.potjerodekool.openapi.internal.generate.Types;
 import io.github.potjerodekool.openapi.tree.OpenApi;
 

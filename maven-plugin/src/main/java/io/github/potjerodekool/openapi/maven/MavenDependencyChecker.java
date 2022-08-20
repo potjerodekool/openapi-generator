@@ -1,7 +1,7 @@
 package io.github.potjerodekool.openapi.maven;
 
-import io.github.potjerodekool.openapi.Artifact;
-import io.github.potjerodekool.openapi.DependencyChecker;
+import io.github.potjerodekool.openapi.dependency.Artifact;
+import io.github.potjerodekool.openapi.dependency.DependencyChecker;
 import org.apache.maven.project.MavenProject;
 import java.util.Set;
 import java.util.stream.Stream;

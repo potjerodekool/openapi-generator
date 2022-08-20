@@ -5,62 +5,87 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
-import io.github.potjerodekool.openapi.DependencyChecker;
+import com.github.javaparser.ast.type.PrimitiveType;
+import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.resolution.types.ResolvedType;
 import io.github.potjerodekool.openapi.HttpMethod;
 import io.github.potjerodekool.openapi.OpenApiGeneratorConfig;
 import io.github.potjerodekool.openapi.RequestCycleLocation;
+import io.github.potjerodekool.openapi.generate.model.ModelAdapter;
 import io.github.potjerodekool.openapi.internal.generate.GenerateUtils;
 import io.github.potjerodekool.openapi.internal.generate.Types;
 import io.github.potjerodekool.openapi.tree.OpenApiProperty;
-import io.github.potjerodekool.openapi.type.OpenApiArrayType;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.HashSet;
 import java.util.Set;
 
-@SuppressWarnings("initialization.fields.uninitialized")
-public class ValidationModelAdapter implements InternalModelAdapter {
+public class ValidationModelAdapter implements ModelAdapter {
 
-    private static final Set<String> SUPPORTED_TYPES_MIN_MAX = Set.of(
-            "java.math.BigDecimal",
-            "java.math.BigInteger",
-            "byte",
-            "java.lang.Byte",
-            "short",
-            "java.lang.Short",
-            "int",
-            "java.lang.Integer",
-            "long",
-            "java.lang.Long"
-    );
+    private final Set<Type> minMaxTypes = new HashSet<>();
 
-    private static final Set<String> SUPPORTED_TYPES_SIZE = Set.of(
-            "java.util.List",
-            "java.util.Map"
-    );
+    private final ResolvedType charSequenceType;
 
-    private String notNullAnnotationClassName;
-    private String validAnnotationClassName;
+    private final Set<Type> digitsTypes = new HashSet<>();
 
-    private String validationBasePackage;
+    private final Set<Type> sizeTypes = new HashSet<>();
 
-    private Types types;
+    private final String notNullAnnotationClassName;
+    private final String validAnnotationClassName;
+
+    private final String validationBasePackage;
+
+    private final String constraintsPackage;
+
+    private final Types types;
 
     private final GenerateUtils generateUtils;
 
-    public ValidationModelAdapter(final GenerateUtils generateUtils) {
+    public ValidationModelAdapter(final OpenApiGeneratorConfig config,
+                                  final Types types,
+                                  final GenerateUtils generateUtils) {
+        this.validationBasePackage = config.isFeatureEnabled(OpenApiGeneratorConfig.FEATURE_JAKARTA_VALIDATION) ? "jakarta" : "javax";
+        this.constraintsPackage = validationBasePackage + ".validation.constraints";
+        this.notNullAnnotationClassName = constraintsPackage + ".NotNull";
+        this.validAnnotationClassName = constraintsPackage + ".Valid";
+        this.types = types;
         this.generateUtils = generateUtils;
+        this.charSequenceType = types.createCharSequenceType().resolve();
+        initMinMaxTypes();
+        initSizeTypes();
+        initDigitsTypes();
     }
 
-    @Override
-    public void init(final OpenApiGeneratorConfig config,
-                     final Types types,
-                     final DependencyChecker dependencyChecker,
-                     final GenerateUtils generateUtils) {
-        this.validationBasePackage = config.isFeatureEnabled(OpenApiGeneratorConfig.FEATURE_JAKARTA_VALIDATION) ? "jakarta" : "javax";
-        this.notNullAnnotationClassName = validationBasePackage + ".validation.constraints.NotNull";
-        this.validAnnotationClassName = validationBasePackage + ".validation.Valid";
-        this.types = types;
+    private void initMinMaxTypes() {
+        minMaxTypes.add(types.createType("java.math.BigInteger"));
+        minMaxTypes.add(PrimitiveType.byteType());
+        minMaxTypes.add(types.createType("java.lang.Byte"));
+        minMaxTypes.add(PrimitiveType.shortType());
+        minMaxTypes.add(types.createType("java.lang.Short"));
+        minMaxTypes.add(PrimitiveType.intType());
+        minMaxTypes.add(types.createType("java.lang.Integer"));
+        minMaxTypes.add(PrimitiveType.longType());
+        minMaxTypes.add(types.createType("java.lang.Long"));
     }
+
+    private void initSizeTypes() {
+        sizeTypes.add(types.createListType());
+        sizeTypes.add(types.createMapType());
+    }
+
+    private void initDigitsTypes() {
+        digitsTypes.add(types.createType("java.math.BigDecimal"));
+        digitsTypes.add(types.createType("java.math.BigInteger"));
+        digitsTypes.add(PrimitiveType.byteType());
+        digitsTypes.add(types.createType("java.lang.Byte"));
+        digitsTypes.add(PrimitiveType.shortType());
+        digitsTypes.add(types.createType("java.lang.Short"));
+        digitsTypes.add(PrimitiveType.intType());
+        digitsTypes.add(types.createType("java.lang.Integer"));
+        digitsTypes.add(PrimitiveType.longType());
+        digitsTypes.add(types.createType("java.lang.Long"));
+    }
+
 
     @Override
     public void adaptField(final HttpMethod httpMethod,
@@ -71,23 +96,27 @@ public class ValidationModelAdapter implements InternalModelAdapter {
         addSize(property, fieldDeclaration);
         addPattern(property, fieldDeclaration);
         addEmail(property, fieldDeclaration);
+        addAssertTrueOrFalse(property, fieldDeclaration);
+        addDigits(property, fieldDeclaration);
     }
 
     private void addMinAndMax(final OpenApiProperty property,
                               final FieldDeclaration fieldDeclaration) {
         final var fieldType = generateUtils.getFieldType(fieldDeclaration);
 
-        if (!SUPPORTED_TYPES_MIN_MAX.contains(types.getTypeName(fieldType))) {
+        if (!minMaxTypes.contains(fieldType)) {
             return;
         }
 
-        final var minimum = incrementAndToString(property.minimum(), property.exclusiveMinimum());
+        final var constraints = property.constraints();
+
+        final var minimum = incrementAndToString(constraints.minimum(), constraints.exclusiveMinimum());
 
         if (minimum != null) {
             fieldDeclaration.addSingleMemberAnnotation(validationBasePackage + ".validation.constraint.Min", new LongLiteralExpr(minimum));
         }
 
-        final var maximum = decrementAndToString(property.maximum(), property.exclusiveMaximum());
+        final var maximum = decrementAndToString(constraints.maximum(), constraints.exclusiveMaximum());
 
         if (maximum != null) {
             fieldDeclaration.addSingleMemberAnnotation(validationBasePackage + ".validation.constraint.Max", new LongLiteralExpr(maximum));
@@ -97,24 +126,23 @@ public class ValidationModelAdapter implements InternalModelAdapter {
     private void addSize(final OpenApiProperty property,
                          final FieldDeclaration fieldDeclaration) {
         final var fieldType = generateUtils.getFieldType(fieldDeclaration);
-        final var fieldTypeName = types.getTypeName(fieldType);
 
         if (!isCharSequenceField(fieldDeclaration) &&
-                !SUPPORTED_TYPES_SIZE.contains(fieldTypeName)) {
+                !sizeTypes.contains(fieldType)) {
             return;
         }
-
-        final var propertyType = property.type();
 
         final Integer min;
         final Integer max;
 
-        if (types.isStringTypeName(fieldTypeName)) {
-            min = property.minLength();
-            max = property.maxLength();
-        } else if (types.isListTypeName(propertyType.qualifiedName()) || propertyType instanceof OpenApiArrayType) {
-            min = property.minItems();
-            max = property.maxItems();
+        final var constrains = property.constraints();
+
+        if (types.isStringType(fieldType)) {
+            min = constrains.minLength();
+            max = constrains.maxLength();
+        } else if (types.isListType(fieldType) || fieldType.isArrayType()) {
+            min = constrains.minItems();
+            max = constrains.maxItems();
         } else {
             min = null;
             max = null;
@@ -141,7 +169,9 @@ public class ValidationModelAdapter implements InternalModelAdapter {
             return;
         }
 
-        final var pattern = property.pattern();
+        final var constrains = property.constraints();
+
+        final var pattern = constrains.pattern();
 
         if (pattern != null) {
             fieldDeclaration.addAnnotation(
@@ -162,9 +192,10 @@ public class ValidationModelAdapter implements InternalModelAdapter {
         }
 
         final var propertyType = property.type();
+        final var constrains = property.constraints();
 
         if ("email".equals(propertyType.format())) {
-            final var pattern = property.pattern();
+            final var pattern = constrains.pattern();
             final var memberValuePairList = new NodeList<MemberValuePair>();
 
             if (pattern != null) {
@@ -221,15 +252,57 @@ public class ValidationModelAdapter implements InternalModelAdapter {
         }
     }
 
-    @Override
-    public void adaptSetter(final HttpMethod httpMethod,
-                            final RequestCycleLocation requestCycleLocation,
-                            final OpenApiProperty property,
-                            final MethodDeclaration methodDeclaration) {
-    }
-
     private boolean isCharSequenceField(final FieldDeclaration fieldDeclaration) {
         final var fieldType = generateUtils.getFieldType(fieldDeclaration);
-        return types.isAssignableBy(types.createCharSequenceType(), fieldType);
+        return charSequenceType.isAssignableBy(fieldType.resolve());
     }
+
+
+    private void addAssertTrueOrFalse(final OpenApiProperty property,
+                                      final FieldDeclaration fieldDeclaration) {
+        final var fieldType = generateUtils.getFieldType(fieldDeclaration);
+        if (types.isBooleanType(fieldType)) {
+            if (Boolean.TRUE.equals(property.constraints().allowedValue())) {
+                fieldDeclaration.addAnnotation(
+                    new MarkerAnnotationExpr(constraintsPackage + ".AssertTrue")
+                );
+            } else if (Boolean.FALSE.equals(property.constraints().allowedValue())) {
+                fieldDeclaration.addAnnotation(
+                        new MarkerAnnotationExpr(constraintsPackage + ".AssertFalse")
+                );
+            }
+        }
+    }
+
+    private void addDigits(final OpenApiProperty property,
+                           final FieldDeclaration fieldDeclaration) {
+        final var digits = property.constraints().digits();
+
+        if (digits != null && supportsDigits(generateUtils.getFieldType(fieldDeclaration))) {
+            final var annotation = new NormalAnnotationExpr(
+                    new Name(constraintsPackage + ".Digits"),
+                    NodeList.nodeList(
+                            new MemberValuePair("integer", new IntegerLiteralExpr(
+                                    Integer.toString(digits.integer())
+                            )),
+                            new MemberValuePair("fraction", new IntegerLiteralExpr(
+                                    Integer.toString(digits.fraction())
+                            ))
+                    )
+            );
+
+            fieldDeclaration.addAnnotation(annotation);
+        }
+    }
+
+    protected boolean supportsDigits(final Type type) {
+        try {
+            return digitsTypes.contains(type) || charSequenceType.isAssignableBy(
+                    type.resolve()
+            );
+        } catch (final Exception e) {
+            return false;
+        }
+    }
+
 }

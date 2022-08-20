@@ -8,6 +8,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Iterator;
+import java.util.Spliterator;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -104,5 +107,44 @@ public final class Utils {
         } catch (final IOException e) {
             throw new GenerateException(e);
         }
+    }
+
+    public static <T> Spliterator<T> spliterator(final Iterator<T> iterator) {
+        return new SimpleSpliterator<>(iterator);
+    }
+}
+
+class SimpleSpliterator<T> implements Spliterator<T> {
+
+    private final Iterator<T> iterator;
+
+    SimpleSpliterator(final Iterator<T> iterator) {
+        this.iterator = iterator;
+    }
+
+    @Override
+    public boolean tryAdvance(final Consumer<? super T> action) {
+        if (iterator.hasNext()) {
+            action.accept(iterator.next());
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    @Override
+    @SuppressWarnings("return")
+    public @Nullable Spliterator<T> trySplit() {
+        return null;
+    }
+
+    @Override
+    public long estimateSize() {
+        return Long.MAX_VALUE;
+    }
+
+    @Override
+    public int characteristics() {
+        return 0;
     }
 }

@@ -1,5 +1,7 @@
 package io.github.potjerodekool.openapi;
 
+import io.github.potjerodekool.openapi.dependency.Artifact;
+import io.github.potjerodekool.openapi.dependency.DependencyChecker;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -30,11 +32,11 @@ class OpenApiMergerIT {
     void merge() {
         final var apiFile = new File("../demo/petstore/petstore.yaml");
 
-        final var config = new OpenApiGeneratorConfigImpl(
+        final var config = OpenApiGeneratorConfig.createBuilder(
                 apiFile,
                 new File("target/generated-sources"),
                 "org.some.config"
-        );
+        ).build();
 
         new Generator().generate(config, this.dependencyChecker());
     }

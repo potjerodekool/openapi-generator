@@ -3,6 +3,7 @@ package io.github.potjerodekool.openapi.internal;
 import io.github.potjerodekool.openapi.HttpMethod;
 import io.github.potjerodekool.openapi.OpenApiGeneratorConfig;
 import io.github.potjerodekool.openapi.RequestCycleLocation;
+import io.github.potjerodekool.openapi.tree.Constraints;
 import io.github.potjerodekool.openapi.tree.OpenApiProperty;
 import io.github.potjerodekool.openapi.tree.Package;
 import io.github.potjerodekool.openapi.internal.util.GenerateException;
@@ -79,22 +80,25 @@ public class SchemaToTypeConverter {
             final var required = schema.getRequiredFields().contains(propertyName);
             final var propertyType = build(propertySchema, dir, schemaContext);
 
+            final var constraints = new Constraints();
+            constraints.minimum(schema.getMinimum());
+            constraints.exclusiveMinimum(schema.getExclusiveMinimum());
+            constraints.maximum(schema.getMaximum());
+            constraints.exclusiveMaximum(schema.getExclusiveMaximum());
+            constraints.minLength(schema.getMinLength());
+            constraints.maxLength(schema.getMaxLength());
+            constraints.pattern(schema.getPattern());
+            constraints.minItems(schema.getMinItems());
+            constraints.maxItems(schema.getMinItems());
+            constraints.uniqueItems(schema.getUniqueItems());
+            constraints.enums(schema.getEnums());
+
             properties.put(propertyName, new OpenApiProperty(
                     propertyType,
                     required,
                     propertySchema.getReadOnly(),
                     propertySchema.getWriteOnly(),
-                    schema.getMinimum(),
-                    schema.getExclusiveMinimum(),
-                    schema.getMaximum(),
-                    schema.getExclusiveMaximum(),
-                    schema.getMinLength(),
-                    schema.getMaxLength(),
-                    schema.getPattern(),
-                    schema.getMinItems(),
-                    schema.getMaxItems(),
-                    schema.getUniqueItems(),
-                    schema.getEnums()
+                    constraints
             ));
         });
 

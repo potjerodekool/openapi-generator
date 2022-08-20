@@ -16,6 +16,8 @@ import io.github.potjerodekool.openapi.internal.*;
 import io.github.potjerodekool.openapi.internal.generate.AnnotationMember;
 import io.github.potjerodekool.openapi.internal.generate.GenerateUtils;
 import io.github.potjerodekool.openapi.internal.generate.Types;
+import io.github.potjerodekool.openapi.log.LogLevel;
+import io.github.potjerodekool.openapi.log.Logger;
 import io.github.potjerodekool.openapi.type.OpenApiType;
 import io.github.potjerodekool.openapi.internal.util.NodeListCollectors;
 import io.github.potjerodekool.openapi.internal.util.Utils;

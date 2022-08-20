@@ -9,6 +9,7 @@ import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.stmt.ReturnStmt;
 import io.github.potjerodekool.openapi.*;
+import io.github.potjerodekool.openapi.dependency.DependencyChecker;
 import io.github.potjerodekool.openapi.internal.Filer;
 import io.github.potjerodekool.openapi.internal.generate.GenerateUtils;
 import io.github.potjerodekool.openapi.internal.generate.Types;
@@ -32,7 +33,7 @@ public class ModelCodeGenerator {
     private final GenerateUtils generateUtils;
     private final Filer filer;
 
-    private final InternalModelAdapter modelAdapter;
+    private final CombinedModelAdapter modelAdapter;
 
     public ModelCodeGenerator(final OpenApiGeneratorConfig config,
                               final Types types,
@@ -42,8 +43,7 @@ public class ModelCodeGenerator {
         this.types = types;
         this.generateUtils = generateUtils;
         this.filer = filer;
-        this.modelAdapter = new CombinedModelAdapter();
-        this.modelAdapter.init(
+        this.modelAdapter = new CombinedModelAdapter(
                 config,
                 types,
                 dependencyChecker,

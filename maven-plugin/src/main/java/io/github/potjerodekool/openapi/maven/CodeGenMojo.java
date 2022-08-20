@@ -1,9 +1,9 @@
 package io.github.potjerodekool.openapi.maven;
 
-import io.github.potjerodekool.openapi.Generator;
-import io.github.potjerodekool.openapi.OpenApiGeneratorConfigImpl;
-import io.github.potjerodekool.openapi.Logger;
-import io.github.potjerodekool.openapi.LoggerFactory;
+import io.github.potjerodekool.openapi.*;
+import io.github.potjerodekool.openapi.internal.OpenApiGeneratorConfigImpl;
+import io.github.potjerodekool.openapi.log.Logger;
+import io.github.potjerodekool.openapi.log.LoggerFactory;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugins.annotations.*;
 import org.apache.maven.project.MavenProject;
@@ -63,30 +63,29 @@ public class CodeGenMojo extends AbstractMojo {
 
         LoggerFactory.setLoggerProvider(this::getLogger);
 
-        final var config = new OpenApiGeneratorConfigImpl(
+        final var configBuilder = OpenApiGeneratorConfig.createBuilder(
                 new File(openApiFile),
                 generatedSourceDirectory,
                 configPackageName
         );
 
-
-
         final var dependencyChecker = new MavenDependencyChecker(this.project);
-
-        config.setGenerateApiDefinitions(generateApiDefinitions);
-        config.setGenerateModels(generateModels);
+        configBuilder.generateApiDefinitions(generateApiDefinitions);
+        configBuilder.generateModels(generateModels);
 
         if (jakartaServlet != null) {
-            config.setFeatureValue(OpenApiGeneratorConfigImpl.FEATURE_JAKARTA_SERVLET, jakartaServlet);
+            configBuilder.featureValue(OpenApiGeneratorConfigImpl.FEATURE_JAKARTA_SERVLET, jakartaServlet);
         }
 
         if (jakartaValidation != null) {
-            config.setFeatureValue(OpenApiGeneratorConfigImpl.FEATURE_JAKARTA_VALIDATION, jakartaValidation);
+            configBuilder.featureValue(OpenApiGeneratorConfigImpl.FEATURE_JAKARTA_VALIDATION, jakartaValidation);
         }
 
         if (checker != null) {
-            config.setFeatureValue(OpenApiGeneratorConfigImpl.FEATURE_CHECKER, checker);
+            configBuilder.featureValue(OpenApiGeneratorConfigImpl.FEATURE_CHECKER, checker);
         }
+
+        final var config = configBuilder.build();
 
         new Generator().generate(config, dependencyChecker);
     }

@@ -1,7 +1,7 @@
 package io.github.potjerodekool.openapi.maven;
 
-import io.github.potjerodekool.openapi.LogLevel;
-import io.github.potjerodekool.openapi.Logger;
+import io.github.potjerodekool.openapi.log.LogLevel;
+import io.github.potjerodekool.openapi.log.Logger;
 import org.apache.maven.plugin.Mojo;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
