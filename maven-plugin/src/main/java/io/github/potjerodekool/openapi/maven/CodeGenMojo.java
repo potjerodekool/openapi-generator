@@ -9,6 +9,7 @@ import org.apache.maven.plugins.annotations.*;
 import org.apache.maven.project.MavenProject;
 
 import java.io.File;
+import java.util.List;
 
 @Mojo(
         name = "generate",
@@ -44,11 +45,20 @@ public class CodeGenMojo extends AbstractMojo {
     @Parameter(property = "checker")
     private Boolean checker;
 
-    @Parameter(property = "dynamicModels")
-    private String dynamicModels;
+    @Parameter(property = "language")
+    private String language;
+
+    @Parameter(property = "externalApis")
+    private List<ExternalApiConfig> externalApis;
 
     @Override
     public void execute() {
+        LoggerFactory.setLoggerProvider(this::getLogger);
+        generate();
+        generateExternalApiModels();
+    }
+
+    private void generate() {
         if (openApiFile.isEmpty()) {
             getLog().warn(""" 
                 No files specified to process.
@@ -61,12 +71,11 @@ public class CodeGenMojo extends AbstractMojo {
             """);
         }
 
-        LoggerFactory.setLoggerProvider(this::getLogger);
-
         final var configBuilder = OpenApiGeneratorConfig.createBuilder(
                 new File(openApiFile),
                 generatedSourceDirectory,
-                configPackageName
+                configPackageName,
+                null
         );
 
         final var dependencyChecker = new MavenDependencyChecker(this.project);
@@ -85,9 +94,48 @@ public class CodeGenMojo extends AbstractMojo {
             configBuilder.featureValue(OpenApiGeneratorConfigImpl.FEATURE_CHECKER, checker);
         }
 
-        final var config = configBuilder.build();
+        if (language != null) {
+            configBuilder.language(Language.valueOf(language.toUpperCase()));
+        }
+
+        final var config = configBuilder.build(ConfigType.DEFAULT);
 
         new Generator().generate(config, dependencyChecker);
+    }
+
+    private void generateExternalApiModels() {
+        externalApis.forEach(externalApiConfig -> generateExternalApiModels(externalApiConfig));
+    }
+
+    private void generateExternalApiModels(final ExternalApiConfig externalApiConfig) {
+        final var configBuilder = OpenApiGeneratorConfig.createBuilder(
+                new File(externalApiConfig.getOpenApiFile()),
+                generatedSourceDirectory,
+                null,
+                externalApiConfig.getModelPackageName()
+        );
+
+        final var dependencyChecker = new MavenDependencyChecker(this.project);
+
+        if (jakartaServlet != null) {
+            configBuilder.featureValue(OpenApiGeneratorConfigImpl.FEATURE_JAKARTA_SERVLET, jakartaServlet);
+        }
+
+        if (jakartaValidation != null) {
+            configBuilder.featureValue(OpenApiGeneratorConfigImpl.FEATURE_JAKARTA_VALIDATION, jakartaValidation);
+        }
+
+        if (checker != null) {
+            configBuilder.featureValue(OpenApiGeneratorConfigImpl.FEATURE_CHECKER, checker);
+        }
+
+        if (language != null) {
+            configBuilder.language(Language.valueOf(language.toUpperCase()));
+        }
+
+        final var config = configBuilder.build(ConfigType.EXTERNAL);
+
+        new Generator().generateExternalApi(config, dependencyChecker);
     }
 
     private Logger getLogger(final String name) {

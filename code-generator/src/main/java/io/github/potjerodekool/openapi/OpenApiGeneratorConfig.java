@@ -9,21 +9,24 @@ import java.util.Map;
 
 public interface OpenApiGeneratorConfig {
 
-    static Builder createBuilder(final File apiFile,
-                                 final File outputDir,
-                                 final String configPackageName) {
-        return new Builder(apiFile, outputDir, configPackageName);
-    }
-
-    Builder toBuilder();
-
     String FEATURE_JAKARTA_SERVLET = "feature.jakarta.servlet";
 
     String FEATURE_JAKARTA_VALIDATION = "feature.jakarta.validation";
 
     String FEATURE_CHECKER = "checkerFramework";
 
+    static Builder createBuilder(final File apiFile,
+                                 final File outputDir,
+                                 final @Nullable String configPackageName,
+                                 final @Nullable String modelPackageName) {
+        return new Builder(apiFile, outputDir, configPackageName, modelPackageName, Language.JAVA);
+    }
+
     File getApiFile();
+
+    Language getLanguage();
+
+    Builder toBuilder();
 
     File getSchemasDir();
 
@@ -31,7 +34,9 @@ public interface OpenApiGeneratorConfig {
 
     File getOutputDir();
 
-    String getConfigPackageName();
+    @Nullable String getConfigPackageName();
+
+    @Nullable String getModelPackageName();
 
     boolean isGenerateApiDefinitions();
 
@@ -43,51 +48,69 @@ public interface OpenApiGeneratorConfig {
         return Boolean.TRUE.equals(getFeatureValue(feature));
     }
 
+    ConfigType getConfigType();
+
     class Builder {
 
         private final File apiFile;
         private final File outputDir;
-        private final String configPackageName;
-
+        private final @Nullable String configPackageName;
+        private final @Nullable String modelPackageName;
         private boolean generateApiDefinitions = true;
-
         private boolean generateModels = true;
-
         private final Map<String, Boolean> features;
+        private Language language;
 
         public Builder(final File apiFile,
                        final File outputDir,
-                       final String configPackageName) {
-            this(apiFile, outputDir, configPackageName, new HashMap<>());
+                       final @Nullable String configPackageName,
+                       final @Nullable String modelPackageName,
+                       final Language language) {
+            this(apiFile, outputDir, configPackageName, modelPackageName, new HashMap<>(), language);
         }
 
         public Builder(final File apiFile,
                        final File outputDir,
-                       final String configPackageName,
-                       final Map<String, Boolean> features) {
+                       final @Nullable String configPackageName,
+                       final @Nullable String modelPackageName,
+                       final Map<String, Boolean> features,
+                       final Language language) {
             this.apiFile = apiFile;
             this.outputDir = outputDir;
             this.configPackageName = configPackageName;
+            this.modelPackageName = modelPackageName;
             this.features = features;
+            this.language = language;
         }
 
-        public void generateApiDefinitions(final boolean generateApiDefinitions) {
+        public Builder generateApiDefinitions(final boolean generateApiDefinitions) {
             this.generateApiDefinitions = generateApiDefinitions;
+            return this;
         }
 
-        public void generateModels(final boolean generateModels) {
+        public Builder generateModels(final boolean generateModels) {
             this.generateModels = generateModels;
+            return this;
         }
 
-        public void featureValue(final String feature, final Boolean value) {
+        public Builder featureValue(final String feature, final Boolean value) {
             this.features.put(feature, value);
+            return this;
         }
 
-        public OpenApiGeneratorConfig build() {
+        public Builder language(final Language language) {
+            this.language = language;
+            return this;
+        }
+
+        public OpenApiGeneratorConfig build(final ConfigType configType) {
             final var config = new OpenApiGeneratorConfigImpl(
                     apiFile,
                     outputDir,
-                    configPackageName
+                    configPackageName,
+                    modelPackageName,
+                    language,
+                    configType
             );
             config.setGenerateApiDefinitions(generateApiDefinitions);
             config.setGenerateModels(generateModels);
@@ -97,3 +120,4 @@ public interface OpenApiGeneratorConfig {
     }
 
 }
+

@@ -32,7 +32,9 @@ public class MavenDependencyChecker implements DependencyChecker {
                 .map(artifact -> new Artifact(
                         artifact.getGroupId(),
                         artifact.getArtifactId(),
-                        artifact.getFile()
+                        artifact.getFile(),
+                        artifact.getClassifier(),
+                        artifact.getType()
                 ));
     }
 }

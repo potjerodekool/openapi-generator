@@ -1,12 +1,10 @@
 package io.github.potjerodekool.openapi.internal;
 
-import io.github.potjerodekool.openapi.HttpMethod;
-import io.github.potjerodekool.openapi.OpenApiGeneratorConfig;
-import io.github.potjerodekool.openapi.RequestCycleLocation;
+import io.github.potjerodekool.openapi.internal.util.QualifiedName;
 import io.github.potjerodekool.openapi.tree.Constraints;
+import io.github.potjerodekool.openapi.tree.Digits;
 import io.github.potjerodekool.openapi.tree.OpenApiProperty;
 import io.github.potjerodekool.openapi.tree.Package;
-import io.github.potjerodekool.openapi.internal.util.GenerateException;
 import io.github.potjerodekool.openapi.internal.util.Utils;
 import com.reprezen.kaizen.oasparser.model3.Schema;
 import com.reprezen.kaizen.oasparser.ovl3.SchemaImpl;
@@ -25,13 +23,10 @@ import static io.github.potjerodekool.openapi.internal.util.Utils.requireNonNull
  */
 public class SchemaToTypeConverter {
 
-    private static final String SCHEMAS = "schemas";
-    private static final String SCHEMAS_SLASH = "schemas/";
+    private final TypeNameResolver typeNameResolver;
 
-    private final File schemaDir;
-
-    public SchemaToTypeConverter(final OpenApiGeneratorConfig config) {
-        this.schemaDir = requireNonNull(config.getSchemasDir());
+    public SchemaToTypeConverter(final TypeNameResolver typeNameResolver) {
+        this.typeNameResolver = typeNameResolver;
     }
 
     private File resolveDirOfSchema(final Schema schema,
@@ -92,6 +87,25 @@ public class SchemaToTypeConverter {
             constraints.maxItems(schema.getMinItems());
             constraints.uniqueItems(schema.getUniqueItems());
             constraints.enums(schema.getEnums());
+
+            propertySchema.getExtensions().forEach( (k, value) -> {
+                if (k.startsWith("x-")) {
+                    final var name = k.substring(2);
+
+                    if ("allowed-value".equals(name)) {
+                        constraints.allowedValue(value);
+                    } else if ("digits".equals(name)) {
+                        if (value instanceof Map<?,?> map) {
+                            final var integer = (Integer) map.get("integer");
+                            final var fraction = (Integer) map.get("fraction");
+
+                            if (integer != null && fraction != null) {
+                                constraints.digits(new Digits(integer, fraction));
+                            }
+                        }
+                    }
+                }
+            });
 
             properties.put(propertyName, new OpenApiProperty(
                     propertyType,
@@ -160,63 +174,13 @@ public class SchemaToTypeConverter {
             }
 
             final var refString = creatingRef.getNormalizedRef();
-            final var absoluteSchemaUri = Utils.toUriString(schemaDir);
-
-            if (!refString.startsWith(absoluteSchemaUri)) {
-                throw new GenerateException(refString + " doesn't start with " + absoluteSchemaUri);
-            }
-
-            final var path = refString.substring(absoluteSchemaUri.length());
-
-            final var qualifiedName = refString.substring(absoluteSchemaUri.length());
-            final var packageSepIndex = qualifiedName.lastIndexOf('/');
-
-            final var nameBuilder = new StringBuilder();
-            final String packageName;
-
-            if (packageSepIndex > 0) {
-                packageName = removeSchemasPart(path.substring(0, packageSepIndex)).replace('/', '.');
-                final var nameSepIndex = path.lastIndexOf('.');
-                final var name = path.substring(packageSepIndex + 1, nameSepIndex);
-                nameBuilder.append(name);
-            } else {
-                packageName = null;
-                final var nameSepIndex = path.lastIndexOf('.');
-                final var name = path.substring(0, nameSepIndex);
-                nameBuilder.append(name);
-            }
-
-            if (HttpMethod.PATCH == schemaContext.httpMethod()
-                    && schemaContext.requestCycleLocation() == RequestCycleLocation.REQUEST
-                    && !nameBuilder.toString().endsWith("Patch")) {
-                nameBuilder.append("Patch");
-            }
-
-            if (schemaContext.requestCycleLocation() == RequestCycleLocation.RESPONSE) {
-                if (!nameBuilder.toString().endsWith("Response")) {
-                    nameBuilder.append("Response");
-                }
-            } else if (!nameBuilder.toString().endsWith("Request")) {
-                nameBuilder.append("Request");
-            }
-
-            nameBuilder.append("Dto");
-
-            final var pck = packageName == null ? Package.UNNAMED : new Package(packageName);
-
-            return ot.withPackage(pck).withName(nameBuilder.toString());
+            typeNameResolver.validateRefString(refString);
+            final QualifiedName qualifiedName = typeNameResolver.createTypeName(creatingRef, schemaContext);
+            final String packageName = qualifiedName.packageName();
+            final var pck = packageName.isEmpty() ? Package.UNNAMED : new Package(packageName);
+            return ot.withPackage(pck).withName(qualifiedName.simpleName());
         } else {
             return type;
-        }
-    }
-
-    private String removeSchemasPart(final String value) {
-        if (value.startsWith(SCHEMAS)) {
-            return value.substring(SCHEMAS.length());
-        } else if (value.startsWith(SCHEMAS_SLASH)) {
-            return value.substring(SCHEMAS_SLASH.length());
-        } else {
-            return value;
         }
     }
 }

@@ -15,6 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.http.HttpServletRequest;
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -34,7 +35,7 @@ public class PetstoreController implements PetstoreApi {
         final var id = petService.createPet(petRequestDto);
 
         if (id != null) {
-            return ResponseEntity.created(ApiUtils.createLocation(request, id)).build();
+            return ResponseEntity.created(ApiUtilsKt.createLocation(request, id)).build();
         } else {
             return ResponseEntity.unprocessableEntity().build();
         }
@@ -130,7 +131,11 @@ public class PetstoreController implements PetstoreApi {
     }
 
     private PetResponseDto createResponse(final Pet pet) {
-        return new PetResponseDto(pet.getId(), pet.getName())
-                .tag(pet.getTag());
+        final var response = new PetResponseDto(pet.getId(), pet.getName(),
+                LocalDate.now(),
+                pet.getTag(
+                )
+        );
+        return response;
     }
 }

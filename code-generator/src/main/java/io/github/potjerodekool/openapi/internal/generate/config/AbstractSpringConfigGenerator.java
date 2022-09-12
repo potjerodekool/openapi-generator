@@ -1,63 +1,65 @@
 package io.github.potjerodekool.openapi.internal.generate.config;
 
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import io.github.potjerodekool.openapi.Language;
 import io.github.potjerodekool.openapi.OpenApiGeneratorConfig;
+import io.github.potjerodekool.openapi.generate.config.ConfigGenerator;
 import io.github.potjerodekool.openapi.internal.Filer;
+import io.github.potjerodekool.openapi.internal.ast.CompilationUnit;
+import io.github.potjerodekool.openapi.internal.ast.TypeUtils;
+import io.github.potjerodekool.openapi.internal.ast.element.PackageElement;
+import io.github.potjerodekool.openapi.internal.ast.element.TypeElement;
 import io.github.potjerodekool.openapi.log.LogLevel;
 import io.github.potjerodekool.openapi.log.Logger;
-import io.github.potjerodekool.openapi.internal.generate.Types;
 import io.github.potjerodekool.openapi.tree.OpenApi;
 
 import java.io.IOException;
 
-public abstract class AbstractSpringConfigGenerator {
+public abstract class AbstractSpringConfigGenerator implements ConfigGenerator {
 
     private static final Logger LOGGER = Logger.getLogger(AbstractSpringConfigGenerator.class.getName());
 
     private final OpenApiGeneratorConfig config;
-    private final Types types;
+    private final TypeUtils typeUtils;
     private final Filer filer;
 
     public AbstractSpringConfigGenerator(final OpenApiGeneratorConfig config,
-                                         final Types types,
+                                         final TypeUtils typeUtils,
                                          final Filer filer) {
         this.config = config;
-        this.types = types;
+        this.typeUtils = typeUtils;
         this.filer = filer;
     }
 
-    public Types getTypes() {
-        return types;
+    protected TypeUtils getTypeUtils() {
+        return typeUtils;
     }
 
     protected abstract String getConfigClassName();
 
+    @Override
     public void generate(final OpenApi api) {
         if (skipGeneration()) {
             return;
         }
 
-        final var cu = types.createCompilationUnit();
+        final var cu = new CompilationUnit(Language.JAVA);
 
         final var configPackageName = config.getConfigPackageName();
-
-        if (configPackageName != null) {
-            cu.setPackageDeclaration(configPackageName);
-        }
+        cu.setPackageElement(PackageElement.create(configPackageName));
 
         final var clazz = cu.addClass(getConfigClassName());
-        clazz.addMarkerAnnotation("org.springframework.context.annotation.Configuration");
+        clazz.addAnnotation("org.springframework.context.annotation.Configuration");
 
         fillClass(api, clazz);
         try {
-            filer.write(cu);
+            filer.write(cu, config.getLanguage());
         } catch (final IOException e) {
             LOGGER.log(LogLevel.SEVERE, "Fail to generate code for spring api definition", e);
         }
     }
 
     protected abstract void fillClass(OpenApi api,
-                                      ClassOrInterfaceDeclaration clazz);
+                                      TypeElement typeElement);
 
     protected boolean skipGeneration() {
         return false;

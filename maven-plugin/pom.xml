@@ -43,7 +43,7 @@
     </distributionManagement>
 
     <properties>
-        <java.version>17</java.version>
+        <java.version>16</java.version>
         <maven.compiler.source>${java.version}</maven.compiler.source>
         <maven.compiler.target>${java.version}</maven.compiler.target>
     </properties>
@@ -129,7 +129,6 @@
                     <artifactId>${project.artifactId}</artifactId>
                     <version>${project.version}</version>
                     <packaging>${project.packaging}</packaging>
-                    <createChecksum>true</createChecksum>
                 </configuration>
                 <executions>
                     <execution>

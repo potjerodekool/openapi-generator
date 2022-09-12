@@ -1,5 +1,7 @@
 package io.github.potjerodekool.openapi.internal;
 
+import io.github.potjerodekool.openapi.ConfigType;
+import io.github.potjerodekool.openapi.Language;
 import io.github.potjerodekool.openapi.OpenApiGeneratorConfig;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -13,7 +15,10 @@ public class OpenApiGeneratorConfigImpl implements OpenApiGeneratorConfig {
     private final File schemasDir;
     private final File pathsDir;
     private final File outputDir;
-    private final String configPackageName;
+    private final @Nullable String configPackageName;
+    private final @Nullable String modelPackageName;
+    private final Language language;
+    private final ConfigType configType;
 
     private boolean generateApiDefinitions = true;
     private boolean generateModels = true;
@@ -22,13 +27,19 @@ public class OpenApiGeneratorConfigImpl implements OpenApiGeneratorConfig {
 
     public OpenApiGeneratorConfigImpl(final File apiFile,
                                       final File outputDir,
-                                      final String configPackageName) {
+                                      final @Nullable String configPackageName,
+                                      final @Nullable String modelPackageName,
+                                      final Language language,
+                                      final ConfigType configType) {
         this.apiFile = apiFile;
         final var parentFile = apiFile.getParentFile();
-        schemasDir = new File(parentFile, "schemas");
-        pathsDir = new File(parentFile, "paths");
+        this.schemasDir = new File(parentFile, "schemas");
+        this.pathsDir = new File(parentFile, "paths");
         this.outputDir = outputDir;
         this.configPackageName = configPackageName;
+        this.modelPackageName = modelPackageName;
+        this.language = language;
+        this.configType = configType;
     }
 
     @Override
@@ -49,10 +60,14 @@ public class OpenApiGeneratorConfigImpl implements OpenApiGeneratorConfig {
         return outputDir;
     }
 
+    @Override
+    public @Nullable String getConfigPackageName() {
+        return configPackageName;
+    }
 
     @Override
-    public String getConfigPackageName() {
-        return configPackageName;
+    public @Nullable String getModelPackageName() {
+        return modelPackageName;
     }
 
     @Override
@@ -78,10 +93,14 @@ public class OpenApiGeneratorConfigImpl implements OpenApiGeneratorConfig {
         return features.get(feature);
     }
 
-    @Override
     public void setFeatureValue(final String feature,
                                 final Boolean value) {
         features.put(feature, value);
+    }
+
+    @Override
+    public Language getLanguage() {
+        return language;
     }
 
     @Override
@@ -90,10 +109,17 @@ public class OpenApiGeneratorConfigImpl implements OpenApiGeneratorConfig {
                 apiFile,
                 outputDir,
                 configPackageName,
-                new HashMap<>(features)
+                modelPackageName,
+                new HashMap<>(features),
+                language
         );
         builder.generateApiDefinitions(generateApiDefinitions);
         builder.generateModels(generateModels);
         return builder;
+    }
+
+    @Override
+    public ConfigType getConfigType() {
+        return configType;
     }
 }

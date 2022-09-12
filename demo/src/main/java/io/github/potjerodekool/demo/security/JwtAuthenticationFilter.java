@@ -1,5 +1,6 @@
 package io.github.potjerodekool.demo.security;
 
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -16,8 +17,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(final HttpServletRequest request,
-                                    final HttpServletResponse response,
-                                    final FilterChain filterChain) throws ServletException, IOException {
+                                    final @NonNull HttpServletResponse response,
+                                    final @NonNull FilterChain filterChain) throws ServletException, IOException {
         final var authorizationStr = request.getHeader(HttpHeaders.AUTHORIZATION);
 
         if (authorizationStr != null && authorizationStr.startsWith(BEARER_PREFIX)) {

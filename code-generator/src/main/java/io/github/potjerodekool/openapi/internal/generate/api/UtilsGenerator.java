@@ -1,40 +1,46 @@
 package io.github.potjerodekool.openapi.internal.generate.api;
 
-import com.github.javaparser.ast.Modifier;
-import com.github.javaparser.ast.NodeList;
-import com.github.javaparser.ast.body.Parameter;
-import com.github.javaparser.ast.body.VariableDeclarator;
-import com.github.javaparser.ast.expr.*;
-import com.github.javaparser.ast.stmt.BlockStmt;
-import com.github.javaparser.ast.stmt.ExpressionStmt;
-import com.github.javaparser.ast.stmt.IfStmt;
-import com.github.javaparser.ast.stmt.ReturnStmt;
+import io.github.potjerodekool.openapi.Language;
 import io.github.potjerodekool.openapi.OpenApiGeneratorConfig;
 import io.github.potjerodekool.openapi.internal.Filer;
+import io.github.potjerodekool.openapi.internal.ast.CompilationUnit;
+import io.github.potjerodekool.openapi.internal.ast.Modifier;
+import io.github.potjerodekool.openapi.internal.ast.Operator;
+import io.github.potjerodekool.openapi.internal.ast.TypeUtils;
+import io.github.potjerodekool.openapi.internal.ast.element.PackageElement;
+import io.github.potjerodekool.openapi.internal.ast.element.VariableElement;
+import io.github.potjerodekool.openapi.internal.ast.expression.*;
+import io.github.potjerodekool.openapi.internal.ast.statement.BlockStatement;
+import io.github.potjerodekool.openapi.internal.ast.statement.ExpressionStatement;
+import io.github.potjerodekool.openapi.internal.ast.statement.IfStatement;
+import io.github.potjerodekool.openapi.internal.ast.statement.ReturnStatement;
+import io.github.potjerodekool.openapi.internal.util.Utils;
 import io.github.potjerodekool.openapi.log.LogLevel;
 import io.github.potjerodekool.openapi.log.Logger;
-import io.github.potjerodekool.openapi.internal.generate.Types;
 import io.github.potjerodekool.openapi.tree.OpenApi;
-import io.github.potjerodekool.openapi.internal.util.Utils;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
+import java.util.Set;
 
 public class UtilsGenerator {
 
     private static final Logger LOGGER = Logger.getLogger(UtilsGenerator.class.getName());
 
-    private final Types types;
-
     private final Filer filer;
+    private final TypeUtils typeUtils;
+
     private final File pathsDir;
+    private final Language language;
 
     public UtilsGenerator(final OpenApiGeneratorConfig config,
-                          final Types types,
-                          final Filer filer) {
-        this.types = types;
+                          final Filer filer,
+                          final TypeUtils typeUtils) {
         this.filer = filer;
-        pathsDir = config.getPathsDir();
+        this.typeUtils = typeUtils;
+        this.pathsDir = config.getPathsDir();
+        this.language = config.getLanguage();
     }
 
     public void generate(final OpenApi api) {
@@ -53,69 +59,74 @@ public class UtilsGenerator {
             }
         }
 
-        final var cu = types.createCompilationUnit();
-        cu.setPackageDeclaration(packageName);
-        cu.addImport("java.net.URI");
+        final var cu = new CompilationUnit(Language.JAVA);
+        cu.setPackageElement(PackageElement.create(packageName));
 
-        final var clazz = cu.addClass("ApiUtils", Modifier.Keyword.PUBLIC, Modifier.Keyword.FINAL);
-        clazz.addConstructor(Modifier.Keyword.PRIVATE);
+        final var clazz = cu.addClass("ApiUtils", Modifier.PUBLIC, Modifier.FINAL);
+        final var constructor = clazz.addConstructor(Modifier.PRIVATE);
+        constructor.setBody(new BlockStatement());
 
-        final var createLocationMethod = clazz.addMethod("createLocation", Modifier.Keyword.PUBLIC, Modifier.Keyword.STATIC);
-        createLocationMethod.setType(types.createType("java.net.URI"));
+        final var createLocationMethod = clazz.addMethod("createLocation", Modifier.PUBLIC, Modifier.STATIC);
+        createLocationMethod.setReturnType(typeUtils.createDeclaredType("java.net.URI"));
+
+        VariableElement.createParameter(
+                "request",
+                typeUtils.createDeclaredType("javax.servlet.http.HttpServletRequest")
+        ).addModifier(Modifier.FINAL);
+
         createLocationMethod.addParameter(
-                new Parameter(
-                        types.createType("javax.servlet.http.HttpServletRequest"),
-                        "request"
-                ).addModifier(Modifier.Keyword.FINAL)
+                VariableElement.createParameter(
+                        "request",
+                        typeUtils.createDeclaredType("javax.servlet.http.HttpServletRequest")
+                ).addModifier(Modifier.FINAL)
         );
         createLocationMethod.addParameter(
-                new Parameter(
-                        types.createType("java.lang.Object"),
-                        "id"
-                ).addModifier(Modifier.Keyword.FINAL)
+                VariableElement.createParameter(
+                        "id",
+                        typeUtils.createDeclaredType("java.lang.Object")
+                ).addModifier(Modifier.FINAL)
         );
 
         // final StringBuffer location = request.getRequestURL();
-        final var body = new BlockStmt();
-        body.addStatement(
-                new VariableDeclarationExpr(
-                        new VariableDeclarator(
-                                types.createType("java.lang.StringBuffer"),
-                                new SimpleName("locationBuffer"),
-                                new MethodCallExpr(
-                                        new NameExpr("request"),
-                                        "getRequestURL"
-                                )
-                        ),
-                        Modifier.finalModifier()
+        final var body = new BlockStatement();
+        body.add(
+                new VariableDeclarationExpression(
+                        Set.of(Modifier.FINAL),
+                        typeUtils.createDeclaredType("java.lang.StringBuffer"),
+                        "locationBuffer",
+                        new MethodCallExpression(
+                                new NameExpression("request"),
+                                "getRequestURL"
+                        )
                 )
         );
 
-        body.addStatement(
-                new IfStmt().setCondition(
-                        new BinaryExpr(
-                                new MethodCallExpr(
-                                        new NameExpr("locationBuffer"),
+        body.add(
+                new IfStatement(
+                        new BinaryExpression(
+                                new MethodCallExpression(
+                                        new NameExpression("locationBuffer"),
                                         "charAt",
-                                        NodeList.nodeList(
-                                                new BinaryExpr(
-                                                        new MethodCallExpr(new NameExpr("locationBuffer"), "length"),
-                                                        new IntegerLiteralExpr("1"),
-                                                        BinaryExpr.Operator.MINUS
+                                        List.of(
+                                                new BinaryExpression(
+                                                        new MethodCallExpression(
+                                                                new NameExpression("locationBuffer"),
+                                                                "length"
+                                                        ),
+                                                        LiteralExpression.createIntLiteralExpression("1"),
+                                                        Operator.MINUS
                                                 )
                                         )
                                 ),
-                                new CharLiteralExpr('/'),
-                                BinaryExpr.Operator.NOT_EQUALS
-                        )
-                ).setThenStmt(
-                        new BlockStmt(
-                                NodeList.nodeList(
-                                        new ExpressionStmt(new MethodCallExpr(
-                                                new NameExpr("locationBuffer"),
+                                LiteralExpression.createCharLiteralExpression('/'),
+                                Operator.NOT_EQUALS
+                        ),
+                        new BlockStatement(
+                                new ExpressionStatement(
+                                        new MethodCallExpression(
+                                                new NameExpression("locationBuffer"),
                                                 "append",
-                                                NodeList.nodeList(new CharLiteralExpr('/'))
-                                        )
+                                                List.of(LiteralExpression.createCharLiteralExpression('/'))
                                         )
                                 )
                         )
@@ -123,17 +134,17 @@ public class UtilsGenerator {
         );
 
         // return Uri.create(location.append(id).toString())
-        body.addStatement(
-                new ReturnStmt(
-                        new MethodCallExpr(
-                                new NameExpr("URI"),
+        body.add(
+                new ReturnStatement(
+                        new MethodCallExpression(
+                                new NameExpression("java.net.URI"),
                                 "create",
-                                NodeList.nodeList(
-                                        new MethodCallExpr(
-                                                new MethodCallExpr(
-                                                        new NameExpr("locationBuffer"),
+                                List.of(
+                                        new MethodCallExpression(
+                                                new MethodCallExpression(
+                                                        new NameExpression("locationBuffer"),
                                                         "append",
-                                                        NodeList.nodeList(new NameExpr("id"))
+                                                        List.of(new NameExpression("id"))
                                                 ),
                                                 "toString"
                                         )
@@ -145,7 +156,7 @@ public class UtilsGenerator {
         createLocationMethod.setBody(body);
 
         try {
-            filer.write(cu);
+            filer.write(cu, language);
         } catch (final IOException e) {
             LOGGER.log(LogLevel.SEVERE, "Fail to generate code for ApiUtils", e);
         }

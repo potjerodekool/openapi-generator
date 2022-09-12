@@ -4,12 +4,12 @@ import com.reprezen.kaizen.oasparser.model3.*;
 import com.reprezen.kaizen.oasparser.ovl3.PathImpl;
 import com.reprezen.kaizen.oasparser.ovl3.SchemaImpl;
 import io.github.potjerodekool.openapi.*;
+import io.github.potjerodekool.openapi.internal.util.GenerateException;
+import io.github.potjerodekool.openapi.internal.util.Utils;
 import io.github.potjerodekool.openapi.tree.*;
 import io.github.potjerodekool.openapi.tree.enums.OpenApiSecuritySchemeIn;
 import io.github.potjerodekool.openapi.tree.enums.OpenApiSecuritySchemeType;
 import io.github.potjerodekool.openapi.type.OpenApiType;
-import io.github.potjerodekool.openapi.internal.util.GenerateException;
-import io.github.potjerodekool.openapi.internal.util.Utils;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.File;
@@ -19,24 +19,26 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static io.github.potjerodekool.openapi.internal.util.Utils.requireNonNull;
-
 /**
  A builder that creates a tree from an OpenApi object.
  */
 public class TreeBuilder {
-    private final File schemaDir;
+    private final @Nullable File schemaDir;
 
     private final SchemaToTypeConverter schemaToTypeConverter;
 
     public TreeBuilder(final OpenApiGeneratorConfig config) {
-        this.schemaDir = requireNonNull(config.getSchemasDir());
-        this.schemaToTypeConverter = new SchemaToTypeConverter(config);
+        if (config.getConfigType() == ConfigType.DEFAULT) {
+            this.schemaDir = config.getSchemasDir();
+            this.schemaToTypeConverter = new SchemaToTypeConverter(new DefaultTypeNameResolver(config));
+        } else {
+            this.schemaDir = null;
+            this.schemaToTypeConverter = new SchemaToTypeConverter(new ExternalTypeNameResolver(config));
+        }
     }
 
     public OpenApi build(final OpenApi3 openApi,
                          final File rootDir) {
-
         final var securitySchemas = processSecuritySchemas(openApi.getSecuritySchemes());
         final var securityRequirements = processSecurityRequirements(openApi.getSecurityRequirements());
 
@@ -276,8 +278,10 @@ public class TreeBuilder {
 
     private OpenApiHeader createHeader(final Header header) {
         final var schema = header.getSchema();
+        var type = Utils.getOrDefault(schema.getType(), "string");
+
         final var headerType = schemaToTypeConverter.build(
-                schema.getType(),
+                type,
                 schema.getFormat(),
                 schema.getNullable()
         );
@@ -379,21 +383,18 @@ public class TreeBuilder {
                     rootDir,
                     schemaContext
             );
-
-            /*
-            return schemaToTypeConverter.build(
-                    schema.getType(),
-                    schema.getFormat(),
-                    schema.getNullable()
-            );
-            */
         }
 
         final var refString = createRef.getNormalizedRef();
-        final var absoluteSchemaUri = Utils.toUriString(schemaDir);
 
-        if (!refString.startsWith(absoluteSchemaUri)) {
-            throw new GenerateException(refString + " doesn't start with " + absoluteSchemaUri);
+        if (!refString.contains("#/components/schemas")) {
+            if (schemaDir == null) {
+                throw new NullPointerException("schemaDir is null");
+            }
+            final var absoluteSchemaUri = Utils.toUriString(schemaDir);
+            if (!refString.startsWith(absoluteSchemaUri)) {
+                throw new GenerateException(refString + " doesn't start with " + absoluteSchemaUri);
+            }
         }
 
         return schemaToTypeConverter.build(schema, rootDir, schemaContext);

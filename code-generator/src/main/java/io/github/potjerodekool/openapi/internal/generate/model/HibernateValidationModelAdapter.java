@@ -1,56 +1,71 @@
 package io.github.potjerodekool.openapi.internal.generate.model;
 
-import com.github.javaparser.ast.body.FieldDeclaration;
-import com.github.javaparser.ast.expr.MarkerAnnotationExpr;
-import io.github.potjerodekool.openapi.dependency.DependencyChecker;
 import io.github.potjerodekool.openapi.HttpMethod;
 import io.github.potjerodekool.openapi.OpenApiGeneratorConfig;
 import io.github.potjerodekool.openapi.RequestCycleLocation;
-import io.github.potjerodekool.openapi.internal.generate.GenerateUtils;
-import io.github.potjerodekool.openapi.internal.generate.Types;
+import io.github.potjerodekool.openapi.internal.ast.TypeUtils;
+import io.github.potjerodekool.openapi.internal.ast.element.VariableElement;
+import io.github.potjerodekool.openapi.internal.ast.type.Type;
+import io.github.potjerodekool.openapi.internal.di.Bean;
+import io.github.potjerodekool.openapi.internal.di.ConditionalOnDependency;
 import io.github.potjerodekool.openapi.tree.OpenApiProperty;
-import org.checkerframework.checker.nullness.qual.EnsuresNonNull;
+import jakarta.inject.Inject;
 
-@SuppressWarnings({"initialization.field.uninitialized", "initialization.fields.uninitialized"})
+@Bean
+@ConditionalOnDependency(
+        groupId = "org.hibernate.validator",
+        artifactId = "hibernate-validator"
+)
 public class HibernateValidationModelAdapter extends ValidationModelAdapter {
 
-    private Types types;
+    private final Type<?> numberType;
 
+    @SuppressWarnings("initialization.fields.uninitialized")
+    private TypeTest futureTypeTest;
+
+    @Inject
     public HibernateValidationModelAdapter(final OpenApiGeneratorConfig config,
-                                           final Types types,
-                                           final DependencyChecker dependencyChecker,
-                                           final GenerateUtils generateUtils) {
-        super(config, types, dependencyChecker, generateUtils);
-        this.types = types;
+                                           final TypeUtils typeUtils) {
+        super(config, typeUtils);
+        this.numberType = typeUtils.createDeclaredType("java.lang.Number");
     }
 
-    @Override
-    @EnsuresNonNull("this.types")
-    public void init(final OpenApiGeneratorConfig config,
-                     final Types types,
-                     final DependencyChecker dependencyChecker,
-                     final GenerateUtils generateUtils) {
-        this.types = types;
+    @Inject
+    public void initTypes(final TypeTestLoader typeTestLoader) {
+        this.futureTypeTest = typeTestLoader.loadTypeTest("validator.hv.future");
     }
 
     @Override
     public void adaptField(final HttpMethod httpMethod,
                            final RequestCycleLocation requestCycleLocation,
                            final OpenApiProperty property,
-                           final FieldDeclaration fieldDeclaration) {
-        super.adaptField(httpMethod, requestCycleLocation, property, fieldDeclaration);
-        processUniqueItems(property, fieldDeclaration);
+                           final VariableElement field) {
+        super.adaptField(httpMethod, requestCycleLocation, property, field);
+        processUniqueItems(property, field);
    }
 
     private void processUniqueItems(final OpenApiProperty property,
-                                    final FieldDeclaration fieldDeclaration) {
-        final var fieldType = fieldDeclaration.getVariable(0).getType();
+                                    final VariableElement field) {
+        final var fieldType = field.getType();
 
-        if (Boolean.TRUE.equals(property.constraints().uniqueItems()) && types.isListType(fieldType)) {
-            fieldDeclaration.addAnnotation(
-                    new MarkerAnnotationExpr("org.hibernate.validator.constraints.UniqueElements")
-            );
+        if (Boolean.TRUE.equals(property.constraints().uniqueItems()) && getTypeUtils().isListType(fieldType)) {
+            field.addAnnotation("org.hibernate.validator.constraints.UniqueElements");
         }
     }
 
+    @Override
+    protected boolean supportsDigits(final Type<?> type) {
+        if (numberType.isAssignableBy(type) ||
+                "javax.money.MonetaryAmount".equals(getTypeUtils().getTypeName(type))) {
+            return true;
+        }
+
+        return super.supportsDigits(type);
+    }
+
+    @Override
+    protected boolean isFutureSupported(final Type<?> type) {
+        return super.isFutureSupported(type)
+                || futureTypeTest.test(type);
+    }
 }

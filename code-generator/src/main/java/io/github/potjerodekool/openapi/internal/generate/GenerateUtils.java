@@ -1,51 +1,169 @@
 package io.github.potjerodekool.openapi.internal.generate;
 
-import com.github.javaparser.ast.body.FieldDeclaration;
-import com.github.javaparser.ast.expr.AnnotationExpr;
-import com.github.javaparser.ast.expr.ArrayInitializerExpr;
-import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.NormalAnnotationExpr;
-import com.github.javaparser.ast.type.Type;
+import io.github.potjerodekool.openapi.internal.ast.TypeUtils;
+import io.github.potjerodekool.openapi.internal.ast.expression.*;
+import io.github.potjerodekool.openapi.internal.ast.type.*;
+import io.github.potjerodekool.openapi.internal.util.GenerateException;
+import io.github.potjerodekool.openapi.internal.util.Utils;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
-public interface GenerateUtils {
-    boolean isListType(Type type);
+public class GenerateUtils {
 
-    @Nullable Expression getDefaultValue(Type type);
+    private final TypeUtils typeUtils;
 
+    public GenerateUtils(final TypeUtils typeUtils) {
+        this.typeUtils = typeUtils;
+    }
 
-    AnnotationExpr createAnnotation(String name,
-                                    String memberName,
-                                    AnnotationExpr value);
+    public AnnotationExpression createAnnotation(final String name,
+                                                 final String memberName,
+                                                 final AnnotationExpression value) {
+        return createAnnotation(
+                name,
+                new AnnotationMember(
+                        memberName,
+                        value
+                )
+        );
+    }
 
-    NormalAnnotationExpr createAnnotation(String name,
-                                          AnnotationMember member);
+    public AnnotationExpression createAnnotation(final String name,
+                                                 final AnnotationMember member) {
+        return createAnnotation(name, List.of(member));
+    }
 
-    NormalAnnotationExpr createAnnotation(String name,
-                                          List<AnnotationMember> members);
+    public AnnotationExpression createAnnotation(final String name,
+                                                 final List<AnnotationMember> members) {
+        return new AnnotationExpression(name, toMap(members));
+    }
 
-    <A extends AnnotationExpr> ArrayInitializerExpr createArrayInitializerExprOfAnnotations(List<@NonNull A> list);
+    public <A extends AnnotationExpression> ArrayInitializerExpression createArrayInitializerExprOfAnnotations(final List<@NonNull A> list) {
+        return new ArrayInitializerExpression(
+                list.stream()
+                .map(it -> (Expression) it)
+                .toList());
+    }
 
-    ArrayInitializerExpr createArrayInitializerExprOfStrings(List<@NonNull String> list);
+    public ArrayInitializerExpression createArrayInitializerExprOfStrings(final List<@NonNull String> list) {
+        final List<Expression> expressionList = list.stream()
+                .map(it -> (Expression) LiteralExpression.createStringLiteralExpression(it))
+                .toList();
+        return new ArrayInitializerExpression(
+                expressionList
+        );
+    }
 
-    <E extends Expression> ArrayInitializerExpr createArrayInitializerExpr(List<@NonNull E> list);
+    public <E extends Expression> ArrayInitializerExpression createArrayInitializerExpr(final List<@NonNull E> list) {
+        return new ArrayInitializerExpression(
+                list.stream()
+                .map(it -> (Expression) it)
+                .toList());
+    }
 
-    <E extends Expression> Expression toExpression(List<@NonNull E> list);
+    public Type<?> getFirstTypeArg(final Type<?> type) {
+        if (type.isDeclaredType()) {
+            final var declaredType = (DeclaredType) type;
+            final var typeArgumentOptional = declaredType.getTypeArguments();
 
-    Type getFirstTypeArg(Type type);
+            if (typeArgumentOptional.isEmpty()) {
+                throw new GenerateException("Expected a type argument");
+            }
 
-    AnnotationExpr createArraySchemaAnnotation(Type elementType);
+            final var typeArguments = typeArgumentOptional.get();
 
-    AnnotationExpr createSchemaAnnotation(Type type,
-                                          Boolean required);
+            if (typeArguments.isEmpty()) {
+                throw new GenerateException("Expected a type argument");
+            }
+            return typeArguments.get(0);
+        } else {
+            return type;
+        }
+    }
 
-    AnnotationExpr createSchemaAnnotation(String type,
-                                          @Nullable String format);
+    public AnnotationExpression createArraySchemaAnnotation(final Type<?> elementType) {
+        return createAnnotation("io.swagger.v3.oas.annotations.media.ArraySchema", "schema",
+                createSchemaAnnotation(elementType, false)
+        );
+    }
 
-    AnnotationExpr createEmptySchemaAnnotation();
+    public AnnotationExpression createSchemaAnnotation(final Type<?> type,
+                                                       final Boolean required) {
+        final var members = new ArrayList<AnnotationMember>();
 
-    Type getFieldType(FieldDeclaration fieldDeclaration);
+        final Type<?> implementationType;
+
+        if (type.isWildCardType()) {
+            final var wt = (WildcardType) type;
+            if (wt.getExtendsBound().isPresent()) {
+                implementationType = wt.getExtendsBound().get();
+            } else if (wt.getSuperBound().isPresent()) {
+                implementationType = wt.getSuperBound().get();
+            } else {
+                //Will result in compilation error in generated code.
+                implementationType = wt;
+            }
+        } else if (typeUtils.isMapType(type)) {
+            implementationType = typeUtils.createMapType();
+        } else {
+            implementationType = type;
+        }
+
+        members.add(new AnnotationMember("implementation", toNonWildCardType(implementationType)));
+
+        if (Utils.isTrue(required)) {
+            members.add(new AnnotationMember("required", true));
+        }
+
+        return new AnnotationExpression(
+                "io.swagger.v3.oas.annotations.media.Schema",
+                toMap(members)
+        );
+    }
+
+    private Type<?> toNonWildCardType(final Type<?> type) {
+        if (type.isWildCardType()) {
+            final var wildcardType = (WildcardType) type;
+            final var extendsBoundOptional = wildcardType.getExtendsBound();
+            final var superBoundOptional = wildcardType.getSuperBound();
+            if (extendsBoundOptional.isPresent()) {
+                return extendsBoundOptional.get();
+            } else if (superBoundOptional.isPresent()) {
+                return superBoundOptional.get();
+            } else {
+                throw new UnsupportedOperationException("No bounds");
+            }
+        } else {
+            return type;
+        }
+    }
+
+    public AnnotationExpression createSchemaAnnotation(final String type,
+                                                       final @Nullable String format) {
+        final var members = new ArrayList<AnnotationMember>();
+        members.add(new AnnotationMember("type", type));
+
+        if (format != null) {
+            members.add(new AnnotationMember("format",format));
+        }
+
+        return new AnnotationExpression(
+                "io.swagger.v3.oas.annotations.media.Schema",
+                toMap(members)
+        );
+    }
+
+    private Map<String, Expression> toMap(final List<AnnotationMember> list) {
+        return list.stream()
+                .collect(Collectors.toMap(
+                        AnnotationMember::name,
+                        AnnotationMember::value
+                ));
+    }
+
 }

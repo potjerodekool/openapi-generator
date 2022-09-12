@@ -1,7 +1,5 @@
 package io.github.potjerodekool.openapi.internal.util;
 
-import com.github.javaparser.ast.Node;
-import com.github.javaparser.ast.NodeList;
 import com.reprezen.kaizen.oasparser.model3.Schema;
 import com.reprezen.kaizen.oasparser.ovl3.SchemaImpl;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -83,8 +81,8 @@ public final class Utils {
         return value == null || value.length() == 0;
     }
 
-    public static NodeList<? extends Node> asGeneric(@SuppressWarnings("rawtypes") final NodeList n) {
-        return ((NodeList<? extends Node>) n);
+    public static boolean isNullOrTrue(final Boolean value) {
+        return value == null || Boolean.TRUE.equals(value);
     }
 
     public static boolean isFalse(final @Nullable Boolean value) {
@@ -112,6 +110,28 @@ public final class Utils {
     public static <T> Spliterator<T> spliterator(final Iterator<T> iterator) {
         return new SimpleSpliterator<>(iterator);
     }
+
+    public static String resolveSimpleClassName(final String className) {
+        return resolveQualifiedName(className).simpleName();
+    }
+
+    public static QualifiedName resolveQualifiedName(final String className) {
+        final var nameSep = className.lastIndexOf('.');
+        final String packageName;
+        final String simpleName;
+
+        if (nameSep > -1) {
+            packageName = className.substring(0, nameSep);
+            simpleName = className.substring(nameSep + 1);
+        } else {
+            packageName = "";
+            simpleName = className;
+        }
+
+        return new QualifiedName(packageName, simpleName);
+    }
+
+
 }
 
 class SimpleSpliterator<T> implements Spliterator<T> {

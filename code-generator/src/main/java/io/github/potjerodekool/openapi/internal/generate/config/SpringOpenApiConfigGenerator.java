@@ -1,19 +1,19 @@
 package io.github.potjerodekool.openapi.internal.generate.config;
 
-import com.github.javaparser.ast.Modifier;
-import com.github.javaparser.ast.NodeList;
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.expr.*;
-import com.github.javaparser.ast.stmt.BlockStmt;
-import com.github.javaparser.ast.stmt.ReturnStmt;
 import io.github.potjerodekool.openapi.OpenApiGeneratorConfig;
 import io.github.potjerodekool.openapi.internal.Filer;
-import io.github.potjerodekool.openapi.internal.generate.Types;
+import io.github.potjerodekool.openapi.internal.ast.Modifier;
+import io.github.potjerodekool.openapi.internal.ast.TypeUtils;
+import io.github.potjerodekool.openapi.internal.ast.element.TypeElement;
+import io.github.potjerodekool.openapi.internal.ast.expression.*;
+import io.github.potjerodekool.openapi.internal.ast.statement.BlockStatement;
+import io.github.potjerodekool.openapi.internal.ast.statement.ReturnStatement;
 import io.github.potjerodekool.openapi.tree.*;
-import io.github.potjerodekool.openapi.internal.util.NodeListCollectors;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -22,9 +22,9 @@ import java.util.Map;
 public class SpringOpenApiConfigGenerator extends AbstractSpringConfigGenerator {
 
     public SpringOpenApiConfigGenerator(final OpenApiGeneratorConfig config,
-                                        final Types types,
+                                        final TypeUtils typeUtils,
                                         final Filer filer) {
-        super(config, types, filer);
+        super(config, typeUtils, filer);
     }
 
     @Override
@@ -34,21 +34,20 @@ public class SpringOpenApiConfigGenerator extends AbstractSpringConfigGenerator 
 
     @Override
     protected void fillClass(final OpenApi api,
-                             final ClassOrInterfaceDeclaration clazz) {
-        final var method = clazz.addMethod("api", Modifier.Keyword.PUBLIC);
-        method.addAnnotation(new MarkerAnnotationExpr("org.springframework.context.annotation.Bean"));
+                             final TypeElement typeElement) {
+        final var method = typeElement.addMethod("api", Modifier.PUBLIC);
+        method.addAnnotation("org.springframework.context.annotation.Bean");
 
-        final var openApiType = getTypes().createType("io.swagger.v3.oas.models.OpenAPI");
+        final var openApiType = getTypeUtils().createDeclaredType("io.swagger.v3.oas.models.OpenAPI");
 
-        Expression openApiInstance = new ObjectCreationExpr()
-                .setType(openApiType);
-        method.setType(openApiType);
+        Expression openApiInstance = new NewClassExpression(openApiType);
+        method.setReturnType(openApiType);
 
-        openApiInstance = new MethodCallExpr(openApiInstance, "info", NodeList.nodeList(createInfo(api)));
+        openApiInstance = new MethodCallExpression(openApiInstance, "info", List.of(createInfo(api)));
 
         final var components = createComponents(api);
         if (components != null) {
-            openApiInstance = new MethodCallExpr(openApiInstance, "components", NodeList.nodeList(components));
+            openApiInstance = new MethodCallExpression(openApiInstance, "components", List.of(components));
         }
 
         final var securityRequirements = api.securityRequirements().stream()
@@ -61,14 +60,15 @@ public class SpringOpenApiConfigGenerator extends AbstractSpringConfigGenerator 
             }
         }
 
-        method.setBody(new BlockStmt(NodeList.nodeList(new ReturnStmt(openApiInstance))));
+        method.setBody(new BlockStatement(new ReturnStatement(openApiInstance)));
     }
 
     private Expression createInfo(final OpenApi api) {
         final var apiInfo = api.info();
 
-        Expression lastExpression = new ObjectCreationExpr()
-                .setType("io.swagger.v3.oas.models.info.Info");
+        Expression lastExpression = new NewClassExpression(
+                getTypeUtils().createDeclaredType("io.swagger.v3.oas.models.info.Info")
+        );
 
         final var title = apiInfo.title();
 
@@ -132,8 +132,9 @@ public class SpringOpenApiConfigGenerator extends AbstractSpringConfigGenerator 
         final var url = licence.url();
         final var extensions = licence.extensions();
 
-        Expression lastExpression = new ObjectCreationExpr()
-                .setType("io.swagger.v3.oas.models.info.License");
+        Expression lastExpression = new NewClassExpression(
+                getTypeUtils().createDeclaredType("io.swagger.v3.oas.models.info.License")
+        );
 
         if (name != null) {
             lastExpression = call(lastExpression, "name", name);
@@ -156,50 +157,52 @@ public class SpringOpenApiConfigGenerator extends AbstractSpringConfigGenerator 
         final var email = contact.email();
         final var extensions = contact.extensions();
 
-        Expression lastExpression = new ObjectCreationExpr().setType("io.swagger.v3.oas.models.info.Contact");
+        Expression lastExpression = new NewClassExpression(
+                getTypeUtils().createDeclaredType("io.swagger.v3.oas.models.info.Contact")
+        );
 
         if (name != null) {
-            lastExpression = new MethodCallExpr(
+            lastExpression = new MethodCallExpression(
                     lastExpression,
                     "name",
-                    NodeList.nodeList(new StringLiteralExpr(name))
+                    List.of(LiteralExpression.createStringLiteralExpression(name))
             );
         }
 
         if (url != null) {
-            lastExpression = new MethodCallExpr(
+            lastExpression = new MethodCallExpression(
                     lastExpression,
                     "url",
-                    NodeList.nodeList(new StringLiteralExpr(url))
+                    List.of(LiteralExpression.createStringLiteralExpression(url))
             );
         }
 
         if (email != null) {
-            lastExpression = new MethodCallExpr(
+            lastExpression = new MethodCallExpression(
                     lastExpression,
                     "email",
-                    NodeList.nodeList(new StringLiteralExpr(email))
+                    List.of(LiteralExpression.createStringLiteralExpression(email))
             );
         }
 
         if (extensions != null) {
-            final NodeList<Expression> entries = extensions.entrySet().stream()
-                    .map(entry -> new MethodCallExpr(
-                            new NameExpr("java.util.Map"),
+            final var entries = extensions.entrySet().stream()
+                    .map(entry -> (Expression) new MethodCallExpression(
+                            new NameExpression("java.util.Map"),
                             "entry",
-                            NodeList.nodeList(
-                                    new StringLiteralExpr(entry.getKey()),
-                                    new StringLiteralExpr((String) entry.getValue())
+                            List.of(
+                                    LiteralExpression.createStringLiteralExpression(entry.getKey()),
+                                    LiteralExpression.createStringLiteralExpression(((String) entry.getValue())
                             )
-                    ))
-                    .collect(NodeListCollectors.collector());
+                    )))
+                    .toList();
 
-            lastExpression = new MethodCallExpr(
+            lastExpression = new MethodCallExpression(
                     lastExpression,
                     "extensions",
-                    NodeList.nodeList(
-                            new MethodCallExpr(
-                                    new NameExpr("java.util.Map"),
+                    List.of(
+                            new MethodCallExpression(
+                                    new NameExpression("java.util.Map"),
                                     "ofEntries",
                                     entries
                             )
@@ -213,7 +216,9 @@ public class SpringOpenApiConfigGenerator extends AbstractSpringConfigGenerator 
     private @Nullable Expression createComponents(final OpenApi openApi) {
         var created = false;
 
-        Expression lastExpression = new ObjectCreationExpr().setType("io.swagger.v3.oas.models.Components");
+        Expression lastExpression = new NewClassExpression(
+                getTypeUtils().createDeclaredType("io.swagger.v3.oas.models.Components")
+        );
 
         final var securitySchemas = openApi.securitySchemas();
 
@@ -221,7 +226,7 @@ public class SpringOpenApiConfigGenerator extends AbstractSpringConfigGenerator 
             created = true;
             for (final var entry : securitySchemas.entrySet()) {
                 lastExpression = call(lastExpression, "addSecuritySchemes",
-                        new StringLiteralExpr(entry.getKey()),
+                        LiteralExpression.createStringLiteralExpression(entry.getKey()),
                         createSecurityScheme(entry.getValue())
                 );
             }
@@ -236,25 +241,27 @@ public class SpringOpenApiConfigGenerator extends AbstractSpringConfigGenerator 
         final var description = openApiSecurityScheme.description();
         final var in = openApiSecurityScheme.in();
 
-        Expression lastExpression = new ObjectCreationExpr().setType("io.swagger.v3.oas.models.security.SecurityScheme");
-        lastExpression = call(lastExpression, "name", new StringLiteralExpr(openApiSecurityScheme.name()));
-        lastExpression = call(lastExpression, "type", new FieldAccessExpr(
-                new NameExpr("io.swagger.v3.oas.models.security.SecurityScheme.Type"),
+        Expression lastExpression = new NewClassExpression(
+                getTypeUtils().createDeclaredType("io.swagger.v3.oas.models.security.SecurityScheme")
+        );
+        lastExpression = call(lastExpression, "name", LiteralExpression.createStringLiteralExpression(openApiSecurityScheme.name()));
+        lastExpression = call(lastExpression, "type", new FieldAccessExpression(
+                new NameExpression("io.swagger.v3.oas.models.security.SecurityScheme.Type"),
                 type
         ));
-        lastExpression = call(lastExpression, "scheme", new StringLiteralExpr(openApiSecurityScheme.schema()));
+        lastExpression = call(lastExpression, "scheme", LiteralExpression.createStringLiteralExpression(openApiSecurityScheme.schema()));
 
         if (bearerFormat != null) {
-            lastExpression = call(lastExpression, "bearerFormat", new StringLiteralExpr(bearerFormat));
+            lastExpression = call(lastExpression, "bearerFormat", LiteralExpression.createStringLiteralExpression(bearerFormat));
         }
 
         if (description != null) {
-            lastExpression = call(lastExpression, "description", new StringLiteralExpr(description));
+            lastExpression = call(lastExpression, "description", LiteralExpression.createStringLiteralExpression(description));
         }
 
         if (in != null) {
-            lastExpression = call(lastExpression, "in", new FieldAccessExpr(
-                    new NameExpr("io.swagger.v3.oas.models.security.SecurityScheme.In"),
+            lastExpression = call(lastExpression, "in", new FieldAccessExpression(
+                    new NameExpression("io.swagger.v3.oas.models.security.SecurityScheme.In"),
                     in.name()
             ));
         }
@@ -267,67 +274,66 @@ public class SpringOpenApiConfigGenerator extends AbstractSpringConfigGenerator 
         final String name = requirements.keySet().iterator().next();
         final var securityParameter = requirements.get(name);
 
-        Expression lastExpression = new ObjectCreationExpr()
-                .setType("io.swagger.v3.oas.models.security.SecurityRequirement");
+        Expression lastExpression = new NewClassExpression(
+                getTypeUtils().createDeclaredType("io.swagger.v3.oas.models.security.SecurityRequirement")
+        );
 
-        final NodeList<Expression> parameters = securityParameter.parameters().stream()
-                .map(StringLiteralExpr::new)
-                .collect(NodeListCollectors.collector());
+        final List<Expression> parameters = securityParameter.parameters().stream()
+                .map(param -> (Expression) LiteralExpression.createStringLiteralExpression(param))
+                .toList();
 
-        final var arguments = new NodeList<Expression>();
-        arguments.add(new StringLiteralExpr(name));
+        final var arguments = new ArrayList<Expression>();
+        arguments.add(LiteralExpression.createStringLiteralExpression(name));
 
         if (parameters.size() > 0) {
             arguments.add(
-                new MethodCallExpr(
-                        new NameExpr("java.util.List"),
+                new MethodCallExpression(
+                        new NameExpression("java.util.List"),
                         "of",
                         parameters
                 )
             );
         }
 
-        return new MethodCallExpr(lastExpression, "addList", arguments);
+        return new MethodCallExpression(lastExpression, "addList", arguments);
     }
 
-    private MethodCallExpr call(final Expression target,
+    private MethodCallExpression call(final Expression target,
                                 final String name,
                                 final Object... arguments) {
         final var argumentList =
                 Arrays.stream(arguments)
                         .map(this::createExpression)
-                        .collect(NodeListCollectors.collector());
+                        .toList();
 
-        return new MethodCallExpr(target, name, argumentList);
+        return new MethodCallExpression(target, name, argumentList);
     }
-
-
 
     private Expression createExpression(final Object value) {
         if (value == null) {
-            return new NullLiteralExpr();
+            return LiteralExpression.createNullLiteralExpression();
         } else if (value instanceof Expression e) {
             return e;
         } else if (value instanceof String s) {
-            return new StringLiteralExpr(s);
+            return LiteralExpression.createStringLiteralExpression(s);
         } else if (value instanceof Map) {
             @SuppressWarnings("unchecked")
             final Map<String, Object> map = (Map<String, Object>) value;
-            final var entries = new NodeList<Expression>();
+            final var entries = new ArrayList<Expression>();
 
-            map.forEach((key, value1) -> entries.add(new MethodCallExpr(
-                    new NameExpr("java.util.Map"),
+            map.forEach((key, value1) -> entries.add(new MethodCallExpression(
+                    new NameExpression("java.util.Map"),
                     "entry",
-                    NodeList.nodeList(
+                    List.of(
                             createExpression(key),
                             createExpression(value1)
                     )
             )));
 
-            return new MethodCallExpr(
-                    new NameExpr("java.util.Map"),
+            return new MethodCallExpression(
+                    new NameExpression("java.util.Map"),
                     "ofEntries",
-                    NodeList.nodeList(entries)
+                    entries
             );
         } else {
             throw new IllegalArgumentException("" + value.getClass());

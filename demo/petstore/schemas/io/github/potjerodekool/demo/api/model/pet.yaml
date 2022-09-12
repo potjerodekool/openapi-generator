@@ -9,9 +9,10 @@ properties:
     readOnly: true
   name:
     type: string
+  birthDate:
+    type: string
+    format: date
+    x-allowed-value: pastOrPresent
   tag:
     type: string
-    x-constraint:
-      #allowed-values: false
-      digits:  3,2
-      allowed-values: future
+    nullable: true
