@@ -28,4 +28,6 @@ public interface OpenApiType {
     }
 
     OpenApiTypeKind kind();
+
+    OpenApiType toNonNullable();
 }

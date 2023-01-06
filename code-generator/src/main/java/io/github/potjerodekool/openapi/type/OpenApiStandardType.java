@@ -25,4 +25,13 @@ public record OpenApiStandardType(OpenApiStandardTypeEnum typeEnum,
     public OpenApiTypeKind kind() {
         return OpenApiTypeKind.STANDARD;
     }
+
+    @Override
+    public OpenApiType toNonNullable() {
+        return new OpenApiStandardType(
+                typeEnum,
+                format,
+                false
+        );
+    }
 }

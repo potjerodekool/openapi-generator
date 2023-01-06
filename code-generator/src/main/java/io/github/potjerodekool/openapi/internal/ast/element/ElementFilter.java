@@ -1,5 +1,6 @@
 package io.github.potjerodekool.openapi.internal.ast.element;
 
+import javax.lang.model.element.ElementKind;
 import java.util.ArrayList;
 import java.util.function.Predicate;
 import java.util.stream.Stream;

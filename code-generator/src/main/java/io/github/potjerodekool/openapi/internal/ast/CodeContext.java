@@ -11,7 +11,7 @@ public class CodeContext {
 
     private final @Nullable CodeContext parentContext;
 
-    private AstNode astNode;
+    private final AstNode astNode;
 
     private final Map<String, Type<?>> localVariables = new HashMap<>();
 
@@ -41,10 +41,6 @@ public class CodeContext {
         return parentContext;
     }
 
-    public void setAstNode(final AstNode astNode) {
-        this.astNode = astNode;
-    }
-
     public void defineLocalVariable(final Type<?> type,
                                     final String name) {
         localVariables.put(name, type);
@@ -62,5 +58,15 @@ public class CodeContext {
         }
 
         return parentContext.resolveLocalVariable(name);
+    }
+
+    public Optional<CompilationUnit> resolveCompilationUnit() {
+        if (astNode instanceof CompilationUnit cu) {
+            return Optional.of(cu);
+        } else if (parentContext != null) {
+            return parentContext.resolveCompilationUnit();
+        } else {
+            return Optional.empty();
+        }
     }
 }

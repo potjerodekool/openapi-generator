@@ -1,8 +1,15 @@
 package io.github.potjerodekool.openapi.internal.generate;
 
-import io.github.potjerodekool.openapi.internal.ast.TypeUtils;
-import io.github.potjerodekool.openapi.internal.ast.expression.*;
-import io.github.potjerodekool.openapi.internal.ast.type.*;
+import io.github.potjerodekool.openapi.internal.ast.Attribute;
+import io.github.potjerodekool.openapi.internal.ast.element.AnnotationValue;
+import io.github.potjerodekool.openapi.internal.ast.element.ExecutableElement;
+import io.github.potjerodekool.openapi.internal.ast.element.MethodElement;
+import io.github.potjerodekool.openapi.internal.ast.expression.ArrayInitializerExpression;
+import io.github.potjerodekool.openapi.internal.ast.expression.Expression;
+import io.github.potjerodekool.openapi.internal.ast.type.DeclaredType;
+import io.github.potjerodekool.openapi.internal.ast.type.Type;
+import io.github.potjerodekool.openapi.internal.ast.type.java.WildcardType;
+import io.github.potjerodekool.openapi.internal.ast.util.TypeUtils;
 import io.github.potjerodekool.openapi.internal.util.GenerateException;
 import io.github.potjerodekool.openapi.internal.util.Utils;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -21,9 +28,9 @@ public class GenerateUtils {
         this.typeUtils = typeUtils;
     }
 
-    public AnnotationExpression createAnnotation(final String name,
-                                                 final String memberName,
-                                                 final AnnotationExpression value) {
+    public Attribute.Compound createAnnotation(final String name,
+                                               final String memberName,
+                                               final Attribute.Compound value) {
         return createAnnotation(
                 name,
                 new AnnotationMember(
@@ -33,30 +40,26 @@ public class GenerateUtils {
         );
     }
 
-    public AnnotationExpression createAnnotation(final String name,
-                                                 final AnnotationMember member) {
+    public Attribute.Compound createAnnotation(final String name,
+                                               final AnnotationMember member) {
         return createAnnotation(name, List.of(member));
     }
 
-    public AnnotationExpression createAnnotation(final String name,
-                                                 final List<AnnotationMember> members) {
-        return new AnnotationExpression(name, toMap(members));
+    public Attribute.Compound createAnnotation(final String name,
+                                               final List<AnnotationMember> members) {
+        return Attribute.compound(name, toMap(members));
     }
 
-    public <A extends AnnotationExpression> ArrayInitializerExpression createArrayInitializerExprOfAnnotations(final List<@NonNull A> list) {
-        return new ArrayInitializerExpression(
-                list.stream()
-                .map(it -> (Expression) it)
-                .toList());
+    public Attribute.Array createArrayInitializerExprOfAnnotations(final List<Attribute.Compound> list) {
+        final var values = list.toArray(Attribute[]::new);
+        return Attribute.array(values);
     }
 
-    public ArrayInitializerExpression createArrayInitializerExprOfStrings(final List<@NonNull String> list) {
-        final List<Expression> expressionList = list.stream()
-                .map(it -> (Expression) LiteralExpression.createStringLiteralExpression(it))
+    public Attribute.Array createArrayInitializerExprOfStrings(final List<@NonNull String> list) {
+        final var attributes = list.stream()
+                .map(Attribute::constant)
                 .toList();
-        return new ArrayInitializerExpression(
-                expressionList
-        );
+        return Attribute.array(attributes);
     }
 
     public <E extends Expression> ArrayInitializerExpression createArrayInitializerExpr(final List<@NonNull E> list) {
@@ -86,14 +89,14 @@ public class GenerateUtils {
         }
     }
 
-    public AnnotationExpression createArraySchemaAnnotation(final Type<?> elementType) {
+    public Attribute createArraySchemaAnnotation(final Type<?> elementType) {
         return createAnnotation("io.swagger.v3.oas.annotations.media.ArraySchema", "schema",
                 createSchemaAnnotation(elementType, false)
         );
     }
 
-    public AnnotationExpression createSchemaAnnotation(final Type<?> type,
-                                                       final Boolean required) {
+    public Attribute.Compound createSchemaAnnotation(final Type<?> type,
+                                                     final Boolean required) {
         final var members = new ArrayList<AnnotationMember>();
 
         final Type<?> implementationType;
@@ -114,13 +117,14 @@ public class GenerateUtils {
             implementationType = type;
         }
 
-        members.add(new AnnotationMember("implementation", toNonWildCardType(implementationType)));
+        members.add(new AnnotationMember("implementation",
+                Attribute.clazz(toNonWildCardType(implementationType))));
 
         if (Utils.isTrue(required)) {
-            members.add(new AnnotationMember("required", true));
+            members.add(new AnnotationMember("required", Attribute.constant(true)));
         }
 
-        return new AnnotationExpression(
+        return Attribute.compound(
                 "io.swagger.v3.oas.annotations.media.Schema",
                 toMap(members)
         );
@@ -143,25 +147,25 @@ public class GenerateUtils {
         }
     }
 
-    public AnnotationExpression createSchemaAnnotation(final String type,
-                                                       final @Nullable String format) {
+    public Attribute.Compound createSchemaAnnotation(final String type,
+                                                     final @Nullable String format) {
         final var members = new ArrayList<AnnotationMember>();
-        members.add(new AnnotationMember("type", type));
+        members.add(new AnnotationMember("type", Attribute.constant(type)));
 
         if (format != null) {
-            members.add(new AnnotationMember("format",format));
+            members.add(new AnnotationMember("format", Attribute.constant(format)));
         }
 
-        return new AnnotationExpression(
+        return Attribute.compound(
                 "io.swagger.v3.oas.annotations.media.Schema",
                 toMap(members)
         );
     }
 
-    private Map<String, Expression> toMap(final List<AnnotationMember> list) {
+    private Map<ExecutableElement, AnnotationValue> toMap(final List<AnnotationMember> list) {
         return list.stream()
                 .collect(Collectors.toMap(
-                        AnnotationMember::name,
+                        it -> MethodElement.createMethod(it.name()),
                         AnnotationMember::value
                 ));
     }

@@ -13,10 +13,7 @@ import io.github.potjerodekool.openapi.type.OpenApiType;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.File;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -27,14 +24,9 @@ public class TreeBuilder {
 
     private final SchemaToTypeConverter schemaToTypeConverter;
 
-    public TreeBuilder(final OpenApiGeneratorConfig config) {
-        if (config.getConfigType() == ConfigType.DEFAULT) {
-            this.schemaDir = config.getSchemasDir();
-            this.schemaToTypeConverter = new SchemaToTypeConverter(new DefaultTypeNameResolver(config));
-        } else {
-            this.schemaDir = null;
-            this.schemaToTypeConverter = new SchemaToTypeConverter(new ExternalTypeNameResolver(config));
-        }
+    public TreeBuilder(final ApiConfiguration apiConfiguration) {
+        this.schemaDir = apiConfiguration.schemasDir();
+        this.schemaToTypeConverter = new SchemaToTypeConverter(new GeneralTypeNameResolver(apiConfiguration));
     }
 
     public OpenApi build(final OpenApi3 openApi,
@@ -60,7 +52,7 @@ public class TreeBuilder {
         securitySchemes.forEach((name, securityScheme) ->
                 map.put(name, new OpenApiSecurityScheme(
                     OpenApiSecuritySchemeType.fromValue(securityScheme.getType()),
-                    Utils.getOrDefault(securityScheme.getName(), name),
+                        Optional.ofNullable(securityScheme.getName()).orElse(name),
                     securityScheme.getDescription(),
                     "",
                     securityScheme.getIn() != null
@@ -122,11 +114,13 @@ public class TreeBuilder {
     private OpenApiPath processPath(final String pathStr,
                                     final Path path,
                                     final File rootDir) {
-        final var post = processOperation(HttpMethod.POST, pathStr, path.getPost(), rootDir);
-        final var get = processOperation(HttpMethod.GET, pathStr, path.getGet(), rootDir);
-        final var put = processOperation(HttpMethod.PUT, pathStr, path.getPut(), rootDir);
-        final var patch = processOperation(HttpMethod.PATCH, pathStr, path.getPatch(), rootDir);
-        final var delete = processOperation(HttpMethod.DELETE, pathStr, path.getDelete(), rootDir);
+        final var pathContext = new PathContext(path, pathStr);
+
+        final var post = processOperation(HttpMethod.POST, pathStr, path.getPost(), rootDir, pathContext);
+        final var get = processOperation(HttpMethod.GET, pathStr, path.getGet(), rootDir, pathContext);
+        final var put = processOperation(HttpMethod.PUT, pathStr, path.getPut(), rootDir, pathContext);
+        final var patch = processOperation(HttpMethod.PATCH, pathStr, path.getPatch(), rootDir, pathContext);
+        final var delete = processOperation(HttpMethod.DELETE, pathStr, path.getDelete(), rootDir, pathContext);
 
         final var creatingRef = ((PathImpl)path)._getCreatingRef();
 
@@ -144,21 +138,22 @@ public class TreeBuilder {
     private @Nullable OpenApiOperation processOperation(final HttpMethod httpMethod,
                                                         final String pathStr,
                                                         final Operation operation,
-                                                        final File rootDir) {
+                                                        final File rootDir,
+                                                        final PathContext pathContext) {
         if (operation == null) {
             return null;
         }
 
         final var parameters = operation.getParameters().stream()
-                .map(parameter -> processParameter(httpMethod, pathStr, parameter, rootDir))
+                .map(parameter -> processParameter(httpMethod, pathStr, parameter, rootDir, pathContext.child(parameter)))
                 .toList();
 
-        final var requestBody = processRequestBody(httpMethod, pathStr, operation.getRequestBody(), rootDir);
+        final var requestBody = processRequestBody(httpMethod, pathStr, operation.getRequestBody(), rootDir, pathContext);
 
         final var responses = operation.getResponses().entrySet().stream()
                 .map(entry -> Map.entry(
                         entry.getKey(),
-                        processResponse(rootDir, httpMethod, pathStr, entry.getValue())
+                        processResponse(rootDir, httpMethod, pathStr, entry.getValue(), pathContext)
                 ))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
@@ -181,17 +176,22 @@ public class TreeBuilder {
     private OpenApiParameter processParameter(final HttpMethod httpMethod,
                                               final String pathStr,
                                               final Parameter parameter,
-                                              final File rootDir) {
+                                              final File rootDir, final OpenApiContext openApiContext) {
 
-        final var parameterType = processSchema(
+        var parameterType = processSchema(
                 parameter.getSchema(),
                 rootDir,
-                new SchemaContext(
+                new RequestContext(
                         httpMethod,
                         ParameterLocation.parseIn(parameter.getIn())
                 ),
+                openApiContext,
                 pathStr
         );
+
+        if (Boolean.TRUE.equals(parameter.getRequired())) {
+            parameterType = parameterType.toNonNullable();
+        }
 
         return new OpenApiParameter(
                 ParameterLocation.parseIn(parameter.getIn()),
@@ -230,14 +230,16 @@ public class TreeBuilder {
     private @Nullable OpenApiRequestBody processRequestBody(final HttpMethod httpMethod,
                                                             final String pathStr,
                                                             final @Nullable RequestBody requestBody,
-                                                            final File rootDir) {
+                                                            final File rootDir,
+                                                            final OpenApiContext openApiContext) {
         if (requestBody == null) {
             return null;
         }
 
         final var contentMediaType = processContentMediaTypes(
                 rootDir, httpMethod, pathStr, requestBody.getContentMediaTypes(),
-                RequestCycleLocation.REQUEST
+                RequestCycleLocation.REQUEST,
+                openApiContext
         );
 
         if (contentMediaType.isEmpty()) {
@@ -254,13 +256,15 @@ public class TreeBuilder {
     private OpenApiResponse processResponse(final File rootDir,
                                             final HttpMethod httpMethod,
                                             final String pathStr,
-                                            final Response response) {
+                                            final Response response,
+                                            final OpenApiContext openApiContext) {
         final var contentMediaType = processContentMediaTypes(
                 rootDir,
                 httpMethod,
                 pathStr,
                 response.getContentMediaTypes(),
-                RequestCycleLocation.RESPONSE
+                RequestCycleLocation.RESPONSE,
+                openApiContext
         );
 
         final var headers = response.getHeaders().entrySet().stream()
@@ -278,7 +282,7 @@ public class TreeBuilder {
 
     private OpenApiHeader createHeader(final Header header) {
         final var schema = header.getSchema();
-        var type = Utils.getOrDefault(schema.getType(), "string");
+        var type = Optional.ofNullable(schema.getType()).orElse("string");
 
         final var headerType = schemaToTypeConverter.build(
                 type,
@@ -302,11 +306,12 @@ public class TreeBuilder {
                                                                  final HttpMethod httpMethod,
                                                                  final String pathStr,
                                                                  final Map<String, MediaType> mediaTypeMap,
-                                                                 final RequestCycleLocation requestCycleLocation) {
+                                                                 final RequestCycleLocation requestCycleLocation,
+                                                                 final OpenApiContext openApiContext) {
 
 
         return mediaTypeMap.entrySet().stream()
-                .map(entry -> mapMediaTypeEntry(rootDir, entry, httpMethod, pathStr, requestCycleLocation))
+                .map(entry -> mapMediaTypeEntry(rootDir, entry, httpMethod, pathStr, requestCycleLocation, openApiContext))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
@@ -314,14 +319,16 @@ public class TreeBuilder {
                                                                 final Map.Entry<String, MediaType> entry,
                                                                 final HttpMethod httpMethod,
                                                                 final String pathStr,
-                                                                final RequestCycleLocation requestCycleLocation) {
+                                                                final RequestCycleLocation requestCycleLocation,
+                                                                final OpenApiContext openApiContext) {
         final var mediaType = entry.getValue();
         final var openApiType = processContentMediaType(
                 rootDir,
                 httpMethod,
                 pathStr,
                 mediaType,
-                requestCycleLocation
+                requestCycleLocation,
+                openApiContext
         );
 
         final var examples = processExamples(mediaType.getExamples());
@@ -332,8 +339,9 @@ public class TreeBuilder {
                                                 final HttpMethod httpMethod,
                                                 final String pathStr,
                                                 final MediaType mediaType,
-                                                final RequestCycleLocation requestCycleLocation) {
-        final var schemaContext = new SchemaContext(
+                                                final RequestCycleLocation requestCycleLocation,
+                                                final OpenApiContext openApiContext) {
+        final var requestContext = new RequestContext(
                 httpMethod,
                 requestCycleLocation
         );
@@ -341,7 +349,8 @@ public class TreeBuilder {
         return processSchema(
                 mediaType.getSchema(),
                 rootDir,
-                schemaContext,
+                requestContext,
+                openApiContext,
                 pathStr
         );
     }
@@ -365,12 +374,13 @@ public class TreeBuilder {
 
     private OpenApiType processSchema(final Schema schema,
                                       final File rootDir,
-                                      final SchemaContext schemaContext,
+                                      final RequestContext requestContext,
+                                      final OpenApiContext openApiContext,
                                       final String pathStr) {
         if (schema == null) {
-            final String location = schemaContext.requestCycleLocation() == RequestCycleLocation.REQUEST ? "request" : "response";
+            final String location = requestContext.requestCycleLocation() == RequestCycleLocation.REQUEST ? "request" : "response";
             throw new NullPointerException(
-                    String.format("schema is null for %s %s in %s", schemaContext.httpMethod(), pathStr, location)
+                    String.format("schema is null for %s %s in %s", requestContext.httpMethod(), pathStr, location)
             );
         }
 
@@ -381,7 +391,8 @@ public class TreeBuilder {
             return schemaToTypeConverter.build(
                     schema,
                     rootDir,
-                    schemaContext
+                    requestContext,
+                    openApiContext.child(schema)
             );
         }
 
@@ -397,7 +408,7 @@ public class TreeBuilder {
             }
         }
 
-        return schemaToTypeConverter.build(schema, rootDir, schemaContext);
+        return schemaToTypeConverter.build(schema, rootDir, requestContext, openApiContext.child(schema));
     }
 
 }

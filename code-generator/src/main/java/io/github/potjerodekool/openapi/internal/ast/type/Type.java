@@ -1,13 +1,15 @@
 package io.github.potjerodekool.openapi.internal.ast.type;
 
+import io.github.potjerodekool.openapi.internal.ast.element.AnnotationMirror;
 import io.github.potjerodekool.openapi.internal.ast.element.Element;
-import io.github.potjerodekool.openapi.internal.ast.expression.AnnotationExpression;
 
+import javax.lang.model.type.TypeKind;
 import java.util.List;
+import java.util.Optional;
 
 public interface Type<E extends Element> {
 
-    List<AnnotationExpression> getAnnotations();
+    List<AnnotationMirror> getAnnotations();
 
     <R, P> R accept(TypeVisitor<R, P> visitor,
                     P param);
@@ -32,8 +34,6 @@ public interface Type<E extends Element> {
 
     default boolean isVoidType() { return false; }
 
-    void addAnnotation(AnnotationExpression annotation);
-
     boolean isAssignableBy(final Type<?> otherType);
 
     boolean isSameType(Type<?> otherType);
@@ -41,4 +41,14 @@ public interface Type<E extends Element> {
     default boolean isNullable() {
         return false;
     }
+
+    Optional<List<? extends Type<?>>> getTypeArguments();
+
+    default Optional<Type<?>> getFirstTypeArg() {
+        return Optional.empty();
+    }
+
+    Type<?> asNullableType();
+
+    Type<?> asNonNullableType();
 }

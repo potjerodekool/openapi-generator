@@ -1,6 +1,8 @@
 package io.github.potjerodekool.openapi.internal.ast.type;
 
-import io.github.potjerodekool.openapi.internal.ast.type.kotlin.KotlinArray;
+import io.github.potjerodekool.openapi.internal.ast.type.java.*;
+import io.github.potjerodekool.openapi.internal.ast.type.kotlin.KotlinArrayType;
+import io.github.potjerodekool.openapi.internal.ast.type.kotlin.UnitType;
 
 public interface TypeVisitor<R, P> {
 
@@ -54,8 +56,8 @@ public interface TypeVisitor<R, P> {
         return visitUnknownType(unitType, param);
     }
 
-    default R visitKotlinArray(final KotlinArray kotlinArray,
+    default R visitKotlinArray(final KotlinArrayType kotlinArrayType,
                                final P param) {
-        return visitUnknownType(kotlinArray, param);
+        return visitUnknownType(kotlinArrayType, param);
     }
 }

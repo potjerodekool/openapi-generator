@@ -1,24 +1,25 @@
 package io.github.potjerodekool.openapi.internal.generate.api;
 
-import io.github.potjerodekool.openapi.HttpMethod;
-import io.github.potjerodekool.openapi.Language;
-import io.github.potjerodekool.openapi.OpenApiGeneratorConfig;
+import io.github.potjerodekool.openapi.*;
+import io.github.potjerodekool.openapi.internal.ClassNames;
 import io.github.potjerodekool.openapi.internal.Filer;
+import io.github.potjerodekool.openapi.internal.ast.Attribute;
 import io.github.potjerodekool.openapi.internal.ast.CompilationUnit;
 import io.github.potjerodekool.openapi.internal.ast.Modifier;
-import io.github.potjerodekool.openapi.internal.ast.TypeUtils;
-import io.github.potjerodekool.openapi.internal.ast.element.MethodElement;
-import io.github.potjerodekool.openapi.internal.ast.element.PackageElement;
-import io.github.potjerodekool.openapi.internal.ast.element.TypeElement;
-import io.github.potjerodekool.openapi.internal.ast.element.VariableElement;
-import io.github.potjerodekool.openapi.internal.ast.expression.*;
+import io.github.potjerodekool.openapi.internal.ast.element.*;
+import io.github.potjerodekool.openapi.internal.ast.expression.FieldAccessExpression;
+import io.github.potjerodekool.openapi.internal.ast.expression.MethodCallExpression;
+import io.github.potjerodekool.openapi.internal.ast.expression.NameExpression;
 import io.github.potjerodekool.openapi.internal.ast.statement.BlockStatement;
 import io.github.potjerodekool.openapi.internal.ast.statement.ReturnStatement;
+import io.github.potjerodekool.openapi.internal.ast.type.ArrayType;
 import io.github.potjerodekool.openapi.internal.ast.type.DeclaredType;
 import io.github.potjerodekool.openapi.internal.ast.type.Type;
-import io.github.potjerodekool.openapi.internal.ast.type.VoidType;
+import io.github.potjerodekool.openapi.internal.ast.type.java.VoidType;
+import io.github.potjerodekool.openapi.internal.ast.util.TypeUtils;
 import io.github.potjerodekool.openapi.internal.generate.AnnotationMember;
 import io.github.potjerodekool.openapi.internal.generate.GenerateUtils;
+import io.github.potjerodekool.openapi.internal.util.QualifiedName;
 import io.github.potjerodekool.openapi.internal.util.Utils;
 import io.github.potjerodekool.openapi.log.LogLevel;
 import io.github.potjerodekool.openapi.log.Logger;
@@ -30,8 +31,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
-
-import static io.github.potjerodekool.openapi.internal.util.Utils.requireNonNull;
 
 public class SpringApiDefinitionGenerator {
 
@@ -48,6 +47,7 @@ public class SpringApiDefinitionGenerator {
     private static final Logger LOGGER = Logger.getLogger(SpringApiDefinitionGenerator.class.getName());
 
     private final Language language;
+    private final String basePackageName;
     private final TypeUtils typeUtils;
 
     private final GenerateUtils generateUtils;
@@ -60,21 +60,26 @@ public class SpringApiDefinitionGenerator {
 
     private final String validAnnotationClassName;
 
-    public SpringApiDefinitionGenerator(final OpenApiGeneratorConfig config,
+    private final Map<String, String> controllers;
+
+    public SpringApiDefinitionGenerator(final GeneratorConfig generatorConfig,
+                                        final ApiConfiguration apiConfiguration,
                                         final TypeUtils typeUtils,
                                         final GenerateUtils generateUtils,
                                         final Filer filer) {
-        this.language = config.getLanguage();
+        this.language = generatorConfig.language();
+        this.basePackageName = Optional.ofNullable(apiConfiguration.basePackageName()).orElse(generatorConfig.basePackageName());
         this.typeUtils = typeUtils;
         this.generateUtils = generateUtils;
         this.filer = filer;
-        this.pathsDir = config.getPathsDir();
-        servletClassName = config.isFeatureEnabled(OpenApiGeneratorConfig.FEATURE_JAKARTA_SERVLET)
-                ? "jakarta.servlet.http.HttpServletRequest"
-                : "javax.servlet.http.HttpServletRequest";
+        this.pathsDir = apiConfiguration.pathsDir();
+        servletClassName = generatorConfig.isFeatureEnabled(Features.FEATURE_JAKARTA)
+                ? ClassNames.JAKARTA_HTTP_SERVLET_REQUEST
+                : ClassNames.JAVA_HTTP_SERVLET_REQUEST;
 
-        final var validationBasePackage = config.isFeatureEnabled(OpenApiGeneratorConfig.FEATURE_JAKARTA_VALIDATION) ? "jakarta" : "javax";
+        final var validationBasePackage = generatorConfig.isFeatureEnabled(Features.FEATURE_JAKARTA) ? "jakarta" : "javax";
         this.validAnnotationClassName = validationBasePackage + ".validation.Valid";
+        this.controllers = apiConfiguration.controllers();
     }
 
     public void generate(final OpenApi api) {
@@ -85,7 +90,7 @@ public class SpringApiDefinitionGenerator {
     private void generateCode() {
         compilationUnitMap.values().forEach(cu -> {
             try {
-                filer.write(cu, language);
+                filer.writeSource(cu, language);
             } catch (final IOException e) {
                 LOGGER.log(LogLevel.SEVERE, "Fail to generate code for spring api definition", e);
             }
@@ -98,37 +103,107 @@ public class SpringApiDefinitionGenerator {
 
         newCU.setPackageElement(PackageElement.create(packageName));
 
-        newCU.addInterface(interfaceName);
+        final var typeElement = newCU.addInterface(interfaceName);
+        typeElement.addModifiers(Modifier.PUBLIC);
+
         return newCU;
     }
 
     private void processPath(final OpenApiPath openApiPath) {
-        final var pathUri = Utils.toUriString(this.pathsDir);
-        final var creatingReference = openApiPath.creatingReference();
-        final var ref = creatingReference.substring(pathUri.length());
-        final var qualifiedName = Utils.resolveQualified(ref);
-        final var packageName = qualifiedName.packageName();
-        final var name = qualifiedName.simpleName();
-        final var apiName = Utils.firstUpper(name) + "Api";
-        final var qualifiedApiName = packageName + "." + apiName;
-
-        final var cu = this.compilationUnitMap.computeIfAbsent(qualifiedApiName, (key) ->
-                createCompilationUnitWithInterface(packageName, apiName));
-
-        final var typeElement = (TypeElement) cu.getElements().get(0);
-
-        processOperation(HttpMethod.POST, openApiPath.path(), openApiPath.post(), typeElement);
-        processOperation(HttpMethod.GET, openApiPath.path(), openApiPath.get(), typeElement);
-        processOperation(HttpMethod.PUT, openApiPath.path(), openApiPath.put(), typeElement);
-        processOperation(HttpMethod.PATCH, openApiPath.path(), openApiPath.patch(), typeElement);
-        processOperation(HttpMethod.DELETE, openApiPath.path(), openApiPath.delete(), typeElement);
+        processOperation(openApiPath, HttpMethod.POST, openApiPath.path(), openApiPath.post());
+        processOperation(openApiPath, HttpMethod.GET, openApiPath.path(), openApiPath.get());
+        processOperation(openApiPath, HttpMethod.PUT, openApiPath.path(), openApiPath.put());
+        processOperation(openApiPath, HttpMethod.PATCH, openApiPath.path(), openApiPath.patch());
+        processOperation(openApiPath, HttpMethod.DELETE, openApiPath.path(), openApiPath.delete());
     }
 
-    private AnnotationExpression createApiOperationAnnotation(final List<AnnotationMember> members) {
+    private QualifiedName resolveApiName(final OpenApiPath openApiPath,
+                                         final OpenApiOperation operation) {
+        for (final var tag : operation.tags()) {
+            final var className = this.controllers.get(tag);
+            if (className != null) {
+                return QualifiedName.from(className);
+            }
+        }
+
+        return resolveQualifiedName(openApiPath, operation);
+    }
+
+    private String resolvePackageName(final OpenApiPath openApiPath) {
+        final var pathUri = Utils.toUriString(this.pathsDir);
+        final var creatingReference = openApiPath.creatingReference();
+
+        if (creatingReference.startsWith(pathUri)) {
+            final var ref = creatingReference.substring(pathUri.length());
+            final var qualifiedName = Utils.resolveQualified(ref);
+            return qualifiedName.packageName();
+        } else {
+            return basePackageName;
+        }
+    }
+
+    private QualifiedName resolveQualifiedName(final OpenApiPath openApiPath, final OpenApiOperation operation) {
+        final var packageName = resolvePackageName(openApiPath);
+        final String simpleName;
+
+        final var pathUri = Utils.toUriString(this.pathsDir);
+        if (packageName.length() > 0) {
+            final var creatingReference = openApiPath.creatingReference();
+
+            if (creatingReference.startsWith(pathUri + "/")) {
+                final var ref = creatingReference.substring(pathUri.length());
+                simpleName = Utils.resolveQualified(ref).simpleName();
+            } else {
+                final var start = creatingReference.lastIndexOf('/') + 1;
+                final var end = creatingReference.indexOf('.', start);
+                simpleName = creatingReference.substring(start, end);
+            }
+        } else {
+            final var creatingReference = openApiPath.creatingReference();
+            final var separatorIndex = creatingReference.lastIndexOf("/");
+            final var end = creatingReference.lastIndexOf(".");
+
+            if (separatorIndex > -1) {
+                simpleName = creatingReference.substring(separatorIndex + 1, end);
+            } else {
+                simpleName = creatingReference.substring(0, end);
+            }
+        }
+
+        final String apiName;
+
+        if (operation.tags().isEmpty()) {
+            apiName = Utils.firstUpper(simpleName) + "Api";
+        } else {
+            final var firstTag = operation.tags().get(0);
+            final var name = Arrays.stream(firstTag.split("-"))
+                    .map(Utils::firstUpper)
+                    .collect(Collectors.joining());
+
+            apiName = name + "Api";
+        }
+
+        return new QualifiedName(packageName, apiName);
+    }
+
+    private TypeElement findOrCreateTypeElement(final OpenApiPath openApiPath,
+                                                final OpenApiOperation operation) {
+        final var apiName = resolveApiName(openApiPath, operation);
+        final var qualifiedApiName = apiName.toString();
+        final var packageName = apiName.packageName();
+        final var simpleName = apiName.simpleName();
+
+        final var cu = this.compilationUnitMap.computeIfAbsent(qualifiedApiName, (key) ->
+                createCompilationUnitWithInterface(packageName, simpleName));
+
+        return  (TypeElement) cu.getElements().get(0);
+    }
+
+    private AnnotationMirror createApiOperationAnnotation(final List<AnnotationMember> members) {
         return generateUtils.createAnnotation("io.swagger.v3.oas.annotations.Operation", members);
     }
 
-    private AnnotationExpression createApiResponsesAnnotation(final OpenApiOperation operation) {
+    private AnnotationMirror createApiResponsesAnnotation(final OpenApiOperation operation) {
         final var responses = operation.responses().entrySet().stream()
                         .map(this::createApiResponse)
                 .toList();
@@ -138,13 +213,13 @@ public class SpringApiDefinitionGenerator {
         );
     }
 
-    private AnnotationExpression createApiResponse(final Map.Entry<String, OpenApiResponse> entry) {
+    private Attribute.Compound createApiResponse(final Map.Entry<String, OpenApiResponse> entry) {
         final var response = entry.getValue();
         final var description = response.description();
 
         final var members = new ArrayList<AnnotationMember>();
-        members.add(new AnnotationMember("responseCode", entry.getKey()));
-        members.add(new AnnotationMember("description", description != null ? description : ""));
+        members.add(new AnnotationMember("responseCode", Attribute.constant(entry.getKey())));
+        members.add(new AnnotationMember("description", Attribute.constant(description != null ? description : "")));
 
         final var headersMap = response.headers();
 
@@ -155,12 +230,12 @@ public class SpringApiDefinitionGenerator {
             ));
         }
 
-        final List<Expression> contentList = response.contentMediaType().entrySet().stream()
-                        .map(contentMediaType -> (Expression) createContentAnnotation(contentMediaType.getKey(), contentMediaType.getValue()))
+        final List<Attribute> contentList = response.contentMediaType().entrySet().stream()
+                        .map(contentMediaType -> (Attribute) createContentAnnotation(contentMediaType.getKey(), contentMediaType.getValue()))
                 .toList();
 
         if (contentList.size() > 0) {
-            members.add(new AnnotationMember("content", new ArrayInitializerExpression(contentList)));
+            members.add(new AnnotationMember("content", Attribute.array(contentList)));
         }
 
         return generateUtils.createAnnotation(API_RESPONSE_CLASS_NAME,
@@ -168,7 +243,7 @@ public class SpringApiDefinitionGenerator {
         );
     }
 
-    private AnnotationExpression createContentAnnotation(final String mediaType,
+    private Attribute.Compound createContentAnnotation(final String mediaType,
                                                          final OpenApiContent content) {
         final var schemaType = typeUtils.createType(content.schema());
 
@@ -177,64 +252,75 @@ public class SpringApiDefinitionGenerator {
                 .toList();
 
         final var contextMembers = new ArrayList<AnnotationMember>();
-        contextMembers.add(new AnnotationMember("mediaType", mediaType));
+        contextMembers.add(new AnnotationMember("mediaType", Attribute.constant(mediaType)));
 
         if (examples.size() > 0) {
-            contextMembers.add(new AnnotationMember("examples", generateUtils.createArrayInitializerExpr(examples)));
+            contextMembers.add(new AnnotationMember("examples", Attribute.array(examples)));
         }
 
-        if (typeUtils.isListType(schemaType)) {
-            final var typeArg = generateUtils.getFirstTypeArg(schemaType);
-            contextMembers.add(new AnnotationMember("array", generateUtils.createArraySchemaAnnotation(typeArg)));
+        if (typeUtils.isListType(schemaType) || schemaType.isArrayType()) {
+            Type<?> elementType;
+
+            if (schemaType.isArrayType()) {
+                elementType = ((ArrayType)schemaType).getComponentType();
+            } else {
+                elementType = generateUtils.getFirstTypeArg(schemaType);
+            }
+            contextMembers.add(new AnnotationMember("array", generateUtils.createArraySchemaAnnotation(elementType)));
         } else if (typeUtils.isMapType(schemaType)) {
-            final var schemaPropertyAnnotation = new AnnotationExpression(
+            final var schemaPropertyAnnotation = Attribute.compound(
                     "io.swagger.v3.oas.annotations.media.SchemaProperty",
-                   toMap(List.of(new AnnotationMember("name", "additionalProp1")))
+                   toMap(List.of(new AnnotationMember("name", Attribute.constant("additionalProp1"))))
             );
 
-            final var additionalProperties = Utils.requireNonNull(content.schema().additionalProperties());
+            final var additionalProperties = content.schema().additionalProperties();
+
+            if (additionalProperties == null) {
+                throw new IllegalStateException("Missing additionalProperties");
+            }
+
             final var type = additionalProperties.type();
             final var typeName = type.name();
             final var format = type.format();
 
             contextMembers.add(new AnnotationMember("schemaProperties",
-                    new ArrayInitializerExpression(schemaPropertyAnnotation)
+                    Attribute.array(schemaPropertyAnnotation)
             ));
             contextMembers.add(new AnnotationMember("additionalPropertiesSchema", generateUtils.createSchemaAnnotation(typeName, format)));
         } else {
             contextMembers.add(new AnnotationMember("schema", generateUtils.createSchemaAnnotation(schemaType, false)));
         }
 
-        return new AnnotationExpression(
+        return Attribute.compound(
                 CONTENT_CLASS_NAME,
                 toMap(contextMembers)
         );
     }
 
-    private Map<String, Expression> toMap(final List<AnnotationMember> list) {
+    private Map<ExecutableElement, AnnotationValue> toMap(final List<AnnotationMember> list) {
         return list.stream()
                 .collect(Collectors.toMap(
-                        AnnotationMember::name,
+                        it -> MethodElement.createMethod(it.name()),
                         AnnotationMember::value
                 ));
     }
 
-    private AnnotationExpression createExampleObject(final String name,
-                                               final OpenApiExample openApiExample) {
+    private Attribute.Compound createExampleObject(final String name,
+                                                 final OpenApiExample openApiExample) {
         final var summary = openApiExample.summary();
 
         final var members = new ArrayList<AnnotationMember>();
-        members.add(new AnnotationMember("name", name));
+        members.add(new AnnotationMember("name", Attribute.constant(name)));
 
         if (summary != null) {
-            members.add(new AnnotationMember("summary", summary));
+            members.add(new AnnotationMember("summary", Attribute.constant(summary)));
         }
 
         members.add(new AnnotationMember("value",
-                escapeJson(openApiExample.value().toString()
+                Attribute.constant(escapeJson(openApiExample.value().toString())
         )));
 
-        return new AnnotationExpression(
+        return Attribute.compound(
                 EXAMPLE_OBJECT_CLASS_NAME,
                 toMap(members)
         );
@@ -255,8 +341,8 @@ public class SpringApiDefinitionGenerator {
         return sb.toString();
     }
 
-    private ArrayInitializerExpression headers(final Map<String, OpenApiHeader> headersMap) {
-        final List<Expression> headers =  headersMap.entrySet().stream()
+    private Attribute.Array headers(final Map<String, OpenApiHeader> headersMap) {
+        final List<Attribute> headers =  headersMap.entrySet().stream()
                         .map(entry -> {
                             final var header = entry.getValue();
                             final String description = header.description();
@@ -270,54 +356,54 @@ public class SpringApiDefinitionGenerator {
                                     );
 
                             final var members = new ArrayList<AnnotationMember>();
-                            members.add(new AnnotationMember("name", entry.getKey()));
+                            members.add(new AnnotationMember("name", Attribute.constant(entry.getKey())));
 
                             if (description != null) {
-                                members.add(new AnnotationMember("description", description));
+                                members.add(new AnnotationMember("description", Attribute.constant(description)));
                             }
 
                             if (Utils.isTrue(required)) {
-                                members.add(new AnnotationMember("required", true));
+                                members.add(new AnnotationMember("required", Attribute.constant(true)));
                             }
 
                             if (Utils.isTrue(deprecated)) {
-                                members.add(new AnnotationMember("deprecated", true));
+                                members.add(new AnnotationMember("deprecated", Attribute.constant(true)));
                             }
 
                             if (Utils.isTrue(allowEmptyValue)) {
-                                members.add(new AnnotationMember("allowEmptyValue", true));
+                                members.add(new AnnotationMember("allowEmptyValue", Attribute.constant(true)));
                             }
 
                             members.add(new AnnotationMember("schema",
-                                    new AnnotationExpression(
+                                    Attribute.compound(
                                             "io.swagger.v3.oas.annotations.media.Schema",
                                             toMap(List.of(
-                                                    new AnnotationMember("implementation", headerType)
+                                                    new AnnotationMember("implementation", Attribute.clazz(headerType))
                                                 )
                                             )
                                     )
                             ));
 
-                            return (Expression) new AnnotationExpression(
+                            return (Attribute) Attribute.compound(
                                     "io.swagger.v3.oas.annotations.headers.Header",
                                     toMap(members)
                             );
                         }).toList();
 
-        return new ArrayInitializerExpression(headers);
+        return Attribute.array(headers);
     }
 
 
-    private AnnotationExpression createMappingAnnotation(final HttpMethod httpMethod,
-                                                   final String path,
-                                                   final OpenApiOperation operation) {
-        final var annotationName = requireNonNull(switch (httpMethod) {
+    private AnnotationMirror createMappingAnnotation(final HttpMethod httpMethod,
+                                                     final String path,
+                                                     final OpenApiOperation operation) {
+        final var annotationName = switch (httpMethod) {
             case POST -> "org.springframework.web.bind.annotation.PostMapping";
             case GET -> "org.springframework.web.bind.annotation.GetMapping";
             case PUT -> "org.springframework.web.bind.annotation.PutMapping";
             case PATCH -> "org.springframework.web.bind.annotation.PatchMapping";
             case DELETE -> "org.springframework.web.bind.annotation.DeleteMapping";
-        });
+        };
 
         final var responseMediaTypes = generateUtils.createArrayInitializerExprOfStrings(operation.responses().values()
                 .stream().flatMap(it -> it.contentMediaType().keySet().stream())
@@ -327,7 +413,7 @@ public class SpringApiDefinitionGenerator {
         final var requestBody = operation.requestBody();
         final var members = new ArrayList<AnnotationMember>();
         members.add(new AnnotationMember("value",
-                new ArrayInitializerExpression(LiteralExpression.createStringLiteralExpression(path))
+                Attribute.array(Attribute.constant(path))
         ));
 
         if (requestBody != null && requestBody.contentMediaType().size() > 0) {
@@ -376,7 +462,7 @@ public class SpringApiDefinitionGenerator {
                 bodyType = typeUtils.createObjectType();
             }
 
-            final var bodyParameter = VariableElement.createParameter("body", bodyType);
+            final var bodyParameter = VariableElementBuilder.createParameter("body", bodyType);
 
             if (addRequestBodyAnnotation) {
                 bodyParameter.addAnnotation(validAnnotationClassName);
@@ -389,13 +475,13 @@ public class SpringApiDefinitionGenerator {
                 final var required = schema.properties().get(propertyName).required();
 
                 final var members = new ArrayList<AnnotationMember>();
-                members.add(new AnnotationMember("value", propertyName));
+                members.add(new AnnotationMember("value", Attribute.constant(propertyName)));
 
                 if (!required) {
-                    members.add(new AnnotationMember("required", false));
+                    members.add(new AnnotationMember("required", Attribute.constant(false)));
                 }
 
-                bodyParameter.addAnnotation(new AnnotationExpression(
+                bodyParameter.addAnnotation(Attribute.compound(
                         "org.springframework.web.bind.annotation.RequestParam",
                         toMap(members)
                 ));
@@ -404,12 +490,12 @@ public class SpringApiDefinitionGenerator {
             }
 
             if (requestBody.required() != null) {
-                new AnnotationExpression(
+                Attribute.compound(
                         "org.springframework.web.bind.annotation.RequestBody",
                         toMap(List.of(
                                 new AnnotationMember(
                                         "required",
-                                        requestBody.required()
+                                        Attribute.constant(requestBody.required())
                                 )
                             )
                       )
@@ -418,7 +504,7 @@ public class SpringApiDefinitionGenerator {
                 bodyParameter.addAnnotation("org.springframework.web.bind.annotation.RequestBody");
             }
 
-            parameters.add(bodyParameter);
+            parameters.add(bodyParameter.build());
         }
 
         parameters.add(
@@ -438,7 +524,7 @@ public class SpringApiDefinitionGenerator {
 
     private VariableElement createParameter(final OpenApiParameter openApiParameter) {
         final var explode = Boolean.TRUE.equals(openApiParameter.explode());
-        var type = typeUtils.createType(openApiParameter.type());
+        var type = typeUtils.createType(openApiParameter.type()).asNonNullableType();
 
         if (explode) {
             final DeclaredType dt;
@@ -447,7 +533,7 @@ public class SpringApiDefinitionGenerator {
             } else {
                 dt = (DeclaredType) type;
             }
-            type = typeUtils.createListType(dt);
+            type = typeUtils.createListType(dt, false);
         }
 
         final var parameter = VariableElement.createParameter(openApiParameter.name(), type);
@@ -465,35 +551,35 @@ public class SpringApiDefinitionGenerator {
         return parameter;
     }
 
-    private AnnotationExpression createSpringPathVariableAnnotation(final OpenApiParameter openApiParameter) {
+    private AnnotationMirror createSpringPathVariableAnnotation(final OpenApiParameter openApiParameter) {
         final var required = openApiParameter.required();
 
         final var members = new ArrayList<AnnotationMember>();
 
-        members.add(new AnnotationMember("name", openApiParameter.name()));
+        members.add(new AnnotationMember("name", Attribute.constant(openApiParameter.name())));
 
         if (Utils.isFalse(required)) {
-            members.add(new AnnotationMember("required", false));
+            members.add(new AnnotationMember("required", Attribute.constant(false)));
         }
 
-        return new AnnotationExpression("org.springframework.web.bind.annotation.PathVariable", toMap(members));
+        return Attribute.compound("org.springframework.web.bind.annotation.PathVariable", toMap(members));
     }
 
-    private AnnotationExpression createSpringRequestParamAnnotation(final OpenApiParameter openApiParameter) {
+    private AnnotationMirror createSpringRequestParamAnnotation(final OpenApiParameter openApiParameter) {
         final var required = openApiParameter.required();
 
         final var members = new ArrayList<AnnotationMember>();
 
-        members.add(new AnnotationMember("name", openApiParameter.name()));
+        members.add(new AnnotationMember("name", Attribute.constant(openApiParameter.name())));
 
         if (Utils.isFalse((required))) {
-            members.add(new AnnotationMember("required", false));
+            members.add(new AnnotationMember("required", Attribute.constant(false)));
         }
 
-        return new AnnotationExpression("org.springframework.web.bind.annotation.RequestParam", toMap(members));
+        return Attribute.compound("org.springframework.web.bind.annotation.RequestParam", toMap(members));
     }
 
-    private AnnotationExpression createApiParamAnnotation(final OpenApiParameter openApiParameter) {
+    private AnnotationMirror createApiParamAnnotation(final OpenApiParameter openApiParameter) {
         final var required = openApiParameter.required();
         final var explode = openApiParameter.explode();
         final var allowEmptyValue = openApiParameter.allowEmptyValue();
@@ -502,71 +588,65 @@ public class SpringApiDefinitionGenerator {
 
         final var members = new ArrayList<AnnotationMember>();
 
-        members.add(new AnnotationMember("name", openApiParameter.name()));
+        members.add(new AnnotationMember("name", Attribute.constant(openApiParameter.name())));
 
-        members.add(new AnnotationMember("in", new FieldAccessExpression(
-                new NameExpression("io.swagger.v3.oas.annotations.enums.ParameterIn"),
-                openApiParameter.in().name()
-        )));
+        members.add(new AnnotationMember("in", Attribute.createEnumAttribute("io.swagger.v3.oas.annotations.enums.ParameterIn", openApiParameter.in().name())));
 
         if (description != null) {
-            members.add(new AnnotationMember("description", description));
+            members.add(new AnnotationMember("description", Attribute.constant(description)));
         }
 
         if (Utils.isFalse(required)) {
-            members.add(new AnnotationMember("required", false));
+            members.add(new AnnotationMember("required", Attribute.constant(false)));
         }
 
         if (Utils.isTrue(allowEmptyValue)) {
-            members.add(new AnnotationMember("allowEmptyValue", true));
+            members.add(new AnnotationMember("allowEmptyValue", Attribute.constant(true)));
         }
 
         if (Utils.isTrue(explode)) {
-            members.add(new AnnotationMember("explode", new FieldAccessExpression(
-                    new NameExpression("io.swagger.v3.oas.annotations.enums.Explode"),
-                    "TRUE"
-            )));
+            members.add(new AnnotationMember("explode", Attribute.createEnumAttribute("io.swagger.v3.oas.annotations.enums.Explode", "TRUE")));
         }
 
         if (example != null) {
-            members.add(new AnnotationMember("example", example));
+            members.add(new AnnotationMember("example", Attribute.constant(example)));
         }
 
-        return new AnnotationExpression("io.swagger.v3.oas.annotations.Parameter", toMap(members));
+        return Attribute.compound("io.swagger.v3.oas.annotations.Parameter", toMap(members));
     }
 
-    private AnnotationExpression createSpringRequestHeaderAnnotation(final OpenApiParameter openApiParameter) {
+    private AnnotationMirror createSpringRequestHeaderAnnotation(final OpenApiParameter openApiParameter) {
         final var required = openApiParameter.required();
 
         final var members = new ArrayList<AnnotationMember>();
 
-        members.add(new AnnotationMember("name", openApiParameter.name()));
+        members.add(new AnnotationMember("name", Attribute.constant(openApiParameter.name())));
 
         if (Utils.isFalse(required)) {
-            members.add(new AnnotationMember("required", false));
+            members.add(new AnnotationMember("required", Attribute.constant(false)));
         }
 
-        return new AnnotationExpression("org.springframework.web.bind.annotation.RequestHeader", toMap(members));
+        return Attribute.compound("org.springframework.web.bind.annotation.RequestHeader", toMap(members));
     }
 
-    private AnnotationExpression createSpringCookieValueAnnotation(final OpenApiParameter openApiParameter) {
+    private AnnotationMirror createSpringCookieValueAnnotation(final OpenApiParameter openApiParameter) {
         final var required = openApiParameter.required();
 
         final var members = new ArrayList<AnnotationMember>();
 
-        members.add(new AnnotationMember("name", openApiParameter.name()));
+        members.add(new AnnotationMember("name", Attribute.constant(openApiParameter.name())));
 
         if (Utils.isFalse(required)) {
-            members.add(new AnnotationMember("required", false));
+            members.add(new AnnotationMember("required", Attribute.constant(false)));
         }
 
-        return new AnnotationExpression("org.springframework.web.bind.annotation.CookieValue", toMap(members));
+        return Attribute.compound("org.springframework.web.bind.annotation.CookieValue", toMap(members));
     }
 
-    private void processOperation(final HttpMethod httpMethod,
+    private void processOperation(final OpenApiPath openApiPath,
+                                  final HttpMethod httpMethod,
                                   final String path,
-                                  final @Nullable OpenApiOperation operation,
-                                  final TypeElement typeElement) {
+                                  final @Nullable OpenApiOperation operation) {
         if (operation == null) {
             return;
         }
@@ -576,10 +656,6 @@ public class SpringApiDefinitionGenerator {
         if (operationId == null || "".equals(operationId)) {
             throw new IllegalArgumentException();
         }
-
-        final var method = typeElement.addMethod(operationId);
-        createParameters(operation)
-                .forEach(method::addParameter);
 
         final var responseTypes = resolveResponseTypes(operation);
         final Type<?> responseType;
@@ -594,7 +670,11 @@ public class SpringApiDefinitionGenerator {
             responseType = typeUtils.createObjectType();
         }
 
-        method.setReturnType(responseType);
+        final var typeElement = findOrCreateTypeElement(openApiPath, operation);
+
+        final var method = typeElement.addMethod(operationId, responseType);
+        createParameters(operation)
+                .forEach(method::addParameter);
 
         postProcessOperation(
                 httpMethod,
@@ -625,8 +705,8 @@ public class SpringApiDefinitionGenerator {
 
         method.addAnnotation(createApiOperationAnnotation(
                 List.of(
-                        new AnnotationMember("summary", summary != null ? summary : ""),
-                        new AnnotationMember("operationId", operationId),
+                        new AnnotationMember("summary", Attribute.constant(summary != null ? summary : "")),
+                        new AnnotationMember("operationId", Attribute.constant(operationId)),
                         new AnnotationMember("tags", tags)
                 )
         ));
@@ -662,8 +742,8 @@ public class SpringApiDefinitionGenerator {
         method.setBody(body);
     }
 
-    private AnnotationExpression createSecurityRequirementsAnnotation(final List<OpenApiSecurityRequirement> securityRequirements) {
-        final List<Expression> annotations = new ArrayList<>();
+    private Attribute.Compound createSecurityRequirementsAnnotation(final List<OpenApiSecurityRequirement> securityRequirements) {
+        final List<Attribute> annotations = new ArrayList<>();
 
         securityRequirements.forEach(securityRequirement -> {
             final var requirements = securityRequirement.requirements();
@@ -672,9 +752,9 @@ public class SpringApiDefinitionGenerator {
                 final String name = securityRequirement.requirements().keySet().iterator().next();
 
                 final var members = new ArrayList<AnnotationMember>();
-                members.add(new AnnotationMember("name", name));
+                members.add(new AnnotationMember("name", Attribute.constant(name)));
 
-                final var annotation = new AnnotationExpression(
+                final var annotation = Attribute.compound(
                         SECURITY_REQUIREMENT_CLASS_NAME,
                         toMap(members)
                 );
@@ -688,12 +768,12 @@ public class SpringApiDefinitionGenerator {
             securityRequirementsMembers.add(
                     new AnnotationMember(
                             "value",
-                            new ArrayInitializerExpression(annotations)
+                            Attribute.array(annotations)
                     )
             );
         }
 
-        return new AnnotationExpression(
+        return Attribute.compound(
                 "io.swagger.v3.oas.annotations.security.SecurityRequirements",
                 toMap(securityRequirementsMembers)
         );

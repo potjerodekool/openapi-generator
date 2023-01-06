@@ -2,11 +2,10 @@ package io.github.potjerodekool.openapi.internal.ast.element;
 
 import io.github.potjerodekool.openapi.internal.ast.AstNode;
 import io.github.potjerodekool.openapi.internal.ast.Modifier;
-import io.github.potjerodekool.openapi.internal.ast.expression.AnnotationExpression;
-import io.github.potjerodekool.openapi.internal.ast.expression.Expression;
 import io.github.potjerodekool.openapi.internal.ast.type.Type;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import javax.lang.model.element.ElementKind;
 import java.util.List;
 import java.util.Set;
 
@@ -32,13 +31,13 @@ public interface Element extends AstNode {
 
     boolean hasModifier(Modifier modifier);
 
-    List<AnnotationExpression> getAnnotations();
+    List<AnnotationMirror> getAnnotations();
 
     void addAnnotation(String annotationClassName);
 
-    void addAnnotation(String annotationClassName, Expression expression);
+    void addAnnotation(String annotationClassName, AnnotationValue expression);
 
-    void addAnnotation(AnnotationExpression annotation);
+    void addAnnotation(AnnotationMirror annotation);
 
-    void addAnnotations(List<AnnotationExpression> annotations);
+    void addAnnotations(List<AnnotationMirror> annotations);
 }

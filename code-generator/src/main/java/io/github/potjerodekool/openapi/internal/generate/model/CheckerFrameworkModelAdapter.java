@@ -1,26 +1,45 @@
 package io.github.potjerodekool.openapi.internal.generate.model;
 
-import io.github.potjerodekool.openapi.HttpMethod;
-import io.github.potjerodekool.openapi.OpenApiGeneratorConfig;
-import io.github.potjerodekool.openapi.RequestCycleLocation;
+import io.github.potjerodekool.openapi.*;
 import io.github.potjerodekool.openapi.generate.model.ModelAdapter;
+import io.github.potjerodekool.openapi.internal.ast.Attribute;
 import io.github.potjerodekool.openapi.internal.ast.element.MethodElement;
 import io.github.potjerodekool.openapi.internal.ast.element.VariableElement;
-import io.github.potjerodekool.openapi.internal.ast.expression.AnnotationExpression;
 import io.github.potjerodekool.openapi.internal.ast.type.DeclaredType;
+import io.github.potjerodekool.openapi.internal.ast.type.MutableType;
+import io.github.potjerodekool.openapi.internal.ast.type.Type;
 import io.github.potjerodekool.openapi.internal.di.Bean;
+import io.github.potjerodekool.openapi.internal.di.ConditionalOnDependency;
 import io.github.potjerodekool.openapi.tree.OpenApiProperty;
+import jakarta.inject.Inject;
 
 @Bean
+@ConditionalOnDependency(
+        groupId = "org.checkerframework",
+        artifactId = "checker-qual"
+)
 public class CheckerFrameworkModelAdapter implements ModelAdapter {
 
-    private boolean isEnabled;
+    private final boolean isEnabled;
 
-    public CheckerFrameworkModelAdapter() {
+    @Inject
+    public CheckerFrameworkModelAdapter(final GeneratorConfig generatorConfig) {
+        this.isEnabled = generatorConfig.language() == Language.JAVA
+                && generatorConfig.isFeatureEnabled(Features.FEATURE_CHECKER);
     }
 
-    public CheckerFrameworkModelAdapter(final OpenApiGeneratorConfig config) {
-        this.isEnabled = config.isFeatureEnabled(OpenApiGeneratorConfig.FEATURE_CHECKER);
+    @Override
+    public void adaptConstructor(final HttpMethod httpMethod,
+                                 final RequestCycleLocation requestCycleLocation,
+                                 final MethodElement constructor) {
+        if (!isEnabled) {
+            return;
+        }
+
+        constructor.getParameters().forEach(parameter -> {
+            final var parameterType = parameter.getType();
+            visitType(parameterType);
+        });
     }
 
     @Override
@@ -38,10 +57,7 @@ public class CheckerFrameworkModelAdapter implements ModelAdapter {
         if (!isPatch
                 && fieldType.isDeclaredType()) {
             final var declaredType = (DeclaredType) fieldType;
-
-            declaredType.addAnnotation(
-                    new AnnotationExpression("org.checkerframework.checker.nullness.qual.Nullable")
-            );
+            visitType(declaredType);
         }
     }
 
@@ -57,11 +73,8 @@ public class CheckerFrameworkModelAdapter implements ModelAdapter {
         final var returnType = methodDeclaration.getReturnType();
 
         if (!returnType.isPrimitiveType()
-                && !property.required()
                 && httpMethod != HttpMethod.PATCH) {
-
-            final var ct = (DeclaredType) returnType;
-            ct.addAnnotation(new AnnotationExpression("org.checkerframework.checker.nullness.qual.Nullable"));
+            visitType(returnType);
         }
     }
 
@@ -74,12 +87,12 @@ public class CheckerFrameworkModelAdapter implements ModelAdapter {
             return;
         }
 
-        final var propertyType = property.type();
-        final var isNullable = propertyType.nullable();
+        visitType(method.getParameters().get(0).getType());
+    }
 
-        if (Boolean.TRUE.equals(isNullable)) {
-            final var parameterType = method.getParameters().get(0).getType();
-            parameterType.addAnnotation(new AnnotationExpression("org.checkerframework.checker.nullness.qual.Nullable"));
+    private void visitType(final Type<?> type) {
+        if (type.isNullable() && type instanceof MutableType<?> mt) {
+            mt.addAnnotation(Attribute.compound("org.checkerframework.checker.nullness.qual.Nullable"));
         }
     }
 }

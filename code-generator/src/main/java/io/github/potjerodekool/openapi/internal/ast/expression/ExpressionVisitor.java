@@ -20,9 +20,6 @@ public interface ExpressionVisitor<R, P> {
     R visitMethodCall(MethodCallExpression methodCallExpression,
                       P param);
 
-    R visitAnnotationExpression(AnnotationExpression annotationExpression,
-                                P param);
-
     R visitArrayInitializerExpression(ArrayInitializerExpression arrayInitializerExpression,
                                       P param);
 

@@ -1,7 +1,10 @@
 package io.github.potjerodekool.openapi.internal.ast.element;
 
 import io.github.potjerodekool.openapi.internal.ast.type.PackageType;
+import io.github.potjerodekool.openapi.internal.ast.type.java.JavaPackageType;
 import org.checkerframework.checker.nullness.qual.Nullable;
+
+import javax.lang.model.element.ElementKind;
 
 public class PackageElement extends AbstractElement<PackageElement, PackageType> implements QualifiedNameable {
 
@@ -17,7 +20,7 @@ public class PackageElement extends AbstractElement<PackageElement, PackageType>
         }
 
         final var pe = new PackageElement(name);
-        final var type = new PackageType(pe);
+        final var type = new JavaPackageType(pe);
         pe.setType(type);
         return pe;
     }

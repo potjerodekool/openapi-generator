@@ -1,0 +1,72 @@
+plugins {
+    id 'java-gradle-plugin'
+    id 'org.gradle.maven-publish'
+}
+
+group = 'io.github.potjerodekool'
+version = '0.0.1'
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+gradlePlugin {
+    //website = 'https://github.com/potjerodekool/openapi-generator'
+    //vcsUrl = 'https://github.com/potjerodekool/openapi-generator.git'
+
+    plugins {
+        openApiPlugin {
+            id = 'io.github.potjerodekool.openapi.gradle.openapi'
+            displayName = 'OpenApi code generator'
+            description = 'Generates code from openapi files'
+            implementationClass = 'io.github.potjerodekool.openapi.gradle.OpenApiPlugin'
+        }
+    }
+}
+
+dependencies {
+    implementation 'io.github.potjerodekool:code-generator:1.0-SNAPSHOT'
+
+    testCompileOnly('org.junit.jupiter:junit-jupiter:5.9.0')
+    testCompileOnly('org.junit.jupiter:junit-jupiter-engine:5.9.0')
+
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.9.0'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.9.0'
+
+    //testImplementation platform("org.spockframework:spock-bom:2.1-groovy-3.0")
+    //testImplementation 'org.spockframework:spock-core'
+
+    //integrationTestImplementation platform("org.spockframework:spock-bom:2.1-groovy-3.0")
+    //integrationTestImplementation 'org.spockframework:spock-core'
+
+    //functionalTestImplementation platform("org.spockframework:spock-bom:2.1-groovy-3.0")
+    //functionalTestImplementation 'org.spockframework:spock-core'
+}
+
+tasks.withType(Test).configureEach {
+    // Using JUnitPlatform for running tests
+    useJUnitPlatform()
+}
+
+publishing {
+    repositories {
+        mavenLocal()
+    }
+}
+
+/*
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            groupId = 'io.github.potjerodekool'
+            artifactId = 'open-api-gradle-plugin'
+            version = "0.0.1"
+            from components.java
+        }
+    }
+    repositories {
+        mavenLocal()
+    }
+}
+*/

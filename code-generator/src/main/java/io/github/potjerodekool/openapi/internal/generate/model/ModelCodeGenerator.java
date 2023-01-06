@@ -4,17 +4,18 @@ import io.github.potjerodekool.openapi.HttpMethod;
 import io.github.potjerodekool.openapi.Language;
 import io.github.potjerodekool.openapi.RequestCycleLocation;
 import io.github.potjerodekool.openapi.internal.Filer;
+import io.github.potjerodekool.openapi.internal.ast.Attribute;
 import io.github.potjerodekool.openapi.internal.ast.CompilationUnit;
 import io.github.potjerodekool.openapi.internal.ast.Modifier;
 import io.github.potjerodekool.openapi.internal.ast.Operator;
-import io.github.potjerodekool.openapi.internal.ast.TypeUtils;
 import io.github.potjerodekool.openapi.internal.ast.element.*;
 import io.github.potjerodekool.openapi.internal.ast.expression.*;
 import io.github.potjerodekool.openapi.internal.ast.statement.BlockStatement;
 import io.github.potjerodekool.openapi.internal.ast.statement.ReturnStatement;
-import io.github.potjerodekool.openapi.internal.ast.type.DeclaredType;
+import io.github.potjerodekool.openapi.internal.ast.type.*;
+import io.github.potjerodekool.openapi.internal.ast.type.java.WildcardType;
+import io.github.potjerodekool.openapi.internal.ast.util.TypeUtils;
 import io.github.potjerodekool.openapi.internal.di.ApplicationContext;
-import io.github.potjerodekool.openapi.internal.generate.CodeGenerateUtils;
 import io.github.potjerodekool.openapi.internal.util.GenerateException;
 import io.github.potjerodekool.openapi.internal.util.Utils;
 import io.github.potjerodekool.openapi.tree.*;
@@ -23,8 +24,12 @@ import io.github.potjerodekool.openapi.type.OpenApiObjectType;
 import io.github.potjerodekool.openapi.type.OpenApiType;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import javax.lang.model.type.TypeKind;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 
 public class ModelCodeGenerator {
 
@@ -32,7 +37,6 @@ public class ModelCodeGenerator {
 
     private final TypeUtils typeUtils;
 
-    private final CodeGenerateUtils generateUtils;
     private final Filer filer;
     private final Language language;
 
@@ -45,7 +49,6 @@ public class ModelCodeGenerator {
         this.filer = filer;
         this.typeUtils = typeUtils;
         this.language = language;
-        this.generateUtils = new CodeGenerateUtils(typeUtils);
         this.modelAdapter = new CombinedModelAdapter(applicationContext);
     }
 
@@ -126,11 +129,13 @@ public class ModelCodeGenerator {
                     .filter(entry -> propertyFilter(entry.getValue(), requestCycleLocation))
                     .forEach(entry -> addField(entry.getKey(), entry.getValue(), typeElement, httpMethod, requestCycleLocation));
 
-            generateConstructor(ot, typeElement, httpMethod, requestCycleLocation, false);
+            var constructor = generateConstructor(ot, typeElement, httpMethod, requestCycleLocation, false);
 
             if (shouldGenerateAllArgConstructor(ot, requestCycleLocation, typeElement)) {
-                generateConstructor(ot, typeElement, httpMethod, requestCycleLocation, true);
+                constructor = generateConstructor(ot, typeElement, httpMethod, requestCycleLocation, true);
             }
+
+            constructor.addAnnotation("com.fasterxml.jackson.annotation.JsonCreator");
 
             ot.properties().entrySet().stream()
                     .filter(it -> this.propertyFilter(it.getValue(), requestCycleLocation))
@@ -147,7 +152,7 @@ public class ModelCodeGenerator {
                             });
 
             try {
-                filer.write(cu, language);
+                filer.writeSource(cu, language);
             } catch (final IOException e) {
                 throw new GenerateException(e);
             }
@@ -161,6 +166,18 @@ public class ModelCodeGenerator {
         return Boolean.TRUE.equals(property.readOnly())
                 ? requestCycleLocation == RequestCycleLocation.RESPONSE
                 : !Boolean.TRUE.equals(property.writeOnly()) || requestCycleLocation == RequestCycleLocation.REQUEST;
+    }
+
+    private boolean constructorParameterFilter(final OpenApiProperty property,
+                                               final RequestCycleLocation requestCycleLocation,
+                                               final boolean allArg) {
+        if (requestCycleLocation == RequestCycleLocation.REQUEST) {
+            if (Boolean.TRUE.equals(property.readOnly())) {
+                return false;
+            }
+        }
+
+        return property.required() || allArg;
     }
 
     private boolean hasFinalField(final TypeElement typeElement,
@@ -186,40 +203,38 @@ public class ModelCodeGenerator {
 
         final var constructors = ElementFilter.constructors(typeElement).toList();
 
+        if (constructors.isEmpty()) {
+            return true;
+        }
+        
         final var existingConstructor = constructors.get(0);
         return existingConstructor.getParameters().size() < allArgConstructorParameterCount;
     }
 
-    private void generateConstructor(final OpenApiObjectType ot,
-                                     final TypeElement typeElement,
-                                     final HttpMethod httpMethod, RequestCycleLocation requestCycleLocation,
-                                     final boolean allArg) {
-
-        final var constructor = typeElement.addConstructor(Modifier.PUBLIC);
+    private MethodElement generateConstructor(final OpenApiObjectType ot,
+                                              final TypeElement typeElement,
+                                              final HttpMethod httpMethod, RequestCycleLocation requestCycleLocation,
+                                              final boolean allArg) {
         final var initPropertyNames = new HashSet<String>();
 
+        final var parameters = new ArrayList<VariableElement>();
+
         ot.properties().entrySet().stream()
-                .filter(it -> this.propertyFilter(it.getValue(), requestCycleLocation))
+                .filter(it -> this.constructorParameterFilter(it.getValue(), requestCycleLocation, allArg))
                 .forEach(entry -> {
                     final var propertyName = entry.getKey();
                     final var property = entry.getValue();
+                    var paramType = typeUtils.createType(property.type());
 
-                    final var isFieldFinal = hasFinalField(typeElement, propertyName);
-
-                    if (property.required() || isFieldFinal || allArg) {
-                        var paramType = (DeclaredType) typeUtils.createType(property.type());
-
-                        if (httpMethod == HttpMethod.PATCH && requestCycleLocation == RequestCycleLocation.REQUEST) {
-                            paramType = typeUtils.createDeclaredType(JSON_NULLABLE_CLASS_NAME)
-                                    .withTypeArgument(paramType.asNullableType());
-                        }
-
-                        constructor.addParameter(
-                                VariableElement.createParameter(propertyName, paramType)
-                                        .addModifier(Modifier.FINAL)
-                        );
-                        initPropertyNames.add(propertyName);
+                    if (httpMethod == HttpMethod.PATCH && requestCycleLocation == RequestCycleLocation.REQUEST) {
+                        paramType = typeUtils.createDeclaredType(JSON_NULLABLE_CLASS_NAME)
+                                .withTypeArgument(paramType.asNullableType());
                     }
+
+                    parameters.add(VariableElement.createParameter(propertyName, paramType)
+                            .addModifier(Modifier.FINAL)
+                    );
+                    initPropertyNames.add(propertyName);
                 });
 
         final var body = new BlockStatement();
@@ -240,7 +255,13 @@ public class ModelCodeGenerator {
                       );
                 });
 
+
+        final var constructor = typeElement.addConstructor(Modifier.PUBLIC);
+        parameters.forEach(constructor::addParameter);
+
         constructor.setBody(body);
+        modelAdapter.adaptConstructor(httpMethod, requestCycleLocation, constructor);
+        return constructor;
     }
 
     private void addField(final String propertyName,
@@ -273,25 +294,41 @@ public class ModelCodeGenerator {
                         "undefined");
                 field.setInitExpression(defaultValue);
             } else {
-                final var defaultValue = generateUtils.getDefaultValue(fieldType);
+                if (fieldType.isDeclaredType() && !fieldType.isNullable()) {
+                    field.setInitExpression(null);
+                } else {
+                    final var defaultValue = getDefaultValue(fieldType);
 
-                if (defaultValue != null) {
-                    field.setInitExpression(defaultValue);
+                    if (defaultValue != null) {
+                        field.setInitExpression(defaultValue);
+                    }
                 }
             }
         }
 
         if (propertyType instanceof OpenApiArrayType) {
-            var elementType = generateUtils.getFirstTypeArg(fieldType);
+            Type<?> elementType;
 
-            if (isPatchRequest) {
-                elementType = generateUtils.getFirstTypeArg(elementType);
+            if (fieldType.isArrayType()) {
+                final var arrayType = (ArrayType) fieldType;
+                elementType = arrayType.getComponentType();
+            } else {
+                elementType = fieldType.getFirstTypeArg().get();
             }
 
-            field.addAnnotation(generateUtils.createArraySchemaAnnotation(elementType));
+            if (isPatchRequest) {
+                if (elementType.isArrayType()) {
+                    final var arrayType = (ArrayType) elementType;
+                    elementType = arrayType.getComponentType();
+                } else {
+                    elementType = elementType.getFirstTypeArg().get();
+                }
+            }
+
+            field.addAnnotation(createArraySchemaAnnotation(elementType));
         } else {
             final var type = typeUtils.createType(propertyType);
-            field.addAnnotation(generateUtils.createSchemaAnnotation(type, property.required()));
+            field.addAnnotation(createSchemaAnnotation(type, property.required(), property.description()));
         }
 
         this.modelAdapter.adaptField(httpMethod, requestCycleLocation, property, field);
@@ -381,5 +418,96 @@ public class ModelCodeGenerator {
         method.setBody(body);
 
         modelAdapter.adaptSetter(httpMethod, requestCycleLocation, property, method);
+    }
+
+    public Attribute.Compound createSchemaAnnotation(final Type<?> type,
+                                                     final Boolean required,
+                                                     final @Nullable String description) {
+        final var members = new HashMap<ExecutableElement, AnnotationValue>();
+
+        final Type<?> implementationType;
+
+        if (type instanceof WildcardType wt) {
+            if (wt.getExtendsBound().isPresent()) {
+                implementationType = wt.getExtendsBound().get();
+            } else if (wt.getSuperBound().isPresent()) {
+                implementationType = wt.getSuperBound().get();
+            } else {
+                //Will result in compilation error in generated code.
+                implementationType = wt;
+            }
+        } else if (typeUtils.isMapType(type)) {
+            implementationType = typeUtils.createMapType();
+        } else {
+            implementationType = type;
+        }
+
+        members.put(
+                MethodElement.createMethod("implementation"),
+                Attribute.clazz(implementationType)
+        );
+
+        if (Utils.isTrue(required)) {
+            members.put(
+                    MethodElement.createMethod("required"),
+                    Attribute.constant(true));
+        }
+
+        if (description != null) {
+            members.put(
+                    MethodElement.createMethod(("description")),
+                    Attribute.constant(description)
+            );
+        }
+
+        return Attribute.compound(
+                "io.swagger.v3.oas.annotations.media.Schema",
+                members
+        );
+    }
+
+    public AnnotationMirror createArraySchemaAnnotation(final Type<?> elementType) {
+        return createAnnotation("io.swagger.v3.oas.annotations.media.ArraySchema", "schema",
+                createSchemaAnnotation(elementType, false, null)
+        );
+    }
+
+    public AnnotationMirror createAnnotation(final String name,
+                                             final String memberName,
+                                             final Attribute value) {
+        return Attribute.compound(
+                name,
+                Map.of(
+                        MethodElement.createMethod(memberName),
+                        value
+                )
+        );
+    }
+
+    public @Nullable Expression getDefaultValue(final Type<?> type) {
+        if (type.isPrimitiveType()) {
+            final var primitiveType = ((PrimitiveType) type);
+
+            return switch (primitiveType.getKind()) {
+                case BOOLEAN -> LiteralExpression.createBooleanLiteralExpression();
+                case CHAR -> LiteralExpression.createCharLiteralExpression();
+                case BYTE, SHORT, INT -> LiteralExpression.createIntLiteralExpression();
+                case LONG -> LiteralExpression.createLongLiteralExpression();
+                case FLOAT -> LiteralExpression.createFloatLiteralExpression();
+                case DOUBLE -> LiteralExpression.createDoubleLiteralExpression();
+                default -> throw new GenerateException(String.format("%s is not a primitive", primitiveType.getKind()));
+            };
+        } else if (typeUtils.isListType(type)) {
+            return new MethodCallExpression(
+                    new NameExpression(typeUtils.getListTypeName()),
+                    "of"
+            );
+        } else if (type.getKind() == TypeKind.DECLARED) {
+            return LiteralExpression.createNullLiteralExpression();
+        } else if (type.isArrayType()) {
+            return new ArrayInitializerExpression();
+        } else {
+            return null;
+        }
     }
 }

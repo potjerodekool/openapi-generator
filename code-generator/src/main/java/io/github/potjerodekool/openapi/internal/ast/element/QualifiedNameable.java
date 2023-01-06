@@ -19,11 +19,19 @@ public interface QualifiedNameable {
                                             final StringBuilder stringBuilder) {
         final var enclosingElement = element.getEnclosingElement();
 
-        if (enclosingElement != null) {
+        if (enclosingElement != null && !isDefaultPackage(enclosingElement)) {
             createQualifiedName(enclosingElement, stringBuilder);
             stringBuilder.append(".");
         }
 
         stringBuilder.append(element.getSimpleName());
+    }
+
+    private static boolean isDefaultPackage(final Element element) {
+        if (element instanceof PackageElement pe) {
+            return pe.isDefaultPackage();
+        } else {
+            return false;
+        }
     }
 }

@@ -5,17 +5,24 @@ import io.github.potjerodekool.openapi.internal.ast.element.*;
 import io.github.potjerodekool.openapi.internal.ast.expression.*;
 import io.github.potjerodekool.openapi.internal.ast.statement.IfStatement;
 import io.github.potjerodekool.openapi.internal.ast.type.*;
-import io.github.potjerodekool.openapi.internal.ast.type.kotlin.KotlinArray;
+import io.github.potjerodekool.openapi.internal.ast.type.java.WildcardType;
+import io.github.potjerodekool.openapi.internal.ast.type.kotlin.KotlinArrayType;
+import io.github.potjerodekool.openapi.internal.ast.type.kotlin.UnitType;
+import io.github.potjerodekool.openapi.internal.ast.util.TypeUtils;
 import io.github.potjerodekool.openapi.internal.util.Counter;
-import io.github.potjerodekool.openapi.internal.util.Utils;
+import io.github.potjerodekool.openapi.internal.util.QualifiedName;
 
+import javax.lang.model.element.ElementKind;
+import javax.lang.model.type.TypeKind;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 public class KotlinAstPrinter extends AbstractAstPrinter {
 
-    public KotlinAstPrinter(final Printer printer) {
-        super(printer);
+    public KotlinAstPrinter(final Printer printer,
+                            final TypeUtils typeUtils) {
+        super(printer, typeUtils);
     }
 
     //Elements
@@ -23,6 +30,8 @@ public class KotlinAstPrinter extends AbstractAstPrinter {
     public Void visitTypeElement(final TypeElement typeElement,
                                  final CodeContext context) {
         printer.printIndent();
+
+        printAnnotations(typeElement.getAnnotations(), true, context);
 
         printModifiers(typeElement.getModifiers());
 
@@ -41,6 +50,28 @@ public class KotlinAstPrinter extends AbstractAstPrinter {
 
         if (primaryConstructor != null) {
             visitPrimaryConstructor(primaryConstructor, context);
+        }
+
+        final var extendsTypes = new ArrayList<Type<?>>();
+
+        final var superType = typeElement.getSuperType();
+
+        if (superType != null) {
+            extendsTypes.add(superType);
+        }
+
+        extendsTypes.addAll(typeElement.getInterfaces());
+
+        if (extendsTypes.size() > 0) {
+            printer.print(" : ");
+
+            for (int extendsIndex = 0; extendsIndex < extendsTypes.size(); extendsIndex++) {
+                if (extendsIndex > 0) {
+                    printer.print(", ");
+                }
+                final var extendsType = extendsTypes.get(extendsIndex);
+                extendsType.accept(this, context);
+            }
         }
 
         final List<Element> enclosedElements = typeElement.getEnclosedElements();
@@ -114,7 +145,7 @@ public class KotlinAstPrinter extends AbstractAstPrinter {
         printer.printIndent();
         printer.print("fun ");
 
-        printer.print(methodElement.getSimpleName());
+        printer.print(methodElement.getSimpleName().toString());
 
         visitMethodParameters(methodElement.getParameters(), context);
 
@@ -203,7 +234,9 @@ public class KotlinAstPrinter extends AbstractAstPrinter {
     public Void visitLiteralExpression(final LiteralExpression literalExpression,
                                        final CodeContext context) {
         if (literalExpression.getLiteralType() == LiteralType.CLASS) {
-            printer.print(resolveClassName(literalExpression.getValue(), context) + "::class");
+            final var classLiteralExpression = (ClassLiteralExpression) literalExpression;
+            final var type = (DeclaredType) classLiteralExpression.getType();
+            printer.print(resolveClassName(type.getElement().getQualifiedName(), context) + "::class");
             return null;
         } else {
             return super.visitLiteralExpression(literalExpression, context);
@@ -305,7 +338,7 @@ public class KotlinAstPrinter extends AbstractAstPrinter {
     private boolean isPartOfAnnotationExpressionOrArrayInitializerExpression(final CodeContext context) {
         final var astNode = context.getAstNode();
 
-        if ((astNode instanceof AnnotationExpression || astNode instanceof ArrayInitializerExpression)) {
+        if ((astNode instanceof AnnotationMirror || astNode instanceof ArrayInitializerExpression)) {
             return true;
         }
 
@@ -314,8 +347,8 @@ public class KotlinAstPrinter extends AbstractAstPrinter {
     }
 
     @Override
-    public Void visitAnnotationExpression(final AnnotationExpression annotationExpression,
-                                          final CodeContext context) {
+    public Void visitAnnotation(final AnnotationMirror annotationExpression,
+                                final CodeContext context) {
         final var elementValues = annotationExpression.getElementValues();
 
         if (!isPartOfAnnotationExpressionOrArrayInitializerExpression(context)) {
@@ -335,7 +368,7 @@ public class KotlinAstPrinter extends AbstractAstPrinter {
             final var childContext = context.child(annotationExpression);
 
             elementValues.forEach((name,value) -> {
-                printer.print(name);
+                printer.print(name.getSimpleName());
                 printer.print(" = ");
                 value.accept(this, childContext);
 
@@ -373,21 +406,42 @@ public class KotlinAstPrinter extends AbstractAstPrinter {
     }
 
     @Override
-    public Void visitKotlinArray(final KotlinArray kotlinArray, final CodeContext context) {
-        final var componentType = kotlinArray.getComponentType();
-        switch (componentType.getKind()) {
-            case BYTE -> printer.print("ByteArray");
-            case CHAR -> printer.print("CharArray");
-            case SHORT -> printer.print("ShortArray");
-            case INT -> printer.print("IntArray");
-            case LONG -> printer.print("LongArray");
-            case FLOAT -> printer.print("FloatArray");
-            case DOUBLE -> printer.print("DoubleArray");
-            case BOOLEAN -> printer.print("BooleanArray");
-            default -> {
+    public Void visitKotlinArray(final KotlinArrayType kotlinArrayType, final CodeContext context) {
+        final var componentType = kotlinArrayType.getComponentType();
+
+        if (componentType.getKind() == TypeKind.DECLARED) {
+            final var declaredComponentType = (DeclaredType) componentType;
+            final var componentTypeName = declaredComponentType.getElement().getQualifiedName();
+            final var isNullable = declaredComponentType.isNullable();
+
+            if (isNullable) {
                 printer.print("Array<");
                 componentType.accept(this, context);
-                printer.print(">");
+                printer.print(">?");
+            } else {
+                switch (componentTypeName) {
+                    case "kotlin.Byte" -> printer.print("ByteArray");
+                    case "kotlin.Char" -> printer.print("CharArray");
+                    case "kotlin.Short" -> printer.print("ShortArray");
+                    case "kotlin.Int" -> printer.print("IntArray");
+                    case "kotlin.Long" -> printer.print("LongArray");
+                    case "kotlin.Float" -> printer.print("FloatArray");
+                    case "kotlin.Double" -> printer.print("DoubleArray");
+                    case "kotlin.Boolean" -> printer.print("BooleanArray");
+                    default -> {
+                        printer.print("Array<");
+                        componentType.accept(this, context);
+                        printer.print(">");
+                    }
+                }
+            }
+        } else {
+            printer.print("Array<");
+            componentType.accept(this, context);
+            printer.print(">");
+
+            if (kotlinArrayType.isNullable()) {
+                printer.print("?");
             }
         }
         return null;
@@ -513,10 +567,18 @@ public class KotlinAstPrinter extends AbstractAstPrinter {
     @Override
     protected String resolveClassName(final String className,
                                       final CodeContext context) {
-        final var qualifiedName = Utils.resolveQualifiedName(className);
+        final var qualifiedName = QualifiedName.from(className);
         if ("kotlin".equals(qualifiedName.packageName())) {
             return qualifiedName.simpleName();
         }
         return super.resolveClassName(className, context);
+    }
+
+    @Override
+    protected String name(final String value) {
+        if ("in".equals(value)) {
+            return "`" + value + "`";
+        }
+        return super.name(value);
     }
 }

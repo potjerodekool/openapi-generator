@@ -1,32 +1,18 @@
 package io.github.potjerodekool.openapi.internal.ast.element;
 
 import io.github.potjerodekool.openapi.internal.ast.Modifier;
-import io.github.potjerodekool.openapi.internal.ast.expression.AnnotationExpression;
 import io.github.potjerodekool.openapi.internal.ast.type.DeclaredType;
+import io.github.potjerodekool.openapi.internal.ast.type.TypeFactory;
 import io.github.potjerodekool.openapi.internal.ast.type.Type;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import javax.lang.model.element.ElementKind;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
-public class TypeElement extends AbstractElement<TypeElement, DeclaredType> implements QualifiedNameable {
-
-    public static final TypeElement ARRAY_ELEMENT = new TypeElement(
-            ElementKind.CLASS,
-            "array"
-    );
-
-    public static final TypeElement PRIMITIVE = new TypeElement(
-            ElementKind.CLASS,
-            "primitive"
-    );
-
-    public static final TypeElement WILDCARD = new TypeElement(
-            ElementKind.CLASS,
-            "wildcard"
-    );
+public class TypeElement extends AbstractElement<TypeElement, Type<?>> implements QualifiedNameable {
 
     private @Nullable Type<?> superType = null;
 
@@ -34,13 +20,17 @@ public class TypeElement extends AbstractElement<TypeElement, DeclaredType> impl
 
     private @Nullable MethodElement primaryConstructor;
 
-    public TypeElement(final ElementKind kind,
+    protected TypeElement(final ElementKind kind,
                        final String simpleName) {
         super(kind, simpleName);
+
+        if (simpleName.contains(".")) {
+            throw new IllegalArgumentException();
+        }
     }
 
     public static TypeElement create(final ElementKind kind,
-                                     final List<AnnotationExpression> annotations,
+                                     final List<AnnotationMirror> annotations,
                                      final Set<Modifier> modifiers,
                                      final String simpleName) {
         final var te = new TypeElement(kind, simpleName);
@@ -59,10 +49,15 @@ public class TypeElement extends AbstractElement<TypeElement, DeclaredType> impl
 
     private static TypeElement create(final ElementKind kind,
                                       final String simpleName) {
-        final var te = new TypeElement(kind, simpleName);
-        final var type = new DeclaredType(te, false);
-        te.setType(type);
-        return te;
+        final var typeElement = new TypeElement(kind, simpleName);
+        final var type = TypeFactory.createDeclaredType(typeElement, false);
+        typeElement.setType(type);
+        return typeElement;
+    }
+
+    @Override
+    public void setType(final Type<?> type) {
+        super.setType(type);
     }
 
     public @Nullable Type<?> getSuperType() {
@@ -102,6 +97,15 @@ public class TypeElement extends AbstractElement<TypeElement, DeclaredType> impl
         return constructor;
     }
 
+    public MethodElement addMethod(final String name,
+                                   final Type<?> returnType,
+                                   final Modifier... modifiers) {
+        final var constructor = MethodElement.createMethod(name, returnType);
+        constructor.addModifiers(modifiers);
+        addEnclosedElement(constructor);
+        return constructor;
+    }
+
     public void addPrimaryConstructor(final MethodElement primaryConstructor) {
         this.primaryConstructor = primaryConstructor;
     }
@@ -121,10 +125,10 @@ public class TypeElement extends AbstractElement<TypeElement, DeclaredType> impl
     }
 
     public VariableElement addField(final Type<?> fieldType,
-                         final String name,
-                         final Modifier modifier) {
+                                    final String name,
+                                    final Modifier... modifiers) {
         final var field = VariableElement.createField(name, fieldType, null)
-                .addModifier(modifier);
+            .addModifiers(modifiers);
         addEnclosedElement(field);
         return field;
     }

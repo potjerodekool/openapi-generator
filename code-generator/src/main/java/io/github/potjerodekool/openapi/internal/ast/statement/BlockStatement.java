@@ -7,7 +7,7 @@ import java.util.List;
 
 public class BlockStatement implements Statement {
 
-    private final List<Statement> statements;
+    private final List<Statement> statements = new ArrayList<>();
 
     public BlockStatement() {
         this(new ArrayList<>());
@@ -22,7 +22,7 @@ public class BlockStatement implements Statement {
     }
 
     public BlockStatement(final List<Statement> statements) {
-        this.statements = statements;
+        this.statements.addAll(statements);
     }
 
     public void add(final Statement statement) {

@@ -1,11 +1,12 @@
 package io.github.potjerodekool.openapi.internal.generate.model;
 
+import io.github.potjerodekool.openapi.GeneratorConfig;
 import io.github.potjerodekool.openapi.HttpMethod;
-import io.github.potjerodekool.openapi.OpenApiGeneratorConfig;
 import io.github.potjerodekool.openapi.RequestCycleLocation;
-import io.github.potjerodekool.openapi.internal.ast.TypeUtils;
 import io.github.potjerodekool.openapi.internal.ast.element.VariableElement;
+import io.github.potjerodekool.openapi.internal.ast.type.DeclaredType;
 import io.github.potjerodekool.openapi.internal.ast.type.Type;
+import io.github.potjerodekool.openapi.internal.ast.util.TypeUtils;
 import io.github.potjerodekool.openapi.internal.di.Bean;
 import io.github.potjerodekool.openapi.internal.di.ConditionalOnDependency;
 import io.github.potjerodekool.openapi.tree.OpenApiProperty;
@@ -24,9 +25,9 @@ public class HibernateValidationModelAdapter extends ValidationModelAdapter {
     private TypeTest futureTypeTest;
 
     @Inject
-    public HibernateValidationModelAdapter(final OpenApiGeneratorConfig config,
+    public HibernateValidationModelAdapter(final GeneratorConfig generatorConfig,
                                            final TypeUtils typeUtils) {
-        super(config, typeUtils);
+        super(generatorConfig, typeUtils);
         this.numberType = typeUtils.createDeclaredType("java.lang.Number");
     }
 
@@ -56,11 +57,20 @@ public class HibernateValidationModelAdapter extends ValidationModelAdapter {
     @Override
     protected boolean supportsDigits(final Type<?> type) {
         if (numberType.isAssignableBy(type) ||
-                "javax.money.MonetaryAmount".equals(getTypeUtils().getTypeName(type))) {
+                isMonetaryAmount(type)) {
             return true;
         }
 
         return super.supportsDigits(type);
+    }
+
+    private boolean isMonetaryAmount(final Type<?> type) {
+        if (type.isDeclaredType()) {
+            final var declaredType = (DeclaredType) type;
+            return "javax.money.MonetaryAmount".equals(declaredType.getElement().getQualifiedName());
+        }
+
+        return false;
     }
 
     @Override

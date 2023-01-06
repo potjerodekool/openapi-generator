@@ -1,17 +1,18 @@
 package io.github.potjerodekool.openapi.internal.ast.element;
 
+import io.github.potjerodekool.openapi.internal.ast.Attribute;
 import io.github.potjerodekool.openapi.internal.ast.Modifier;
-import io.github.potjerodekool.openapi.internal.ast.expression.AnnotationExpression;
-import io.github.potjerodekool.openapi.internal.ast.expression.Expression;
 import io.github.potjerodekool.openapi.internal.ast.type.Type;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import javax.lang.model.element.ElementKind;
 import java.util.*;
 
+@SuppressWarnings("initialization.fields.uninitialized")
 public abstract class AbstractElement<E extends AbstractElement<E, T>, T extends Type<?>> implements Element {
 
     private final ElementKind kind;
-    private String simpleName;
+    private final String simpleName;
 
     private T type;
 
@@ -21,13 +22,21 @@ public abstract class AbstractElement<E extends AbstractElement<E, T>, T extends
 
     private final Set<Modifier> modifiers = new LinkedHashSet<>();
 
-    private final List<AnnotationExpression> annotations = new ArrayList<>();
+    private final List<AnnotationMirror> annotations = new ArrayList<>();
 
     @SuppressWarnings("initialization.fields.uninitialized")
     protected AbstractElement(final ElementKind kind,
                               final String simpleName) {
+        this(kind, simpleName, new ArrayList<>());
+    }
+
+    @SuppressWarnings("method.invocation")
+    protected AbstractElement(final ElementKind kind,
+                              final String simpleName,
+                              final List<AnnotationMirror> annotations) {
         this.kind = kind;
         this.simpleName = simpleName;
+        this.annotations.addAll(annotations);
     }
 
     protected void setType(final T type) {
@@ -42,10 +51,6 @@ public abstract class AbstractElement<E extends AbstractElement<E, T>, T extends
     @Override
     public String getSimpleName() {
         return simpleName;
-    }
-
-    public void setSimpleName(final String simpleName) {
-        this.simpleName = simpleName;
     }
 
     @Override
@@ -118,29 +123,30 @@ public abstract class AbstractElement<E extends AbstractElement<E, T>, T extends
     }
 
     @Override
-    public List<AnnotationExpression> getAnnotations() {
+    public List<AnnotationMirror> getAnnotations() {
         return Collections.unmodifiableList(this.annotations);
     }
 
     @Override
-    public void addAnnotation(String annotationClassName) {
-        addAnnotation(new AnnotationExpression(annotationClassName));
+    public void addAnnotation(final String annotationClassName) {
+        addAnnotation(Attribute.compound(annotationClassName));
     }
 
     @Override
-    public void addAnnotation(final String annotationClassName, final Expression expression) {
-        final var annotation = new AnnotationExpression(annotationClassName);
+    public void addAnnotation(final String annotationClassName,
+                              final AnnotationValue expression) {
+        final var annotation = Attribute.compound(annotationClassName);
         annotation.addElementValue("value", expression);
         addAnnotation(annotation);
     }
 
     @Override
-    public void addAnnotation(final AnnotationExpression annotation) {
+    public void addAnnotation(final AnnotationMirror annotation) {
         this.annotations.add(annotation);
     }
 
     @Override
-    public void addAnnotations(final List<AnnotationExpression> annotations) {
+    public void addAnnotations(final List<AnnotationMirror> annotations) {
         this.annotations.addAll(annotations);
     }
 

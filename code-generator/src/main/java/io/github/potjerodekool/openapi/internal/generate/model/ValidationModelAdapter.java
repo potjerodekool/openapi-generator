@@ -1,17 +1,11 @@
 package io.github.potjerodekool.openapi.internal.generate.model;
 
-import io.github.potjerodekool.openapi.HttpMethod;
-import io.github.potjerodekool.openapi.OpenApiGeneratorConfig;
-import io.github.potjerodekool.openapi.RequestCycleLocation;
+import io.github.potjerodekool.openapi.*;
 import io.github.potjerodekool.openapi.generate.model.ModelAdapter;
-import io.github.potjerodekool.openapi.internal.ast.TypeUtils;
-import io.github.potjerodekool.openapi.internal.ast.element.MethodElement;
-import io.github.potjerodekool.openapi.internal.ast.element.VariableElement;
-import io.github.potjerodekool.openapi.internal.ast.expression.AnnotationExpression;
-import io.github.potjerodekool.openapi.internal.ast.expression.Expression;
-import io.github.potjerodekool.openapi.internal.ast.expression.LiteralExpression;
+import io.github.potjerodekool.openapi.internal.ast.Attribute;
+import io.github.potjerodekool.openapi.internal.ast.element.*;
+import io.github.potjerodekool.openapi.internal.ast.util.TypeUtils;
 import io.github.potjerodekool.openapi.internal.ast.type.DeclaredType;
-import io.github.potjerodekool.openapi.internal.ast.type.PrimitiveType;
 import io.github.potjerodekool.openapi.internal.ast.type.Type;
 import io.github.potjerodekool.openapi.internal.di.Bean;
 import io.github.potjerodekool.openapi.internal.di.ConditionalOnMissingBean;
@@ -20,6 +14,7 @@ import io.github.potjerodekool.openapi.tree.OpenApiProperty;
 import jakarta.inject.Inject;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import javax.lang.model.type.TypeKind;
 import java.util.*;
 
 @Bean
@@ -43,9 +38,9 @@ public class ValidationModelAdapter implements ModelAdapter {
     private final TypeUtils typeUtils;
 
     @Inject
-    public ValidationModelAdapter(final OpenApiGeneratorConfig config,
+    public ValidationModelAdapter(final GeneratorConfig generatorConfig,
                                   final TypeUtils typeUtils) {
-        final var validationBasePackage = (config.isFeatureEnabled(OpenApiGeneratorConfig.FEATURE_JAKARTA_VALIDATION) ? "jakarta" : "javax") + ".validation";
+        final var validationBasePackage = (generatorConfig.isFeatureEnabled(Features.FEATURE_JAKARTA) ? "jakarta" : "javax") + ".validation";
         this.constraintsPackage = validationBasePackage + ".constraints";
         this.notNullAnnotationClassName = constraintsPackage + ".NotNull";
         this.validAnnotationClassName = validationBasePackage + ".Valid";
@@ -64,13 +59,13 @@ public class ValidationModelAdapter implements ModelAdapter {
     private static Set<Type<?>> initMinMaxTypes(final TypeUtils types) {
         return Set.of(
                 types.createDeclaredType("java.math.BigInteger"),
-                PrimitiveType.BYTE,
+                types.createPrimitiveType(TypeKind.BYTE),
                 types.createDeclaredType("java.lang.Byte"),
-                PrimitiveType.SHORT,
+                types.createPrimitiveType(TypeKind.SHORT),
                 types.createDeclaredType("java.lang.Short"),
-                PrimitiveType.INT,
+                types.createPrimitiveType(TypeKind.INT),
                 types.createDeclaredType("java.lang.Integer"),
-                PrimitiveType.LONG,
+                types.createPrimitiveType(TypeKind.LONG),
                 types.createDeclaredType("java.lang.Long")
         );
     }
@@ -86,13 +81,13 @@ public class ValidationModelAdapter implements ModelAdapter {
         return Set.of(
                 typeUtils.createDeclaredType("java.math.BigDecimal"),
                 typeUtils.createDeclaredType("java.math.BigInteger"),
-                PrimitiveType.BYTE,
+                typeUtils.createPrimitiveType(TypeKind.BYTE),
                 typeUtils.createDeclaredType("java.lang.Byte"),
-                PrimitiveType.SHORT,
+                typeUtils.createPrimitiveType(TypeKind.SHORT),
                 typeUtils.createDeclaredType("java.lang.Short"),
-                PrimitiveType.INT,
+                typeUtils.createPrimitiveType(TypeKind.INT),
                 typeUtils.createDeclaredType("java.lang.Integer"),
-                PrimitiveType.LONG,
+                typeUtils.createPrimitiveType(TypeKind.LONG),
                 typeUtils.createDeclaredType("java.lang.Long")
         );
     }
@@ -150,9 +145,9 @@ public class ValidationModelAdapter implements ModelAdapter {
         final var minimum = incrementAndToString(constraints.minimum(), constraints.exclusiveMinimum());
 
         if (minimum != null) {
-            fieldDeclaration.addAnnotation(new AnnotationExpression(
+            fieldDeclaration.addAnnotation(Attribute.compound(
                     constraintsPackage + ".Min",
-                    LiteralExpression.createLongLiteralExpression(minimum)
+                    Attribute.constant(Long.parseLong(minimum))
             ));
         }
 
@@ -160,9 +155,9 @@ public class ValidationModelAdapter implements ModelAdapter {
 
         if (maximum != null) {
             fieldDeclaration.addAnnotation(
-                    new AnnotationExpression(
+                    Attribute.compound(
                             constraintsPackage + ".Max",
-                            LiteralExpression.createLongLiteralExpression(maximum)
+                            Attribute.constant(Long.parseLong(maximum))
                     )
             );
         }
@@ -194,17 +189,17 @@ public class ValidationModelAdapter implements ModelAdapter {
         }
 
         if (min != null || max != null) {
-            final var members = new HashMap<String, Expression>();
+            final var members = new HashMap<ExecutableElement, AnnotationValue>();
 
             if (min != null && min > 0) {
-                members.put("min", LiteralExpression.createIntLiteralExpression(Integer.toString(min)));
+                members.put(MethodElement.createMethod("min"), Attribute.constant(min));
             }
 
             if (max != null && max < Integer.MAX_VALUE) {
-                members.put("max", LiteralExpression.createIntLiteralExpression(Integer.toString(max)));
+                members.put(MethodElement.createMethod("max"), Attribute.constant(max));
             }
 
-            fieldDeclaration.addAnnotation(new AnnotationExpression(
+            fieldDeclaration.addAnnotation(Attribute.compound(
                     constraintsPackage + ".Size",
                     members
             ));
@@ -222,9 +217,9 @@ public class ValidationModelAdapter implements ModelAdapter {
         final var pattern = constrains.pattern();
 
         if (pattern != null) {
-            fieldDeclaration.addAnnotation(new AnnotationExpression(
+            fieldDeclaration.addAnnotation(Attribute.compound(
                     constraintsPackage + ".Pattern",
-                    Map.of("regexp", LiteralExpression.createStringLiteralExpression(pattern))
+                    Map.of(MethodElement.createMethod("regexp"), Attribute.constant(pattern))
             ));
         }
     }
@@ -240,13 +235,13 @@ public class ValidationModelAdapter implements ModelAdapter {
 
         if ("email".equals(propertyType.format())) {
             final var pattern = constrains.pattern();
-            final var members = new HashMap<String, Expression>();
+            final var members = new HashMap<ExecutableElement, AnnotationValue>();
 
             if (pattern != null) {
-                members.put("regexp", LiteralExpression.createStringLiteralExpression(pattern));
+                members.put(MethodElement.createMethod("regexp"), Attribute.constant(pattern));
             }
 
-            final var annotation = new AnnotationExpression(constraintsPackage + ".Email", members);
+            final var annotation = Attribute.compound(constraintsPackage + ".Email", members);
 
             fieldDeclaration.addAnnotation(annotation);
         }
@@ -283,9 +278,11 @@ public class ValidationModelAdapter implements ModelAdapter {
         final var isPrimitiveType = returnType.isPrimitiveType();
         final var isListType = typeUtils.isListType(returnType);
 
-        if (!isPrimitiveType && !isListType) {
+        if (!isPrimitiveType && !isListType && !returnType.isArrayType()) {
             final var ct = (DeclaredType) returnType;
-            ct.addAnnotation(new AnnotationExpression(notNullAnnotationClassName));
+            if (!ct.isNullable()) {
+                ct.addAnnotation(Attribute.compound(notNullAnnotationClassName));
+            }
         }
 
         if (requestCycleLocation == RequestCycleLocation.REQUEST && property.type().format() != null) {
@@ -316,13 +313,13 @@ public class ValidationModelAdapter implements ModelAdapter {
         final var digits = property.constraints().digits();
 
         if (digits != null && supportsDigits(field.getType())) {
-            final var annotation = new AnnotationExpression(
+            final var annotation = Attribute.compound(
                     constraintsPackage + ".Digits",
                     Map.of(
-                            "integer",
-                            LiteralExpression.createIntLiteralExpression(Integer.toString(digits.integer())),
-                            "fraction",
-                            LiteralExpression.createIntLiteralExpression(Integer.toString(digits.fraction()))
+                            MethodElement.createMethod("integer"),
+                            Attribute.constant(digits.integer()),
+                            MethodElement.createMethod("fraction"),
+                            Attribute.constant(digits.fraction())
                     )
             );
 

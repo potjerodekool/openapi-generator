@@ -9,6 +9,7 @@ properties:
     readOnly: true
   name:
     type: string
+    description: Name of Pet
   birthDate:
     type: string
     format: date

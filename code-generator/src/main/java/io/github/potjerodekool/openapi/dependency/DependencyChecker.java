@@ -15,5 +15,7 @@ public interface DependencyChecker {
     boolean isDependencyPresent(String groupId,
                                 String artifactId);
 
+    boolean isClassPresent(String className);
+
     Stream<Artifact> getProjectArtifacts();
 }

@@ -1,7 +1,6 @@
 package io.github.potjerodekool.openapi.internal.di.scope;
 
 import io.github.potjerodekool.openapi.internal.di.ApplicationContext;
-import io.github.potjerodekool.openapi.internal.util.Utils;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 public class LazySingletonScopeManager<T> implements ScopeManager<T> {
@@ -22,7 +21,12 @@ public class LazySingletonScopeManager<T> implements ScopeManager<T> {
                 instance = applicationContext.createBean(beanClass);
             }
         }
-        return Utils.requireNonNull(instance);
+
+        if (instance == null) {
+            throw new IllegalStateException(String.format("Failed to get instance of %s", beanClass.getName()));
+        }
+
+        return instance;
     }
 
     @Override

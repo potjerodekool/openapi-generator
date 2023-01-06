@@ -5,24 +5,30 @@ import io.github.potjerodekool.openapi.internal.ast.element.*;
 import io.github.potjerodekool.openapi.internal.ast.expression.*;
 import io.github.potjerodekool.openapi.internal.ast.statement.*;
 import io.github.potjerodekool.openapi.internal.ast.type.*;
-import io.github.potjerodekool.openapi.internal.util.Utils;
-import org.checkerframework.checker.nullness.qual.KeyFor;
+import io.github.potjerodekool.openapi.internal.ast.type.java.VoidType;
+import io.github.potjerodekool.openapi.internal.ast.util.TypeUtils;
+import io.github.potjerodekool.openapi.internal.util.QualifiedName;
 
+import javax.lang.model.element.ElementKind;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 public abstract class AbstractAstPrinter implements CompilationUnitVisitor<Void, CodeContext>,
         ElementVisitor<Void, CodeContext>,
         TypeVisitor<Void, CodeContext>,
         StatementVisitor<Void, CodeContext>,
-        ExpressionVisitor<Void, CodeContext> {
+        ExpressionVisitor<Void, CodeContext>,
+        AnnotationValueVisitor<Void, CodeContext> {
 
     protected final Printer printer;
+    private final TypeUtils typeUtils;
 
-    protected AbstractAstPrinter(final Printer printer) {
+    protected AbstractAstPrinter(final Printer printer,
+                                 final TypeUtils typeUtils) {
         this.printer = printer;
+        this.typeUtils = typeUtils;
     }
 
     @Override
@@ -159,7 +165,7 @@ public abstract class AbstractAstPrinter implements CompilationUnitVisitor<Void,
         return null;
     }
 
-    protected void printAnnotations(final List<AnnotationExpression> annotations,
+    protected void printAnnotations(final List<AnnotationMirror> annotations,
                                     final boolean addNewLineAfterAnnotation,
                                     final CodeContext context) {
         if (annotations.isEmpty()) {
@@ -182,34 +188,36 @@ public abstract class AbstractAstPrinter implements CompilationUnitVisitor<Void,
         }
     }
 
-    protected void printAnnotation(final AnnotationExpression annotation,
+    protected void printAnnotation(final AnnotationMirror annotation,
                                    final boolean addNewLineAfterAnnotation,
                                    final CodeContext context) {
-        final String annotationName = resolveClassName(annotation.getAnnotationClassName(), context);
+        final String annotationName = resolveClassName(annotation.getAnnotationType().getElement().getQualifiedName(), context);
         printer.print("@").print(annotationName).print("(");
 
-        final List<Map.Entry<@KeyFor("annotation.getElementValues()") String, Expression>> elementValues =
-                annotation.getElementValues().entrySet()
-                        .stream()
-                        .toList();
-
+        final var elementValues = annotation.getElementValues();
         final var lastIndex = elementValues.size() - 1;
+        final var childContext = context.child(annotation);
+        final var elementValueIndex = new AtomicInteger();
 
-        for (int i = 0; i < elementValues.size(); i++) {
-            final var entry = elementValues.get(i);
-            printer.print(entry.getKey()).print(" = ");
-            entry.getValue().accept(this, context);
+        annotation.getElementValues().forEach((key, value) -> {
+            printer.print(name(key.getSimpleName())).print(" = ");
+            value.accept(this, childContext);
 
-            if (i < lastIndex) {
+            if (elementValueIndex.get() < lastIndex) {
                 printer.print(", ");
             }
-        }
+            elementValueIndex.incrementAndGet();
+        });
 
         printer.print(")");
 
         if (addNewLineAfterAnnotation) {
             printer.printLn();
         }
+    }
+
+    protected String name(final String value) {
+        return value;
     }
 
     @Override
@@ -322,10 +330,44 @@ public abstract class AbstractAstPrinter implements CompilationUnitVisitor<Void,
                                        final CodeContext context) {
         switch (literalExpression.getLiteralType()) {
             case NULL -> printer.print("null");
-            case CLASS -> printer.print(resolveClassName(literalExpression.getValue(), context) + ".class");
-            case STRING -> printer.print("\"" + literalExpression.getValue() + "\"");
-            case CHAR ->  printer.print("'" + literalExpression.getValue() + "'");
-            default -> printer.print(literalExpression.getValue());
+            case CLASS -> {
+                final var classLiteralExpression = (ClassLiteralExpression) literalExpression;
+                final var type = classLiteralExpression.getType();
+
+                if (context.getAstNode() instanceof AnnotationMirror) {
+                    final String className;
+                    if (type.isDeclaredType()) {
+                        final var declaredType = (DeclaredType) type;
+                        className = resolveClassName(declaredType.getElement().getQualifiedName(), context);
+                    } else {
+                        final var boxedType = typeUtils.getBoxedType(type);
+                        className = resolveClassName(boxedType.getElement().getQualifiedName(), context);
+                    }
+                    printer.print(className + ".class");
+                } else if (type.isDeclaredType()) {
+                    final var declaredType = (DeclaredType) type;
+                    final String className = resolveClassName(declaredType.getElement().getQualifiedName(), context);
+                    printer.print(className + ".class");
+                } else if (type.isPrimitiveType()) {
+                    final var boxedType = typeUtils.getBoxedType(type);
+                    final String className = resolveClassName(boxedType.getElement().getQualifiedName(), context);
+                    printer.print(className + ".TYPE");
+                } else {
+                    throw new UnsupportedOperationException("TODO");
+                }
+            }
+            case STRING -> {
+                final var le = (StringValueLiteralExpression) literalExpression;
+                printer.print("\"" + le.getValue() + "\"");
+            }
+            case CHAR -> {
+                final var le = (StringValueLiteralExpression) literalExpression;
+                printer.print("'" + le.getValue() + "'");
+            }
+            default -> {
+                final var le = (StringValueLiteralExpression) literalExpression;
+                printer.print(le.getValue());
+            }
         }
         return null;
     }
@@ -383,6 +425,13 @@ public abstract class AbstractAstPrinter implements CompilationUnitVisitor<Void,
     @Override
     public Void visitDeclaredType(final DeclaredType declaredType,
                                   final CodeContext context) {
+        final var annotations = declaredType.getAnnotations();
+
+        if (annotations.size() > 0) {
+            printAnnotations(annotations,false, context);
+            printer.print(" ");
+        }
+
         printer.print(resolveClassName(declaredType.getElement().getQualifiedName(), context));
 
         final var typeArgsOptional = declaredType.getTypeArguments();
@@ -424,6 +473,95 @@ public abstract class AbstractAstPrinter implements CompilationUnitVisitor<Void,
         return null;
     }
 
+    @Override
+    public Void visitBoolean(final boolean value, final CodeContext param) {
+        printer.print(Boolean.toString(value));
+        return null;
+    }
+
+    @Override
+    public Void visitInt(final int value, final CodeContext param) {
+        printer.print(Integer.toString(value));
+        return null;
+    }
+
+    @Override
+    public Void visitLong(final long value, final CodeContext param) {
+        printer.print(Long.toString(value));
+        return null;
+    }
+
+    @Override
+    public Void visitString(final String value, final CodeContext param) {
+        printer.print("\"");
+        printer.print(value);
+        printer.print("\"");
+        return null;
+    }
+
+    @Override
+    public Void visitArray(final Attribute[] array, final CodeContext param) {
+        printer.print("{");
+
+        final var lastIndex = array.length - 1;
+
+        for (int valueIndex = 0; valueIndex < array.length; valueIndex++) {
+            array[valueIndex].accept(this, param);
+            if (valueIndex < lastIndex) {
+                printer.print(", ");
+            }
+        }
+
+        printer.print("}");
+
+        return null;
+    }
+
+    @Override
+    public Void visitType(final Type<?> type, final CodeContext codeContext) {
+        final var element = type.getElement();
+
+        if (element instanceof TypeElement te) {
+            if (isInImport(te.getQualifiedName(), codeContext)) {
+                printer.print(element.getSimpleName());
+            } else {
+                printer.print(te.getQualifiedName());
+            }
+        } else {
+            printer.print(element.getSimpleName());
+        }
+        printer.print(".class");
+        return null;
+    }
+
+    private boolean isInImport(final String className, final CodeContext codeContext) {
+        if (className.startsWith("java.lang.")) {
+            return true;
+        } else {
+            final var compilationUnitOptional = codeContext.resolveCompilationUnit();
+            if (compilationUnitOptional.isPresent()) {
+                final var compilationUnit = compilationUnitOptional.get();
+                if (compilationUnit.getImports().contains(className)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    @Override
+    public Void visitEnum(final VariableElement enumValue, final CodeContext param) {
+        final var enumElement = (TypeElement) enumValue.getEnclosingElement();
+
+        printer
+                .print(enumElement.getQualifiedName())
+                .print(".")
+                .print(enumValue.getSimpleName());
+
+        return null;
+    }
+
     protected boolean useSemiColonAfterStatement() {
         return true;
     }
@@ -432,7 +570,7 @@ public abstract class AbstractAstPrinter implements CompilationUnitVisitor<Void,
         final var compilationUnit = findCompilationUnit(context);
 
         if (compilationUnit.getImports().contains(className)) {
-            return Utils.resolveSimpleClassName(className);
+            return QualifiedName.from(className).simpleName();
         }
 
         return className;

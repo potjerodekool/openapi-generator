@@ -1,7 +1,7 @@
 package io.github.potjerodekool.demo.service;
 
-import io.github.potjerodekool.demo.api.model.PetPatchRequestDto;
-import io.github.potjerodekool.demo.api.model.PetRequestDto;
+import io.github.petstore.model.PetPatchRequestDto;
+import io.github.petstore.model.PetRequestDto;
 import io.github.potjerodekool.demo.model.Pet;
 import io.github.potjerodekool.demo.model.ResourceWithMediaType;
 import org.springframework.http.MediaType;

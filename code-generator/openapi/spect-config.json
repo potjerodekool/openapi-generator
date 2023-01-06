@@ -1,0 +1,5 @@
+{
+  "controllers": {
+    "application": "io.github.potjerodekool.authserver.api.ApplicationControllerApi"
+  }
+}

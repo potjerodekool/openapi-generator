@@ -1,21 +1,37 @@
 package io.github.potjerodekool.openapi.internal;
 
-import io.github.potjerodekool.openapi.HttpMethod;
-import io.github.potjerodekool.openapi.ParameterLocation;
-import io.github.potjerodekool.openapi.RequestCycleLocation;
+import com.reprezen.jsonoverlay.JsonOverlay;
+import com.reprezen.kaizen.oasparser.model3.Schema;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-public record SchemaContext(HttpMethod httpMethod,
-                            @Nullable RequestCycleLocation requestCycleLocation,
-                            @Nullable ParameterLocation parameterLocation) {
+public class SchemaContext implements OpenApiContext {
 
-    public SchemaContext(final HttpMethod httpMethod,
-                         final RequestCycleLocation requestCycleLocation) {
-        this(httpMethod, requestCycleLocation, null);
+    private final Schema schema;
+    private final OpenApiContext parent;
+
+    SchemaContext(final Schema schema,
+                  final OpenApiContext parent) {
+        this.schema = schema;
+        this.parent = parent;
     }
 
-    public SchemaContext(final HttpMethod httpMethod,
-                         final ParameterLocation parameterLocation) {
-        this(httpMethod, null, parameterLocation);
+    @Override
+    public OpenApiContext child(final Schema schema) {
+        return new SchemaContext(schema, this);
+    }
+
+    @Override
+    public JsonOverlay<?> getItem() {
+        return (JsonOverlay<?>) schema;
+    }
+
+    @Override
+    public String getValue() {
+        return schema.getName();
+    }
+
+    @Override
+    public @Nullable OpenApiContext getParent() {
+        return parent;
     }
 }

@@ -8,5 +8,5 @@ public interface TypeNameResolver {
     void validateRefString(String refString);
 
     QualifiedName createTypeName(final Reference creatingRef,
-                                 final SchemaContext schemaContext);
+                                 final RequestContext requestContext);
 }

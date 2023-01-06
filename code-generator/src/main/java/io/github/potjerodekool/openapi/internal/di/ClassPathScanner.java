@@ -1,11 +1,13 @@
 package io.github.potjerodekool.openapi.internal.di;
 
+import io.github.potjerodekool.openapi.internal.util.StreamUtils;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.Opcodes;
 
+import java.io.File;
 import java.io.IOException;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.InvocationHandler;
@@ -14,10 +16,9 @@ import java.lang.reflect.Proxy;
 import java.net.URL;
 import java.nio.file.*;
 import java.util.*;
-import java.util.function.Consumer;
-import java.util.stream.StreamSupport;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
+import java.util.zip.ZipFile;
+
+import static io.github.potjerodekool.openapi.internal.util.StreamUtils.tryAction;
 
 public class ClassPathScanner {
 
@@ -51,6 +52,22 @@ public class ClassPathScanner {
     private static List<BeanDefinition> scanArchive(final URL location) {
         final var beanDefinitions = new ArrayList<BeanDefinition>();
 
+        try(final ZipFile zipFile = new ZipFile(new File(location.toURI()))) {
+            StreamUtils.of(zipFile.entries().asIterator())
+                    .filter(it -> it.getName().endsWith(".class"))
+                    .forEach(entry -> tryAction(() -> {
+                        final var inputStream = zipFile.getInputStream(entry);
+                        final var beanDefinition = read(inputStream.readAllBytes());
+
+                        if (beanDefinition != null) {
+                            beanDefinitions.add(beanDefinition);
+                        }
+                    }));
+        } catch (final Exception e) {
+            //Ignore exceptions
+        }
+
+        /*
         try (final ZipInputStream inputStream = new ZipInputStream(location.openStream())) {
             final var stream = StreamSupport.stream(new ZipSpliterator(inputStream), false);
 
@@ -64,6 +81,7 @@ public class ClassPathScanner {
         } catch (final IOException e) {
             throw new RuntimeException(e);
         }
+        */
 
         return beanDefinitions;
     }
@@ -288,48 +306,4 @@ class AnnotationInvocationHandler implements InvocationHandler {
 interface WithAnnotationsVisitor {
 
     void addAnnotation(Class<?> annotationClass, Annotation annotation);
-}
-
-class ZipSpliterator implements Spliterator<byte[]> {
-
-    private final ZipInputStream inputStream;
-
-    ZipSpliterator(final ZipInputStream inputStream) {
-        this.inputStream = inputStream;
-    }
-
-    @Override
-    public boolean tryAdvance(final Consumer<? super byte[]> action) {
-        var loop = true;
-        ZipEntry entry = null;
-
-        try {
-            while (loop && (entry = inputStream.getNextEntry()) != null) {
-                if (entry.getName().endsWith(".class")) {
-                    final var data = inputStream.readNBytes((int)entry.getSize());
-                    loop = false;
-                    action.accept(data);
-                }
-            }
-        } catch (final IOException e) {
-            throw new RuntimeException(e);
-        }
-        return entry != null;
-    }
-
-    @Override
-    public @Nullable Spliterator<byte[]> trySplit() {
-        return null;
-    }
-
-    @Override
-    public long estimateSize() {
-        return Long.MAX_VALUE;
-    }
-
-    @Override
-    public int characteristics() {
-        return 0;
-    }
-
 }

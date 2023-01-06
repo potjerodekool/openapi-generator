@@ -1,19 +1,21 @@
 package io.github.potjerodekool.demo.api;
 
-import io.github.potjerodekool.demo.api.model.ErrorResponseDto;
-import io.github.potjerodekool.demo.api.model.PetPatchRequestDto;
-import io.github.potjerodekool.demo.api.model.PetRequestDto;
-import io.github.potjerodekool.demo.api.model.PetResponseDto;
+import io.github.petstore.ApiUtils;
+import io.github.petstore.PetsApi;
+import io.github.petstore.model.ErrorResponseDto;
+import io.github.petstore.model.PetPatchRequestDto;
+import io.github.petstore.model.PetRequestDto;
+import io.github.petstore.model.PetResponseDto;
 import io.github.potjerodekool.demo.model.Pet;
 import io.github.potjerodekool.demo.service.CrudOperationResult;
 import io.github.potjerodekool.demo.service.PetService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import javax.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.List;
@@ -21,7 +23,7 @@ import java.util.Map;
 
 @RestController
 @CrossOrigin
-public class PetstoreController implements PetstoreApi {
+public class PetstoreController implements PetsApi {
 
     private final PetService petService;
 
@@ -30,12 +32,11 @@ public class PetstoreController implements PetstoreApi {
     }
 
     @Override
-    public ResponseEntity<Void> createPet(final PetRequestDto petRequestDto,
-                                          final HttpServletRequest request) {
-        final var id = petService.createPet(petRequestDto);
+    public ResponseEntity<Void> createPet(final PetRequestDto body, final HttpServletRequest request) {
+        final var id = petService.createPet(body);
 
         if (id != null) {
-            return ResponseEntity.created(ApiUtilsKt.createLocation(request, id)).build();
+            return ResponseEntity.created(ApiUtils.createLocation(request, id)).build();
         } else {
             return ResponseEntity.unprocessableEntity().build();
         }
@@ -63,7 +64,7 @@ public class PetstoreController implements PetstoreApi {
     }
 
     @Override
-    public ResponseEntity<ErrorResponseDto> updatePet(final long petId, PetRequestDto petRequestDto, HttpServletRequest request) {
+    public ResponseEntity<Object> updatePet(final long petId, PetRequestDto petRequestDto, HttpServletRequest request) {
         final var result = petService.updatePet(petId, petRequestDto);
         return switch (result.status()) {
             case SUCCESS -> ResponseEntity.noContent().build();
@@ -73,7 +74,7 @@ public class PetstoreController implements PetstoreApi {
     }
 
     @Override
-    public ResponseEntity<ErrorResponseDto> patchPet(final long petId, PetPatchRequestDto petPatchRequestDto, HttpServletRequest request) {
+    public ResponseEntity<Object> patchPet(final long petId, PetPatchRequestDto petPatchRequestDto, HttpServletRequest request) {
         final var result = petService.patchPet(petId, petPatchRequestDto);
         return switch (result.status()) {
             case SUCCESS -> ResponseEntity.noContent().build();

@@ -1,6 +1,6 @@
 package io.github.potjerodekool.openapi.type;
 
-public record OpenApiArrayType(OpenApiType items) implements OpenApiType {
+public record OpenApiArrayType(OpenApiType items, Boolean nullable) implements OpenApiType {
 
     @Override
     public String name() {
@@ -12,4 +12,11 @@ public record OpenApiArrayType(OpenApiType items) implements OpenApiType {
         return OpenApiTypeKind.ARRAY;
     }
 
+    @Override
+    public OpenApiType toNonNullable() {
+        return new OpenApiArrayType(
+                items,
+                false
+        );
+    }
 }

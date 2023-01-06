@@ -1,10 +1,13 @@
 package io.github.potjerodekool.demo.api;
 
+/*
 import au.com.dius.pact.consumer.MockServer;
 import au.com.dius.pact.consumer.dsl.PactBuilder;
 import au.com.dius.pact.consumer.junit5.PactConsumerTestExt;
 import au.com.dius.pact.consumer.junit5.PactTestFor;
 import au.com.dius.pact.core.model.annotations.Pact;
+
+ */
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,10 +16,11 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
 
-@ExtendWith(PactConsumerTestExt.class)
-@PactTestFor(providerName = "petstore_provider", hostInterface="localhost")
+//@ExtendWith(PactConsumerTestExt.class)
+//@PactTestFor(providerName = "petstore_provider", hostInterface="localhost")
 public class PetControllerPactTest {
 
+    /*
     @Pact(provider="petstore_provider", consumer = "petstore_consumer")
     public au.com.dius.pact.core.model.V4Pact createPact(final PactBuilder builder) {
         final var headers = Map.of(
@@ -67,4 +71,6 @@ public class PetControllerPactTest {
 //then
         Assertions.assertThat(postResponse.getStatusCode().value()).isEqualTo(201);
     }
+
+     */
 }

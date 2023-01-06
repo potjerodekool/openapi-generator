@@ -1,6 +1,6 @@
 package io.github.potjerodekool.openapi.internal.generate.model;
 
-import io.github.potjerodekool.openapi.internal.ast.TypeUtils;
+import io.github.potjerodekool.openapi.internal.ast.util.TypeUtils;
 import io.github.potjerodekool.openapi.internal.ast.type.Type;
 import io.github.potjerodekool.openapi.internal.di.Bean;
 import jakarta.inject.Inject;

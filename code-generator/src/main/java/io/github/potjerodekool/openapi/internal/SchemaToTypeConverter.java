@@ -16,8 +16,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import static io.github.potjerodekool.openapi.internal.util.Utils.requireNonNull;
-
 /**
  Converts a Schema to a OpenApiType
  */
@@ -32,27 +30,31 @@ public class SchemaToTypeConverter {
     private File resolveDirOfSchema(final Schema schema,
                                     final File rootDir) {
         final var createRef = Utils.getCreateRef(schema);
-        return createRef != null
-                ? requireNonNull(new File(rootDir, createRef).getParentFile())
-                : rootDir;
+
+        if (createRef != null) {
+            return new File(rootDir, createRef).getParentFile();
+        } else {
+            return rootDir;
+        }
     }
 
     public OpenApiType build(final Schema schema,
                              final File rootDir,
-                             final SchemaContext schemaContext) {
+                             final RequestContext requestContext,
+                             final OpenApiContext openApiContext) {
         final File dir = resolveDirOfSchema(schema, rootDir);
 
-        final var properties = createProperties(schema, rootDir, schemaContext);
-
+        final var properties = createProperties(schema, rootDir, requestContext, openApiContext);
         final var additionalProperties = schema.getAdditionalPropertiesSchema();
         final var hasAdditionalProperties = additionalProperties.getType() != null;
 
         final var openApiAdditionalProperties = hasAdditionalProperties
                 ? new OpenApiProperty(
-                        build(additionalProperties, dir, schemaContext),
+                        build(additionalProperties, dir, requestContext, openApiContext.child(additionalProperties)),
                     false,
                     schema.getReadOnly(),
-                    schema.getWriteOnly()
+                    schema.getWriteOnly(),
+                    schema.getDescription()
                   )
                 : null;
 
@@ -60,20 +62,22 @@ public class SchemaToTypeConverter {
                 schema,
                 properties,
                 openApiAdditionalProperties,
-                schemaContext,
+                requestContext,
+                openApiContext,
                 dir
         );
     }
 
     private HashMap<String, OpenApiProperty> createProperties(final Schema schema,
                                                               final File rootDir,
-                                                              final SchemaContext schemaContext) {
+                                                              final RequestContext requestContext,
+                                                              final OpenApiContext openApiContext) {
         final var dir = resolveDirOfSchema(schema, rootDir);
         final var properties = new LinkedHashMap<String, OpenApiProperty>();
 
         schema.getProperties().forEach((propertyName, propertySchema) -> {
             final var required = schema.getRequiredFields().contains(propertyName);
-            final var propertyType = build(propertySchema, dir, schemaContext);
+            final var propertyType = build(propertySchema, dir, requestContext, openApiContext.child(propertySchema));
 
             final var constraints = new Constraints();
             constraints.minimum(schema.getMinimum());
@@ -112,12 +116,13 @@ public class SchemaToTypeConverter {
                     required,
                     propertySchema.getReadOnly(),
                     propertySchema.getWriteOnly(),
+                    propertySchema.getDescription(),
                     constraints
             ));
         });
 
         schema.getAllOfSchemas()
-                .forEach(otherSchema -> properties.putAll(createProperties(otherSchema, rootDir, schemaContext)));
+                .forEach(otherSchema -> properties.putAll(createProperties(otherSchema, rootDir, requestContext, openApiContext.child(otherSchema))));
 
         return properties;
     }
@@ -125,7 +130,8 @@ public class SchemaToTypeConverter {
     private OpenApiType createType(final Schema schema,
                                    final Map<String, OpenApiProperty> properties,
                                    final @Nullable OpenApiProperty openApiAdditionalProperties,
-                                   final SchemaContext schemaContext,
+                                   final RequestContext requestContext,
+                                   final OpenApiContext openApiContext,
                                    final File dir) {
         final var type = schema.getType();
         final var format = schema.getFormat();
@@ -144,13 +150,16 @@ public class SchemaToTypeConverter {
             case "object" -> postProcessType(
                     schema,
                     new OpenApiObjectType("object", properties, openApiAdditionalProperties),
-                    schemaContext
+                    requestContext
             );
             case "array" -> {
-                final var items = build(schema.getItemsSchema(), dir, schemaContext);
-                yield new OpenApiArrayType(items);
+                final var items = build(schema.getItemsSchema(), dir, requestContext, openApiContext.child(schema.getItemsSchema()));
+                yield new OpenApiArrayType(items, schema.getNullable());
             }
-            default -> throw new IllegalArgumentException(String.format("Unsupported type %s", type));
+            default -> {
+                final var createRef = Utils.getReference(openApiContext);
+                throw new IllegalArgumentException(String.format("Unsupported type %s in %s", type, createRef));
+            }
         };
     }
 
@@ -163,7 +172,7 @@ public class SchemaToTypeConverter {
 
     private OpenApiType postProcessType(final Schema schema,
                                         final OpenApiType type,
-                                        final SchemaContext schemaContext) {
+                                        final RequestContext requestContext) {
         if (type instanceof OpenApiObjectType ot) {
             final var schemaImp = (SchemaImpl) schema;
 
@@ -175,9 +184,18 @@ public class SchemaToTypeConverter {
 
             final var refString = creatingRef.getNormalizedRef();
             typeNameResolver.validateRefString(refString);
-            final QualifiedName qualifiedName = typeNameResolver.createTypeName(creatingRef, schemaContext);
-            final String packageName = qualifiedName.packageName();
-            final var pck = packageName.isEmpty() ? Package.UNNAMED : new Package(packageName);
+
+            final QualifiedName qualifiedName = typeNameResolver.createTypeName(creatingRef, requestContext);
+            final var packageNameValue = (String) schema.getExtension("x-package-name");
+            final Package pck;
+
+            if (packageNameValue != null && packageNameValue.length() > 0) {
+                pck = new Package(packageNameValue);
+            } else {
+                final String packageName = qualifiedName.packageName();
+                pck = packageName.isEmpty() ? Package.UNNAMED : new Package(packageName);
+            }
+
             return ot.withPackage(pck).withName(qualifiedName.simpleName());
         } else {
             return type;

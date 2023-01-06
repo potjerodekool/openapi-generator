@@ -51,6 +51,10 @@ public class CompilationUnit implements AstNode {
         this.elements.add(element);
     }
 
+    public void removeElement(final Element element) {
+        this.elements.remove(element);
+    }
+
     public TypeElement addClass(final String name) {
         return addClassOrInterface(TypeElement.createClass(name));
     }

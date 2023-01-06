@@ -2,13 +2,11 @@ package io.github.potjerodekool.openapi.internal;
 
 import io.github.potjerodekool.openapi.Language;
 import io.github.potjerodekool.openapi.internal.ast.*;
-import io.github.potjerodekool.openapi.internal.ast.element.MethodElement;
-import io.github.potjerodekool.openapi.internal.ast.element.PackageElement;
-import io.github.potjerodekool.openapi.internal.ast.element.TypeElement;
-import io.github.potjerodekool.openapi.internal.ast.element.VariableElement;
+import io.github.potjerodekool.openapi.internal.ast.element.*;
 import io.github.potjerodekool.openapi.internal.ast.expression.*;
 import io.github.potjerodekool.openapi.internal.ast.statement.BlockStatement;
 import io.github.potjerodekool.openapi.internal.ast.statement.ReturnStatement;
+import io.github.potjerodekool.openapi.internal.ast.util.TypeUtils;
 import org.junit.jupiter.api.Test;
 
 import java.io.BufferedWriter;
@@ -27,10 +25,11 @@ class AstPrinterTest {
         final var field = VariableElement.createField("name", stringType)
                     .addModifiers(Modifier.PRIVATE, Modifier.FINAL);
 
-        final var annotation = new AnnotationExpression("io.swagger.v3.oas.annotations.media.Schema");
+        final var annotation = Attribute.compound("io.swagger.v3.oas.annotations.media.Schema");
 
-        annotation.addElementValue("implementation", LiteralExpression.createClassLiteralExpression(Integer.class));
-        annotation.addElementValue("required", LiteralExpression.createBooleanLiteralExpression(true));
+        //TODO
+        //annotation.addElementValue("implementation", LiteralExpression.createClassLiteralExpression(Integer.class));
+        annotation.addElementValue("required", Attribute.constant(true));
         field.addAnnotation(annotation);
 
         clazz.addEnclosedElement(field);
@@ -52,10 +51,8 @@ class AstPrinterTest {
         ));
         constructor.setBody(body);
 
-        final var getter = MethodElement.createMethod("getName");
+        final var getter = MethodElement.createMethod("getName", stringType);
         getter.addModifiers(Modifier.PUBLIC);
-
-        getter.setReturnType(stringType);
 
         getter.setBody(new BlockStatement(
                 new ReturnStatement(

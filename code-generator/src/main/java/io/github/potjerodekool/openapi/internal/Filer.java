@@ -1,9 +1,11 @@
 package io.github.potjerodekool.openapi.internal;
 
 import io.github.potjerodekool.openapi.Language;
-import io.github.potjerodekool.openapi.OpenApiGeneratorConfig;
+import io.github.potjerodekool.openapi.Project;
 import io.github.potjerodekool.openapi.internal.ast.*;
-import io.github.potjerodekool.openapi.internal.util.Utils;
+import io.github.potjerodekool.openapi.internal.ast.element.PackageElement;
+import io.github.potjerodekool.openapi.internal.ast.element.TypeElement;
+import io.github.potjerodekool.openapi.internal.ast.util.TypeUtils;
 import io.github.potjerodekool.openapi.log.Logger;
 
 import java.io.*;
@@ -12,71 +14,57 @@ public class Filer {
 
     private static final Logger LOGGER = Logger.getLogger(Filer.class.getName());
 
-    private final OpenApiGeneratorConfig config;
-
     private final TypeUtils typeUtils;
 
-    public Filer(final OpenApiGeneratorConfig config,
-                 final TypeUtils typeUtils) {
-        this.config = config;
+    private final FileManager fileManager;
+
+    public Filer(final TypeUtils typeUtils,
+                 final Project project) {
         this.typeUtils = typeUtils;
+        this.fileManager = new FileManagerImpl(project);
     }
 
-    public void write(final io.github.potjerodekool.openapi.internal.ast.CompilationUnit cu,
-                      final Language language) throws IOException {
-        var outputDir = Utils.requireNonNull(config.getOutputDir());
+    public void writeSource(final CompilationUnit compilationUnit,
+                            final Language language) throws IOException {
+        final var clazz = (TypeElement) compilationUnit.getElements().get(0);
+        final var packageElement = (PackageElement) clazz.getEnclosingElement();
+        final var packageName = packageElement != null
+                ? packageElement.getQualifiedName()
+                : "";
 
-        final var packageElement = cu.getPackageElement();
-
-        if (!packageElement.isDefaultPackage()) {
-            final var packageDir = packageElement.getQualifiedName()
-                    .replace('.', '/');
-            outputDir = new File(outputDir, packageDir);
-        }
-
-        write(cu, outputDir, language);
-    }
-
-    public void write(final io.github.potjerodekool.openapi.internal.ast.CompilationUnit cu,
-                      final File dir,
-                      final Language language) throws IOException {
-
-        final io.github.potjerodekool.openapi.internal.ast.CompilationUnit compilationUnit;
-        final AbstractAstPrinter astPrinter;
-        final var output = new ByteArrayOutputStream();
-        final var writer = new BufferedWriter(new OutputStreamWriter(output));
-        final var printer = new Printer(writer);
-
-        if (language == Language.KOTLIN) {
-            compilationUnit = new JavaToKotlinConverter(typeUtils).convert(cu);
-            astPrinter = new KotlinAstPrinter(printer);
-        } else {
-            compilationUnit = cu;
-            astPrinter = new JavaAstPrinter(printer);
-        }
-
-        final var unit = new io.github.potjerodekool.openapi.internal.ast.ImportOrganiser().organiseImports(
-                compilationUnit
+        final var fileObject = createResource(
+                Location.SOURCE_OUTPUT,
+                packageName,
+                clazz.getSimpleName() + "." + language.getFileExtension()
         );
 
-        unit.accept(astPrinter, new CodeContext(unit));
-        writer.flush();
+        try (final var writer = fileObject.openWriter()) {
+            final var printer = Printer.create(writer);
+            final CompilationUnit cu;
+            final AbstractAstPrinter astPrinter;
 
-        final var typeElement = cu.getElements().get(0);
+            if (language == Language.KOTLIN) {
+                cu = new JavaToKotlinConverter(typeUtils).convert(compilationUnit);
+                astPrinter = new KotlinAstPrinter(printer, typeUtils);
+            } else {
+                cu = compilationUnit;
+                astPrinter = new JavaAstPrinter(printer, typeUtils);
+            }
 
-        if (!dir.exists()) {
-            dir.mkdirs();
+            final var unit = new ImportOrganiser(typeUtils).organiseImports(cu);
+
+            unit.accept(astPrinter, new CodeContext(unit));
+            writer.flush();
         }
+    }
 
-        final String name = String.format("%s.%s", typeElement.getSimpleName(), language.getFileExtension());
-        final var file = new File(dir, name);
+    public FileObject getResource(final Location location,
+                                  final CharSequence moduleAndPkg,
+                                  final String relativeName) {
+        return fileManager.getResource(location, moduleAndPkg, relativeName);
+    }
 
-        final var code = output.toByteArray();
-
-        try(final var outputStream = new BufferedOutputStream(new FileOutputStream(file))) {
-            outputStream.write(code);
-        }
-
-        LOGGER.info("Write file " + file.getAbsolutePath());
+    public FileObject createResource(final Location location, final CharSequence moduleAndPkg, final String relativeName) {
+        return fileManager.createResource(location, moduleAndPkg, relativeName);
     }
 }

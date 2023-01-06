@@ -1,11 +1,9 @@
 package io.github.potjerodekool.openapi.internal.ast.element;
 
-import io.github.potjerodekool.openapi.internal.ast.type.ExecutableType;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
-public abstract class ExecutableElement extends AbstractElement<ExecutableElement, ExecutableType> {
+public interface ExecutableElement extends Element {
 
-    protected ExecutableElement(final ElementKind kind,
-                                final String simpleName) {
-        super(kind, simpleName);
-    }
+    @Nullable AnnotationValue getDefaultValue();
+
 }

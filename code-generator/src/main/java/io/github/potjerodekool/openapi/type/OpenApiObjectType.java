@@ -38,4 +38,9 @@ public record OpenApiObjectType(Package pck,
             return pck.getName() + "." + name;
         }
     }
+
+    @Override
+    public OpenApiType toNonNullable() {
+        return this;
+    }
 }

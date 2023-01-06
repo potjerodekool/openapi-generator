@@ -1,0 +1,70 @@
+import io.github.potjerodekool.openapi.gradle.ApiConfiguration
+
+buildscript {
+    repositories {
+        mavenLocal()
+        mavenCentral()
+/*
+        dependencies {
+            classpath 'io.github.potjerodekool:open-api-gradle-plugin:0.0.1'
+        }
+        */
+    }
+}
+
+plugins {
+    id 'java'
+    id "org.springframework.boot" version "3.0.1"
+    id 'io.spring.dependency-management' version '1.1.0'
+    id 'io.github.potjerodekool.openapi.gradle.openapi' version '0.0.1'
+}
+
+sourceCompatibility = '17'
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+sourceSets {
+    main {
+        java.srcDirs += new File("build/generated/sources/java")
+    }
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    implementation 'io.swagger.core.v3:swagger-annotations:2.2.6'
+    implementation 'io.swagger.core.v3:swagger-models:2.2.6'
+    implementation 'org.springdoc:springdoc-openapi-ui:1.6.14'
+    implementation 'org.springdoc:springdoc-openapi-webmvc-core:1.6.14'
+    implementation 'org.springdoc:springdoc-openapi-security:1.6.14'
+
+    implementation 'org.hibernate.validator:hibernate-validator:8.0.0.Final'
+    implementation 'org.openapitools:jackson-databind-nullable:0.2.4'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+openapi {
+    basePackageName = 'io.github.petstore'
+    apis = [
+            apiConfig(
+                    openApiFile: new File(project.getProjectDir(), "petstore/petstore.yaml").absolutePath,
+                    basePackageName: "io.github.petstore",
+                    generateApiDefinitions: true
+            ),
+            apiConfig(
+                    openApiFile: new File(project.getProjectDir(), "external/api.json").absolutePath,
+                    basePackageName: "io.github.petstore",
+                    generateApiDefinitions: true
+            )
+    ]
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}

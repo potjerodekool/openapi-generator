@@ -21,6 +21,11 @@ public class CombinedModelAdapter implements ModelAdapter {
     }
 
     @Override
+    public void adaptConstructor(final HttpMethod httpMethod, final RequestCycleLocation requestCycleLocation, final MethodElement constructor) {
+        modelAdapters.forEach(modelAdapter -> modelAdapter.adaptConstructor(httpMethod, requestCycleLocation, constructor));
+    }
+
+    @Override
     public void adaptField(final HttpMethod httpMethod,
                            final RequestCycleLocation requestCycleLocation,
                            final OpenApiProperty property,

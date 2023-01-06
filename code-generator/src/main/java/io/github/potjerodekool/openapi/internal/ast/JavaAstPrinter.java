@@ -4,16 +4,20 @@ import io.github.potjerodekool.openapi.internal.Printer;
 import io.github.potjerodekool.openapi.internal.ast.element.*;
 import io.github.potjerodekool.openapi.internal.ast.expression.*;
 import io.github.potjerodekool.openapi.internal.ast.type.*;
+import io.github.potjerodekool.openapi.internal.ast.type.java.WildcardType;
+import io.github.potjerodekool.openapi.internal.ast.type.kotlin.UnitType;
+import io.github.potjerodekool.openapi.internal.ast.util.TypeUtils;
 import io.github.potjerodekool.openapi.internal.util.Counter;
+import io.github.potjerodekool.openapi.internal.util.QualifiedName;
 import io.github.potjerodekool.openapi.internal.util.Utils;
 
+import javax.lang.model.element.ElementKind;
 import java.util.List;
 
-//literal, declaredtype, AnnotationExpression
 public class JavaAstPrinter extends AbstractAstPrinter {
 
-    public JavaAstPrinter(final Printer printer) {
-        super(printer);
+    public JavaAstPrinter(final Printer printer, final TypeUtils typeUtils) {
+        super(printer, typeUtils);
     }
 
     //Elements
@@ -21,6 +25,12 @@ public class JavaAstPrinter extends AbstractAstPrinter {
     public Void visitTypeElement(final TypeElement typeElement,
                                  final CodeContext context) {
         printer.printIndent();
+
+        printAnnotations(
+                typeElement.getAnnotations(),
+                true,
+                context
+        );;
 
         printModifiers(typeElement.getModifiers());
 
@@ -39,6 +49,27 @@ public class JavaAstPrinter extends AbstractAstPrinter {
 
         if (primaryConstructor != null) {
             visitPrimaryConstructor(primaryConstructor);
+        }
+
+        final var superType = typeElement.getSuperType();
+
+        if (superType != null) {
+            printer.print(" extends ");
+            superType.accept(this, context);
+        }
+
+        final var interfaces = typeElement.getInterfaces();
+
+        if (interfaces.size() > 0) {
+            printer.print(" implements ");
+
+            for (int interfaceIndex = 0; interfaceIndex < interfaces.size(); interfaceIndex++) {
+                if (interfaceIndex > 0) {
+                    printer.print(", ");
+                }
+                final var interfaceType = interfaces.get(interfaceIndex);
+                interfaceType.accept(this, context);
+            }
         }
 
         final List<Element> enclosedElements = typeElement.getEnclosedElements();
@@ -101,6 +132,11 @@ public class JavaAstPrinter extends AbstractAstPrinter {
         printer.print(variableElement.getSimpleName());
 
         if (isField) {
+            final var initExpression = variableElement.getInitExpression();
+            if (initExpression != null) {
+                printer.print(" = ");
+                initExpression.accept(this, context);
+            }
             printer.printLn(";");
         }
         return null;
@@ -196,12 +232,12 @@ public class JavaAstPrinter extends AbstractAstPrinter {
     }
 
     @Override
-    public Void visitAnnotationExpression(final AnnotationExpression annotationExpression,
-                                          final CodeContext context) {
-        final var elementValues = annotationExpression.getElementValues();
+    public Void visitAnnotation(final AnnotationMirror annotation,
+                                final CodeContext context) {
+        final var elementValues = annotation.getElementValues();
 
         printer.print("@");
-        printer.print(resolveClassName(annotationExpression.getAnnotationClassName(), context));
+        printer.print(resolveClassName(annotation.getAnnotationClassName(), context));
 
         if (elementValues.size() > 0) {
             printer.print("(");
@@ -210,7 +246,7 @@ public class JavaAstPrinter extends AbstractAstPrinter {
             final var counter = new Counter();
 
             elementValues.forEach((name,value) -> {
-                printer.print(name);
+                printer.print(name.getSimpleName());
                 printer.print(" = ");
                 value.accept(this, context);
 
@@ -316,7 +352,7 @@ public class JavaAstPrinter extends AbstractAstPrinter {
 
     @Override
     protected String resolveClassName(final String className, final CodeContext context) {
-        final var qualifiedName = Utils.resolveQualifiedName(className);
+        final var qualifiedName = QualifiedName.from(className);
         if ("java.lang".equals(qualifiedName.packageName())) {
             return qualifiedName.simpleName();
         }

@@ -2,6 +2,7 @@ package io.github.potjerodekool.openapi.internal;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.Writer;
 
 public class Printer {
 
@@ -10,6 +11,19 @@ public class Printer {
     private final BufferedWriter writer;
 
     private final boolean autoFlush;
+
+    public static Printer create(final Writer writer) {
+        return create(writer, false);
+    }
+
+    public static Printer create(final Writer writer,
+                          final boolean autoFlush) {
+        final BufferedWriter bufferedWriter =
+                writer instanceof BufferedWriter bw
+                        ? bw
+                        : new BufferedWriter(writer);
+        return new Printer(bufferedWriter, autoFlush);
+    }
 
     public Printer(final BufferedWriter writer) {
         this(writer, false);

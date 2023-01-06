@@ -1,9 +1,9 @@
 package io.github.potjerodekool.openapi.internal.generate.config;
 
-import io.github.potjerodekool.openapi.OpenApiGeneratorConfig;
+import io.github.potjerodekool.openapi.GeneratorConfig;
 import io.github.potjerodekool.openapi.internal.Filer;
 import io.github.potjerodekool.openapi.internal.ast.Modifier;
-import io.github.potjerodekool.openapi.internal.ast.TypeUtils;
+import io.github.potjerodekool.openapi.internal.ast.util.TypeUtils;
 import io.github.potjerodekool.openapi.internal.ast.element.TypeElement;
 import io.github.potjerodekool.openapi.internal.ast.expression.*;
 import io.github.potjerodekool.openapi.internal.ast.statement.BlockStatement;
@@ -19,12 +19,12 @@ import java.util.Map;
 /**
  Generates a configuration class with an OpenApiConfiguration bean.
  */
-public class SpringOpenApiConfigGenerator extends AbstractSpringConfigGenerator {
+public class SpringOpenApiConfigGenerator extends AbstractSpringApiConfigGenerator {
 
-    public SpringOpenApiConfigGenerator(final OpenApiGeneratorConfig config,
+    public SpringOpenApiConfigGenerator(final GeneratorConfig generatorConfig,
                                         final TypeUtils typeUtils,
                                         final Filer filer) {
-        super(config, typeUtils, filer);
+        super(generatorConfig, typeUtils, filer);
     }
 
     @Override
@@ -35,13 +35,12 @@ public class SpringOpenApiConfigGenerator extends AbstractSpringConfigGenerator 
     @Override
     protected void fillClass(final OpenApi api,
                              final TypeElement typeElement) {
-        final var method = typeElement.addMethod("api", Modifier.PUBLIC);
-        method.addAnnotation("org.springframework.context.annotation.Bean");
-
         final var openApiType = getTypeUtils().createDeclaredType("io.swagger.v3.oas.models.OpenAPI");
 
+        final var method = typeElement.addMethod("api", openApiType, Modifier.PUBLIC);
+        method.addAnnotation("org.springframework.context.annotation.Bean");
+
         Expression openApiInstance = new NewClassExpression(openApiType);
-        method.setReturnType(openApiType);
 
         openApiInstance = new MethodCallExpression(openApiInstance, "info", List.of(createInfo(api)));
 

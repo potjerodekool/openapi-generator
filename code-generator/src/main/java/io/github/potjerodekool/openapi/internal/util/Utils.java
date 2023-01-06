@@ -1,44 +1,65 @@
 package io.github.potjerodekool.openapi.internal.util;
 
+import com.reprezen.jsonoverlay.JsonOverlay;
+import com.reprezen.kaizen.oasparser.model3.Parameter;
 import com.reprezen.kaizen.oasparser.model3.Schema;
 import com.reprezen.kaizen.oasparser.ovl3.SchemaImpl;
+import io.github.potjerodekool.openapi.internal.OpenApiContext;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Iterator;
-import java.util.Spliterator;
-import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Supplier;
 
 public final class Utils {
 
     private Utils() {
     }
 
-    public static <T> T requireNonNull(final @Nullable T value) throws RuntimeException {
-        return requireNonNull(value, () -> new NullPointerException("required nonnull value"));
-    }
-
-    public static <T, E extends Exception> T requireNonNull(final @Nullable T value,
-                                                            final Supplier<E> exceptionSupplier) throws E {
-        if (value == null) {
-            throw exceptionSupplier.get();
-        } else {
-            return value;
-        }
-    }
-
-    public static String getOrDefault(final @Nullable String value,
-                                      final String defaultValue) {
-        return value != null ? value : defaultValue;
+    public static boolean isEmpty(final String value) {
+        return value == null || value.isEmpty();
     }
 
     public static @Nullable String getCreateRef(final Schema schema) {
         final var schemaImpl = (SchemaImpl) schema;
         final var createRef = schemaImpl._getCreatingRef();
         return createRef != null ? createRef.getRefString() : null;
+    }
+
+    public static @Nullable String getReference(final @Nullable OpenApiContext openApiContext) {
+        if (openApiContext == null) {
+            return null;
+        }
+        final var item = (JsonOverlay<?>) openApiContext.getItem();
+        final var createRef = item._getCreatingRef();
+
+        if (createRef != null) {
+            final var value = openApiContext.getValue();
+            return String.format("%s%s", createRef.getNormalizedRef(), value);
+        } else {
+            final var creatingRef = getReference(openApiContext.getParent());
+
+            if (creatingRef != null) {
+                final String value;
+
+                if (item instanceof Schema s) {
+                    final var name = s.getName();
+                    value = name != null ? "/" + name : null;
+                } else if (item instanceof Parameter p) {
+                    value = "?" + p.getName();
+                } else {
+                    value = null;
+                }
+
+                if (value != null) {
+                    return String.format("%s%s", creatingRef, value);
+                } else {
+                    return creatingRef;
+                }
+            } else {
+                return openApiContext.getValue();
+            }
+        }
     }
 
     public static String firstUpper(final String value) {
@@ -77,11 +98,7 @@ public final class Utils {
         }
     }
 
-    public static boolean isNullOrEmpty(final @Nullable String value) {
-        return value == null || value.length() == 0;
-    }
-
-    public static boolean isNullOrTrue(final Boolean value) {
+    public static boolean isNullOrTrue(final @Nullable Boolean value) {
         return value == null || Boolean.TRUE.equals(value);
     }
 
@@ -107,64 +124,4 @@ public final class Utils {
         }
     }
 
-    public static <T> Spliterator<T> spliterator(final Iterator<T> iterator) {
-        return new SimpleSpliterator<>(iterator);
-    }
-
-    public static String resolveSimpleClassName(final String className) {
-        return resolveQualifiedName(className).simpleName();
-    }
-
-    public static QualifiedName resolveQualifiedName(final String className) {
-        final var nameSep = className.lastIndexOf('.');
-        final String packageName;
-        final String simpleName;
-
-        if (nameSep > -1) {
-            packageName = className.substring(0, nameSep);
-            simpleName = className.substring(nameSep + 1);
-        } else {
-            packageName = "";
-            simpleName = className;
-        }
-
-        return new QualifiedName(packageName, simpleName);
-    }
-
-
-}
-
-class SimpleSpliterator<T> implements Spliterator<T> {
-
-    private final Iterator<T> iterator;
-
-    SimpleSpliterator(final Iterator<T> iterator) {
-        this.iterator = iterator;
-    }
-
-    @Override
-    public boolean tryAdvance(final Consumer<? super T> action) {
-        if (iterator.hasNext()) {
-            action.accept(iterator.next());
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    @Override
-    @SuppressWarnings("return")
-    public @Nullable Spliterator<T> trySplit() {
-        return null;
-    }
-
-    @Override
-    public long estimateSize() {
-        return Long.MAX_VALUE;
-    }
-
-    @Override
-    public int characteristics() {
-        return 0;
-    }
 }

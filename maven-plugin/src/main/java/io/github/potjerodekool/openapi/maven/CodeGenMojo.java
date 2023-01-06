@@ -1,7 +1,6 @@
 package io.github.potjerodekool.openapi.maven;
 
 import io.github.potjerodekool.openapi.*;
-import io.github.potjerodekool.openapi.internal.OpenApiGeneratorConfigImpl;
 import io.github.potjerodekool.openapi.log.Logger;
 import io.github.potjerodekool.openapi.log.LoggerFactory;
 import org.apache.maven.plugin.AbstractMojo;
@@ -9,6 +8,8 @@ import org.apache.maven.plugins.annotations.*;
 import org.apache.maven.project.MavenProject;
 
 import java.io.File;
+import java.nio.file.Paths;
+import java.util.HashMap;
 import java.util.List;
 
 @Mojo(
@@ -21,26 +22,11 @@ public class CodeGenMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project}", required = true, readonly = true)
     private MavenProject project;
 
-    @Parameter(defaultValue = "${project.build.directory}/generated-sources", required = true)
-    private File generatedSourceDirectory;
+    @Parameter(property = "basePackageName")
+    private String basePackageName;
 
-    @Parameter(property = "openApiFile", required = true)
-    private String openApiFile;
-
-    @Parameter(property = "configPackageName")
-    private String configPackageName;
-
-    @Parameter(property = "generateModels", defaultValue = "true")
-    private boolean generateModels;
-
-    @Parameter(property = "generateApiDefinitions", defaultValue = "true")
-    private boolean generateApiDefinitions;
-
-    @Parameter(property = "jakarta.servlet")
-    private Boolean jakartaServlet;
-
-    @Parameter(property = "jakarta.validation")
-    private Boolean jakartaValidation;
+    @Parameter(property = "jakarta")
+    private Boolean jakarta;
 
     @Parameter(property = "checker")
     private Boolean checker;
@@ -48,94 +34,69 @@ public class CodeGenMojo extends AbstractMojo {
     @Parameter(property = "language")
     private String language;
 
-    @Parameter(property = "externalApis")
-    private List<ExternalApiConfig> externalApis;
+    @Parameter(property = "apis")
+    private List<ApiConfiguration> apis;
 
     @Override
     public void execute() {
         LoggerFactory.setLoggerProvider(this::getLogger);
-        generate();
-        generateExternalApiModels();
+        generateApis();
     }
 
-    private void generate() {
-        if (openApiFile.isEmpty()) {
-            getLog().warn(""" 
-                No files specified to process.
-                Specify a file via configuration of the plugin.
-                Files must have a yml or yaml file extension.
-                
-                <configuration>
-                  <openApiFile>openapi.yml</openApiFiles>
-                </configuration>
-            """);
-        }
+    private void generateApis() {
+        final var language = Language.fromString(this.language);
 
-        final var configBuilder = OpenApiGeneratorConfig.createBuilder(
-                new File(openApiFile),
-                generatedSourceDirectory,
-                configPackageName,
-                null
-        );
+        final var sourceRoots = project.getCompileSourceRoots().stream()
+                .map(Paths::get)
+                .toList();
 
-        final var dependencyChecker = new MavenDependencyChecker(this.project);
-        configBuilder.generateApiDefinitions(generateApiDefinitions);
-        configBuilder.generateModels(generateModels);
-
-        if (jakartaServlet != null) {
-            configBuilder.featureValue(OpenApiGeneratorConfigImpl.FEATURE_JAKARTA_SERVLET, jakartaServlet);
-        }
-
-        if (jakartaValidation != null) {
-            configBuilder.featureValue(OpenApiGeneratorConfigImpl.FEATURE_JAKARTA_VALIDATION, jakartaValidation);
-        }
-
-        if (checker != null) {
-            configBuilder.featureValue(OpenApiGeneratorConfigImpl.FEATURE_CHECKER, checker);
-        }
-
-        if (language != null) {
-            configBuilder.language(Language.valueOf(language.toUpperCase()));
-        }
-
-        final var config = configBuilder.build(ConfigType.DEFAULT);
-
-        new Generator().generate(config, dependencyChecker);
-    }
-
-    private void generateExternalApiModels() {
-        externalApis.forEach(externalApiConfig -> generateExternalApiModels(externalApiConfig));
-    }
-
-    private void generateExternalApiModels(final ExternalApiConfig externalApiConfig) {
-        final var configBuilder = OpenApiGeneratorConfig.createBuilder(
-                new File(externalApiConfig.getOpenApiFile()),
-                generatedSourceDirectory,
-                null,
-                externalApiConfig.getModelPackageName()
-        );
+        final var resourceRoots = project.getResources().stream()
+                .map(resource -> Paths.get(resource.getDirectory()))
+                .toList();
 
         final var dependencyChecker = new MavenDependencyChecker(this.project);
 
-        if (jakartaServlet != null) {
-            configBuilder.featureValue(OpenApiGeneratorConfigImpl.FEATURE_JAKARTA_SERVLET, jakartaServlet);
-        }
+        final var rootDir = this.project.getBasedir().toPath();
 
-        if (jakartaValidation != null) {
-            configBuilder.featureValue(OpenApiGeneratorConfigImpl.FEATURE_JAKARTA_VALIDATION, jakartaValidation);
+        final var project = new Project(
+                rootDir,
+                sourceRoots,
+                resourceRoots,
+                rootDir.resolve("target/generated-sources"),
+                dependencyChecker);
+
+        final var apiConfigurations = apis.stream()
+                .filter(apiConfiguration -> apiConfiguration.getOpenApiFile() != null)
+                .map(this::toApiConfiguration)
+                .toList();
+
+        final var features = new HashMap<String, Boolean>();
+
+        if (jakarta != null) {
+            features.put(Features.FEATURE_JAKARTA, jakarta);
         }
 
         if (checker != null) {
-            configBuilder.featureValue(OpenApiGeneratorConfigImpl.FEATURE_CHECKER, checker);
+            features.put(Features.FEATURE_CHECKER, checker);
         }
 
-        if (language != null) {
-            configBuilder.language(Language.valueOf(language.toUpperCase()));
-        }
+        new Generator().generate(
+                project,
+                apiConfigurations,
+                features,
+                this.basePackageName,
+                language
+        );
+    }
 
-        final var config = configBuilder.build(ConfigType.EXTERNAL);
-
-        new Generator().generateExternalApi(config, dependencyChecker);
+    private io.github.potjerodekool.openapi.ApiConfiguration toApiConfiguration(final ApiConfiguration apiConfiguration) {
+        return new io.github.potjerodekool.openapi.ApiConfiguration(
+                new File(apiConfiguration.getOpenApiFile()),
+                apiConfiguration.getBasePackageName(),
+                apiConfiguration.isGenerateApiDefinitions(),
+                apiConfiguration.isGenerateModels(),
+                new HashMap<>()
+        );
     }
 
     private Logger getLogger(final String name) {

@@ -3,29 +3,41 @@ package io.github.potjerodekool.openapi.internal.ast;
 import io.github.potjerodekool.openapi.Language;
 import io.github.potjerodekool.openapi.internal.ast.element.*;
 import io.github.potjerodekool.openapi.internal.ast.expression.*;
-import io.github.potjerodekool.openapi.internal.ast.expression.kotlin.KotlinAnnotationExpression;
 import io.github.potjerodekool.openapi.internal.ast.statement.*;
 import io.github.potjerodekool.openapi.internal.ast.type.*;
-import io.github.potjerodekool.openapi.internal.ast.type.kotlin.KotlinArray;
+import io.github.potjerodekool.openapi.internal.ast.type.java.*;
+import io.github.potjerodekool.openapi.internal.ast.type.kotlin.KotlinArrayType;
+import io.github.potjerodekool.openapi.internal.ast.type.kotlin.UnitType;
+import io.github.potjerodekool.openapi.internal.ast.util.TypeUtils;
 import io.github.potjerodekool.openapi.internal.util.Utils;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import javax.lang.model.element.ElementKind;
+import javax.lang.model.type.TypeKind;
 import java.util.*;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 public class JavaToKotlinConverter implements ElementVisitor<Void, CodeContext>,
         StatementVisitor<Statement, CodeContext>,
         ExpressionVisitor<Expression, CodeContext>,
-        TypeVisitor<Type<?>, CodeContext> {
+        TypeVisitor<Type<?>, CodeContext>,
+        AnnotationValueVisitor<Object, CodeContext> {
 
-    private static final Map<String, String> JAVA_TO_KOTLIN_TYPE = Map.of(
-            "java.lang.String", "kotlin.String",
-            "java.lang.Integer", "kotlin.Int",
-            "java.lang.Long", "kotlin.Long",
-            "java.lang.Object", "kotlin.Any",
-            "java.util.List", "kotlin.collections.MutableList",
-            "java.util.Map", "kotlin.collections.MutableMap"
+    private static final Map<String, String> JAVA_TO_KOTLIN_TYPE = Map.ofEntries(
+            Map.entry("java.lang.String", "kotlin.String"),
+            Map.entry("java.lang.Integer", "kotlin.Int"),
+            Map.entry("java.lang.Boolean", "kotlin.Boolean"),
+            Map.entry("java.lang.Byte", "kotlin.Byte"),
+            Map.entry("java.lang.Short", "kotlin.Short"),
+            Map.entry("java.lang.Character", "kotlin.Char"),
+            Map.entry("java.lang.Float", "kotlin.Float"),
+            Map.entry("java.lang.Double", "kotlin.Double"),
+            Map.entry("java.lang.Long", "kotlin.Long"),
+            Map.entry("java.lang.Object", "kotlin.Any"),
+            Map.entry("java.util.List", "kotlin.collections.MutableList"),
+            Map.entry("java.util.Map", "kotlin.collections.MutableMap")
     );
 
     private final TypeUtils typeUtils;
@@ -68,22 +80,14 @@ public class JavaToKotlinConverter implements ElementVisitor<Void, CodeContext>,
         } else {
             final var parentAstNode = context.getAstNode();
 
-            context.setAstNode(typeElement);
+            final var childContext = context.child(typeElement);
 
             typeElement.removeModifier(Modifier.PUBLIC);
-            final var primaryConstructor = convertFirstConstructorToPrimaryConstructor(typeElement, context);
+            final var primaryConstructor = convertFirstConstructorToPrimaryConstructor(typeElement, childContext);
+
+            final var enclosedElements = typeElement.getEnclosedElements().stream().toList();
+            enclosedElements.forEach(enclosedElement -> enclosedElement.accept(this, childContext));
             removeFieldsWithGetterAndSetters(typeElement, primaryConstructor);
-
-            final var methods = typeElement.getEnclosedElements().stream()
-                    .filter(element -> element.getKind() == ElementKind.METHOD)
-                    .toList();
-
-            methods.forEach(typeElement::removeEnclosedElement);
-            methods.forEach(method -> {
-                context.setAstNode(typeElement);
-                method.accept(this, context);
-            });
-            context.setAstNode(typeElement);
 
             if (parentAstNode instanceof CompilationUnit cu) {
                 cu.addElement(typeElement);
@@ -98,33 +102,33 @@ public class JavaToKotlinConverter implements ElementVisitor<Void, CodeContext>,
         final var parentAstNode = context.getAstNode();
 
         final var newMethod = methodElement.getKind() == ElementKind.METHOD
-                ? MethodElement.createMethod(methodElement.getSimpleName())
+                ? MethodElement.createMethod(methodElement.getSimpleName(), methodElement.getReturnType().accept(this, context))
                 : MethodElement.createConstructor(methodElement.getSimpleName());
 
-        context.setAstNode(newMethod);
+        final var childContext = context.child(newMethod);
 
         methodElement.getParameters()
-                .forEach(parameter -> parameter.accept(this, context));
+                .forEach(parameter -> parameter.accept(this, childContext));
 
         methodElement.getBody().ifPresent(body -> {
-            final var newBody = (BlockStatement) body.accept(this, context);
+            final var newBody = (BlockStatement) body.accept(this, childContext);
             newMethod.setBody(newBody);
         });
 
         newMethod.addAnnotations(
                 methodElement.getAnnotations().stream()
-                        .map(annotation -> (AnnotationExpression) annotation.accept(this, context))
+                        .map(annotation -> (AnnotationMirror) annotation.accept(this, childContext))
                         .toList()
         );
 
         newMethod.addModifiers(convertModifiers(methodElement.getModifiers(),
                 it -> !(it == Modifier.DEFAULT || it == Modifier.STATIC)));
 
-        newMethod.setReturnType(methodElement.getReturnType().accept(this, context));
-
         if (parentAstNode instanceof TypeElement te) {
+            te.removeEnclosedElement(methodElement);
             te.addEnclosedElement(newMethod);
         } else if (parentAstNode instanceof CompilationUnit cu) {
+            cu.removeElement(methodElement);
             cu.addElement(newMethod);
         }
 
@@ -135,9 +139,17 @@ public class JavaToKotlinConverter implements ElementVisitor<Void, CodeContext>,
     public Void visitVariableElement(final VariableElement variableElement,
                                      final CodeContext context) {
         final VariableElement newVariableElement;
+        final var annotations = variableElement.getAnnotations().stream()
+                .map(annotation -> (AnnotationMirror) annotation.accept(this, context))
+                .toList();
 
         if (variableElement.getKind() == ElementKind.PARAMETER) {
             newVariableElement = VariableElement.createParameter(
+                    variableElement.getSimpleName(),
+                    variableElement.getType().accept(this, context)
+            );
+        } else if (variableElement.getKind() == ElementKind.FIELD) {
+            newVariableElement = VariableElement.createField(
                     variableElement.getSimpleName(),
                     variableElement.getType().accept(this, context)
             );
@@ -145,9 +157,15 @@ public class JavaToKotlinConverter implements ElementVisitor<Void, CodeContext>,
             throw new UnsupportedOperationException();
         }
 
+        newVariableElement.addAnnotations(annotations);
+
         if (newVariableElement.getKind() == ElementKind.PARAMETER) {
             final var method = (MethodElement) context.getAstNode();
             method.addParameter(newVariableElement);
+        } else if (newVariableElement.getKind() == ElementKind.FIELD) {
+            final var clazz = (TypeElement) context.getAstNode();
+            clazz.removeEnclosedElement(variableElement);
+            clazz.addEnclosedElement(newVariableElement);
         }
 
         return null;
@@ -197,12 +215,13 @@ public class JavaToKotlinConverter implements ElementVisitor<Void, CodeContext>,
 
         if (paramType.isNullable()) {
             parameter.setInitExpression(LiteralExpression.createNullLiteralExpression());
+        } else {
+            parameter.setInitExpression(createDefaultParameterValue(paramType));
         }
 
         convertModifiers(
-                field.getModifiers().stream()
-                        .filter(modifier -> modifier != Modifier.PRIVATE)
-                        .collect(Collectors.toSet())
+                field.getModifiers(),
+                modifier -> modifier != Modifier.PRIVATE
         ).forEach(parameter::addModifier);
 
         if (!field.isFinal()) {
@@ -210,9 +229,43 @@ public class JavaToKotlinConverter implements ElementVisitor<Void, CodeContext>,
         }
 
         field.getAnnotations().stream()
-                .map(this::toFieldAnnotation)
+                .map(annotation -> toFieldAnnotation(annotation, context))
                 .forEach(parameter::addAnnotation);
         return parameter;
+    }
+
+    private @Nullable Expression createDefaultParameterValue(final Type<?> parameterType) {
+        if (parameterType.isDeclaredType()) {
+            final var declaredType = (DeclaredType) parameterType;
+            final var qualifiedName = declaredType.getElement().getQualifiedName();
+            if ("org.openapitools.jackson.nullable.JsonNullable".equals(qualifiedName)) {
+                return new MethodCallExpression(
+                        new NameExpression("org.openapitools.jackson.nullable.JsonNullable"),
+                        "undefined"
+                );
+            }
+        } else if (parameterType.isArrayType()) {
+            final var kotlinArrayType = (KotlinArrayType) parameterType;
+            final var componentType = (DeclaredType) kotlinArrayType.getComponentType();
+            final var componentTypeName = componentType.getElement().getQualifiedName();
+            final var methodName = switch (componentTypeName) {
+                case "kotlin.Byte" -> "byteArrayOf";
+                case "kotlin.Char" -> "charArrayOf";
+                case "kotlin.Short" -> "shortArrayOf";
+                case "kotlin.Int" -> "intArrayOf";
+                case "kotlin.Long" -> "longArrayOf";
+                case "kotlin.Float" -> "floatArrayOf";
+                case "kotlin.Double" -> "doubleArrayOf";
+                case "kotlin.Boolean" -> "booleanArrayOf";
+                default -> "arrayOf";
+            };
+            return new MethodCallExpression(
+                    null,
+                    methodName
+            );
+        }
+
+        return null;
     }
 
     private Set<Modifier> convertModifiers(final Set<Modifier> modifiers) {
@@ -240,11 +293,18 @@ public class JavaToKotlinConverter implements ElementVisitor<Void, CodeContext>,
         return Collections.unmodifiableSet(convertedModifiers);
     }
 
-    private AnnotationExpression toFieldAnnotation(final AnnotationExpression annotation) {
-        return new KotlinAnnotationExpression(
+    private AnnotationMirror toFieldAnnotation(final AnnotationMirror annotation,
+                                                   final CodeContext context) {
+        final var elementValues = annotation.getElementValues().entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        it -> (AnnotationValue) it.getValue().accept(this, context)
+                ));
+
+        return new KotlinAnnotationMirror(
                 "field",
                 annotation.getAnnotationClassName(),
-                annotation.getElementValues()
+                elementValues
         );
     }
 
@@ -280,43 +340,44 @@ public class JavaToKotlinConverter implements ElementVisitor<Void, CodeContext>,
     private void removeGetterAndSetters(final TypeElement typeElement,
                                         final List<VariableElement> fields) {
 
-        final var fieldAndTypeMap = fields.stream()
+        final var fieldMap = fields.stream()
                 .collect(Collectors.toMap(
-                        AbstractElement::getSimpleName,
-                        VariableElement::getType
+                        it -> it.getSimpleName().toString(),
+                        Function.identity()
                 ));
 
         final var getterNames = new ArrayList<String>();
         final var setterNames = new ArrayList<String>();
 
         fields.forEach(field -> {
-            getterNames.add("get" + Utils.firstUpper(field.getSimpleName()));
-            getterNames.add(field.getSimpleName());
+            getterNames.add("get" + Utils.firstUpper(field.getSimpleName().toString()));
+            getterNames.add(field.getSimpleName().toString());
         });
 
         fields.forEach(field -> {
-            setterNames.add("set" + Utils.firstUpper(field.getSimpleName()));
-            setterNames.add(field.getSimpleName());
+            setterNames.add("set" + Utils.firstUpper(field.getSimpleName().toString()));
+            setterNames.add(field.getSimpleName().toString());
         });
 
         var methods = ElementFilter.methods(typeElement).toList();
 
         methods.stream().filter(this::isGetter)
-                .filter(getter -> getterNames.contains(getter.getSimpleName()))
+                .filter(getter -> getterNames.contains(getter.getSimpleName().toString()))
                 .filter(getter -> {
-                    final String getterName = getter.getSimpleName();
+                    final String getterName = getter.getSimpleName().toString();
                     final String fieldName = Utils.firstLower(getterName.startsWith("get") ? getterName.substring(3) : getterName);
-                    final var fieldType = fieldAndTypeMap.get(fieldName);
-                    return fieldType != null && getter.getReturnType().isSameType(fieldType);
+                    final var field = fieldMap.get(fieldName);
+                    return field != null && getter.getReturnType().isSameType(field.getType());
                 }).forEach(typeElement::removeEnclosedElement);
 
         methods.stream().filter(this::isSetter)
-                .filter(setter -> setterNames.contains(setter.getSimpleName()))
+                .filter(setter -> setterNames.contains(setter.getSimpleName().toString()))
                 .filter(setter -> {
-                    final String setterName = setter.getSimpleName();
-                    final String fieldName = Utils.firstLower(setterName.startsWith("set") ? setterName.substring(3) : setterName);
-                    final var fieldType = fieldAndTypeMap.get(fieldName);
-                    return fieldType != null && setter.getParameters().get(0).getType().isSameType(fieldType);
+                    final String setterName = setter.getSimpleName().toString();
+                    final var isNormalSetter = setterName.startsWith("set");
+                    final String fieldName = Utils.firstLower(isNormalSetter ? setterName.substring(3) : setterName);
+                    final var field = fieldMap.get(fieldName);
+                    return field != null && setter.getParameters().get(0).getType().isSameType(field.getType()) && isNormalSetter;
                 }).forEach(typeElement::removeEnclosedElement);
     }
 
@@ -498,24 +559,29 @@ public class JavaToKotlinConverter implements ElementVisitor<Void, CodeContext>,
     @Override
     public Expression visitLiteralExpression(final LiteralExpression literalExpression, final CodeContext context) {
         if (literalExpression.getLiteralType() == LiteralType.CLASS) {
-            final var kotlinClassName = JAVA_TO_KOTLIN_TYPE.get(literalExpression.getValue());
-            if (kotlinClassName != null) {
-                return LiteralExpression.createClassLiteralExpression(kotlinClassName);
+            final var classLiteral = (ClassLiteralExpression) literalExpression;
+            final var type = classLiteral.getType();
+            final var convertedType = type.accept(this, context);
+
+            if (convertedType.isPrimitiveType()) {
+                throw new UnsupportedOperationException();
             }
+
+            return LiteralExpression.createClassLiteralExpression(convertedType);
         }
         return literalExpression;
     }
 
     @Override
-    public Expression visitAnnotationExpression(final AnnotationExpression annotationExpression, final CodeContext context) {
+    public AnnotationMirror visitAnnotation(final AnnotationMirror annotationExpression, final CodeContext context) {
         final var convertedElementValues = annotationExpression.getElementValues().entrySet().stream()
                 .collect(Collectors.toMap(
                             Map.Entry::getKey,
-                            it -> it.getValue().accept(this, context)
+                            it -> (AnnotationValue) it.getValue().accept(this, context)
                         )
                 );
 
-        return new AnnotationExpression(
+        return Attribute.compound(
                 annotationExpression.getAnnotationClassName(),
                 convertedElementValues
         );
@@ -552,7 +618,7 @@ public class JavaToKotlinConverter implements ElementVisitor<Void, CodeContext>,
     @Override
     public Type<?> visitVoidType(final VoidType voidType,
                                  final CodeContext context) {
-        return new UnitType();
+        return UnitType.INSTANCE;
     }
 
     @Override
@@ -598,6 +664,7 @@ public class JavaToKotlinConverter implements ElementVisitor<Void, CodeContext>,
     public Type<?> visitJavaArrayType(final JavaArrayType javaArrayType,
                                       final CodeContext context) {
         final var componentType = javaArrayType.getComponentType();
+        final var convertedComponentType = componentType.accept(this, context);
 
         if (componentType.isPrimitiveType()) {
             switch (componentType.getKind()) {
@@ -609,12 +676,12 @@ public class JavaToKotlinConverter implements ElementVisitor<Void, CodeContext>,
                      FLOAT,
                      DOUBLE,
                      BOOLEAN -> {
-                    return new KotlinArray(componentType);
+                    return typeUtils.createKotlinArray(convertedComponentType);
                 }
             }
         }
 
-        return new KotlinArray(componentType);
+        return typeUtils.createKotlinArray(convertedComponentType);
     }
 
     @Override
@@ -675,5 +742,40 @@ public class JavaToKotlinConverter implements ElementVisitor<Void, CodeContext>,
     public Type<?> visitUnitType(final UnitType unitType,
                                  final CodeContext context) {
         return unitType;
+    }
+
+    @Override
+    public Object visitBoolean(final boolean value, final CodeContext param) {
+        return Attribute.constant(value);
+    }
+
+    @Override
+    public Object visitInt(final int value, final CodeContext param) {
+        return Attribute.constant(value);
+    }
+
+    @Override
+    public Object visitLong(final long value, final CodeContext param) {
+        return Attribute.constant(value);
+    }
+
+    @Override
+    public Object visitString(final String value, final CodeContext param) {
+        return Attribute.constant(value);
+    }
+
+    @Override
+    public Object visitEnum(final VariableElement enumValue, final CodeContext param) {
+        return Attribute.createEnumAttribute(enumValue);
+    }
+
+    @Override
+    public Object visitArray(final Attribute[] array, final CodeContext param) {
+        return Attribute.array(array);
+    }
+
+    @Override
+    public Object visitType(final Type<?> type, final CodeContext param) {
+        return Attribute.clazz(type);
     }
 }

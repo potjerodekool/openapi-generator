@@ -7,15 +7,17 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
 
 class OpenApiParserHelperIT {
 
-    private final Set<Dependency> dependencies = Set.of(new Dependency(
-            "org.hibernate.validator",
-            "hibernate-validator"
-    ));
+    private final Set<Dependency> dependencies = Set.of(
+            new Dependency("org.hibernate.validator", "hibernate-validator"),
+            new Dependency("org.checkerframework", "checker-qual")
+    );
 
     @AfterEach
     void tearDown() {
@@ -36,17 +38,33 @@ class OpenApiParserHelperIT {
 
     @Test
     void merge() {
-        final var apiFile = new File("../demo/petstore/petstore.yaml");
+        //final var apiFile = new File("../demo/petstore/petstore.yaml");
+        //final var apiFile = new File("openapi/spec.yml");
+        //final var apiFile = new File("C:\\projects\\openapi-generator\\demo\\external\\api.json");
+        final var apiFile = new File("C:\\projects\\auth-server2\\authserver\\openapi\\spec.yml");
 
-        final var config = OpenApiGeneratorConfig.createBuilder(
+        final var apiConfiguration = new ApiConfiguration(
                 apiFile,
-                new File("target/generated-sources"),
-                "org.some.config",
-                null
-                ).language(Language.KOTLIN)
-                .build(ConfigType.DEFAULT);
+                "org.some",
+                true,
+                true,
+                new HashMap<>()
+        );
 
-        new Generator().generate(config, this.dependencyChecker());
+        final var project = new Project(
+                new File("").toPath(),
+                List.of(),
+                List.of(),
+                new File("").toPath(),
+                dependencyChecker());
+
+        new Generator().generate(
+                project,
+                List.of(apiConfiguration),
+                new HashMap<>(),
+                "org.some",
+                Language.JAVA
+        );
     }
 
     private DependencyChecker dependencyChecker() {
@@ -55,6 +73,11 @@ class OpenApiParserHelperIT {
             public boolean isDependencyPresent(final String groupId,
                                                final String artifactId) {
                 return dependencies.contains(new Dependency(groupId, artifactId));
+            }
+
+            @Override
+            public boolean isClassPresent(final String className) {
+                return false;
             }
 
             @Override
