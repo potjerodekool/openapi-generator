@@ -1,8 +1,8 @@
 package io.github.potjerodekool.openapi.internal.generate.config;
 
-import io.github.potjerodekool.openapi.internal.FileObject;
-import io.github.potjerodekool.openapi.internal.Filer;
-import io.github.potjerodekool.openapi.internal.Location;
+import io.github.potjerodekool.codegen.io.FileObject;
+import io.github.potjerodekool.codegen.io.Filer;
+import io.github.potjerodekool.codegen.io.Location;
 import org.yaml.snakeyaml.Yaml;
 
 import java.io.*;

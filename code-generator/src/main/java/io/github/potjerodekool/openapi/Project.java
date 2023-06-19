@@ -2,7 +2,6 @@ package io.github.potjerodekool.openapi;
 
 import io.github.potjerodekool.openapi.dependency.DependencyChecker;
 
-import java.io.File;
 import java.nio.file.Path;
 import java.util.List;
 

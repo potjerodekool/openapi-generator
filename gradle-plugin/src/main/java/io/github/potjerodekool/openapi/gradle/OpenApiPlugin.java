@@ -1,8 +1,8 @@
 package io.github.potjerodekool.openapi.gradle;
 
+import io.github.potjerodekool.codegen.Language;
 import io.github.potjerodekool.openapi.Features;
 import io.github.potjerodekool.openapi.Generator;
-import io.github.potjerodekool.openapi.Language;
 import io.github.potjerodekool.openapi.internal.util.Utils;
 import io.github.potjerodekool.openapi.log.LogLevel;
 import io.github.potjerodekool.openapi.log.LoggerFactory;

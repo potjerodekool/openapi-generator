@@ -52,11 +52,13 @@ dependencies {
 openapi {
     basePackageName = 'io.github.petstore'
     apis = [
+            /*
             apiConfig(
                     openApiFile: new File(project.getProjectDir(), "petstore/petstore.yaml").absolutePath,
                     basePackageName: "io.github.petstore",
                     generateApiDefinitions: true
             ),
+            */
             apiConfig(
                     openApiFile: new File(project.getProjectDir(), "external/api.json").absolutePath,
                     basePackageName: "io.github.petstore",

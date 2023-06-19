@@ -1,14 +1,19 @@
 package io.github.potjerodekool.openapi.internal.generate.config;
 
+import io.github.potjerodekool.codegen.Environment;
+import io.github.potjerodekool.codegen.Language;
+import io.github.potjerodekool.codegen.model.Attribute;
+import io.github.potjerodekool.codegen.model.CompilationUnit;
+import io.github.potjerodekool.codegen.model.element.ElementKind;
+import io.github.potjerodekool.codegen.model.element.Name;
+import io.github.potjerodekool.codegen.model.element.NestingKind;
+import io.github.potjerodekool.codegen.model.symbol.ClassSymbol;
+import io.github.potjerodekool.codegen.model.util.Elements;
+import io.github.potjerodekool.codegen.model.util.SymbolTable;
+import io.github.potjerodekool.codegen.model.util.type.JavaTypes;
+import io.github.potjerodekool.codegen.model.util.type.Types;
 import io.github.potjerodekool.openapi.GeneratorConfig;
-import io.github.potjerodekool.openapi.Language;
 import io.github.potjerodekool.openapi.generate.config.ApiConfigGenerator;
-import io.github.potjerodekool.openapi.internal.Filer;
-import io.github.potjerodekool.openapi.internal.ast.Attribute;
-import io.github.potjerodekool.openapi.internal.ast.CompilationUnit;
-import io.github.potjerodekool.openapi.internal.ast.util.TypeUtils;
-import io.github.potjerodekool.openapi.internal.ast.element.PackageElement;
-import io.github.potjerodekool.openapi.internal.ast.element.TypeElement;
 import io.github.potjerodekool.openapi.log.LogLevel;
 import io.github.potjerodekool.openapi.log.Logger;
 import io.github.potjerodekool.openapi.tree.OpenApi;
@@ -20,19 +25,22 @@ public abstract class AbstractSpringApiConfigGenerator implements ApiConfigGener
     private static final Logger LOGGER = Logger.getLogger(AbstractSpringApiConfigGenerator.class.getName());
 
     private final GeneratorConfig generatorConfig;
-    private final TypeUtils typeUtils;
-    private final Filer filer;
+    private final Environment environment;
+    private final SymbolTable symbolTable;
 
     public AbstractSpringApiConfigGenerator(final GeneratorConfig generatorConfig,
-                                            final TypeUtils typeUtils,
-                                            final Filer filer) {
+                                            final Environment environment) {
         this.generatorConfig = generatorConfig;
-        this.typeUtils = typeUtils;
-        this.filer = filer;
+        this.environment = environment;
+        this.symbolTable = environment.getSymbolTable();
     }
 
-    protected TypeUtils getTypeUtils() {
-        return typeUtils;
+    protected Elements getElementUtils() {
+        return environment.getElementUtils();
+    }
+
+    protected Types getTypes() {
+        return environment.getTypes();
     }
 
     protected abstract String getConfigClassName();
@@ -46,21 +54,25 @@ public abstract class AbstractSpringApiConfigGenerator implements ApiConfigGener
         final var cu = new CompilationUnit(Language.JAVA);
 
         final var configPackageName = generatorConfig.configPackageName();
-        cu.setPackageElement(PackageElement.create(configPackageName));
+        final var packageSymbol = symbolTable.findOrCreatePackageSymbol(Name.of(configPackageName));
 
-        final var clazz = cu.addClass(getConfigClassName());
-        clazz.addAnnotation(Attribute.compound("org.springframework.context.annotation.Configuration"));
+        cu.setPackageElement(packageSymbol);
 
-        fillClass(api, clazz);
+        final var classSymbol = symbolTable.enterClass(ElementKind.CLASS, Name.of(getConfigClassName()), NestingKind.TOP_LEVEL, packageSymbol);
+        cu.addElement(classSymbol);
+
+        classSymbol.addAnnotation(Attribute.compound((ClassSymbol) getElementUtils().getTypeElement("org.springframework.context.annotation.Configuration")));
+
+        fillClass(api, classSymbol);
         try {
-            filer.writeSource(cu, generatorConfig.language());
+            environment.getFiler().writeSource(cu, generatorConfig.language());
         } catch (final IOException e) {
             LOGGER.log(LogLevel.SEVERE, "Fail to generate code for spring api definition", e);
         }
     }
 
     protected abstract void fillClass(OpenApi api,
-                                      TypeElement typeElement);
+                                      ClassSymbol typeElement);
 
     protected boolean skipGeneration() {
         return false;

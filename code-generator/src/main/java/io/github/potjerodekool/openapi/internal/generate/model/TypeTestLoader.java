@@ -1,7 +1,9 @@
 package io.github.potjerodekool.openapi.internal.generate.model;
 
-import io.github.potjerodekool.openapi.internal.ast.util.TypeUtils;
-import io.github.potjerodekool.openapi.internal.ast.type.Type;
+import io.github.potjerodekool.codegen.Environment;
+import io.github.potjerodekool.codegen.model.type.TypeMirror;
+import io.github.potjerodekool.codegen.model.util.Elements;
+import io.github.potjerodekool.codegen.model.util.type.Types;
 import io.github.potjerodekool.openapi.internal.di.Bean;
 import jakarta.inject.Inject;
 
@@ -14,12 +16,16 @@ public class TypeTestLoader {
 
     private final Properties properties;
 
-    private final TypeUtils typeUtils;
+    private final Elements elements;
+
+    private final Types types;
 
     @Inject
-    public TypeTestLoader(final TypeUtils typeUtils) {
+    public TypeTestLoader(final Environment environment) {
         this.properties = new Properties();
-        this.typeUtils = typeUtils;
+        this.elements = environment.getElementUtils();
+        this.types = environment.getTypes();
+
         final var classLoader = TypeTestLoader.class.getClassLoader();
 
         if (classLoader != null) {
@@ -35,23 +41,26 @@ public class TypeTestLoader {
 
     public TypeTest loadTypeTest(final String key) {
         final var property = this.properties.getProperty(key);
-        final var typeSet = new HashSet<Type<?>>();
-        final var resolvedTypeSet = new HashSet<Type<?>>();
+        final var typeSet = new HashSet<TypeMirror>();
+        final var resolvedTypeSet = new HashSet<TypeMirror>();
 
         if (property != null) {
             for (final var className : property.split(",")) {
                 if (className.startsWith("+")) {
                     try {
-                        resolvedTypeSet.add(typeUtils.createDeclaredType(className.substring(1)));
+                        resolvedTypeSet.add(types.getDeclaredType(elements.getTypeElement(className.substring(1))));
                     } catch (final Exception e) {
                         //Ignore
                     }
                 } else {
-                    typeSet.add(typeUtils.createDeclaredType(className));
+                    final var typeElement = elements.getTypeElement(className);
+                    if (typeElement != null) {
+                        typeSet.add(types.getDeclaredType(typeElement));
+                    }
                 }
             }
         }
 
-        return new TypeTest(typeSet, resolvedTypeSet);
+        return new TypeTest(typeSet, resolvedTypeSet, types);
     }
 }

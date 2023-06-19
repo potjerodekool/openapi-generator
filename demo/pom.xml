@@ -41,24 +41,24 @@
         </dependency>
         <dependency>
             <groupId>org.springdoc</groupId>
-            <artifactId>springdoc-openapi-ui</artifactId>
-            <version>1.6.14</version>
-        </dependency>
-        <dependency>
-            <groupId>org.springdoc</groupId>
-            <artifactId>springdoc-openapi-webmvc-core</artifactId>
-            <version>1.6.14</version>
-        </dependency>
-        <dependency>
-            <groupId>org.springdoc</groupId>
-            <artifactId>springdoc-openapi-security</artifactId>
-            <version>1.6.14</version>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.0.2</version>
         </dependency>
 
         <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
             <artifactId>kotlin-stdlib</artifactId>
             <version>${kotlin.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.fasterxml.jackson.module</groupId>
+            <artifactId>jackson-module-kotlin</artifactId>
+            <version>2.14.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
 
         <dependency>
@@ -129,7 +129,7 @@
                         </goals>
                         <configuration>
                             <sources>
-                                <source>target/generated-sources/java</source>
+                                <source>target/generated-sources</source>
                             </sources>
                         </configuration>
                     </execution>
@@ -145,19 +145,24 @@
                             <goal>generate</goal>
                         </goals>
                         <configuration>
-                            <basePackageName>io.github.potjerodekool.authserver</basePackageName>
+                            <basePackageName>io.github.potjerodekool.petstore</basePackageName>
                             <language>java</language>
+                            <features>
+                                <model.generate.experialmental>true</model.generate.experialmental>
+                            </features>
                             <apis>
                                 <api>
                                     <openApiFile>petstore/petstore.yaml</openApiFile>
-                                    <basePackageName>io.github.potjerodekool.authserver</basePackageName>
+                                    <basePackageName>io.github.potjerodekool.petstore.api</basePackageName>
                                     <generateApiDefinitions>true</generateApiDefinitions>
                                 </api>
+                                <!--
                                 <api>
                                     <openApiFile>external/api.json</openApiFile>
                                     <basePackageName>io.github.petstore</basePackageName>
                                     <generateApiDefinitions>true</generateApiDefinitions>
                                 </api>
+                                -->
                             </apis>
 
                             <!--
@@ -188,7 +193,7 @@
                         <configuration>
                             <sourceDirs>
                                 <sourceDir>${project.basedir}/src/main/kotlin</sourceDir>
-                                <sourceDir>${project.basedir}/target/generated-sources/java</sourceDir>
+                                <sourceDir>${project.basedir}/target/generated-sources</sourceDir>
                                 <sourceDir>${project.basedir}/src/main/java</sourceDir>
                             </sourceDirs>
                         </configuration>

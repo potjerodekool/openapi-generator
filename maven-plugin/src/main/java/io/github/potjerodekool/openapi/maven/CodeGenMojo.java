@@ -1,5 +1,6 @@
 package io.github.potjerodekool.openapi.maven;
 
+import io.github.potjerodekool.codegen.Language;
 import io.github.potjerodekool.openapi.*;
 import io.github.potjerodekool.openapi.log.Logger;
 import io.github.potjerodekool.openapi.log.LoggerFactory;
@@ -11,6 +12,7 @@ import java.io.File;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Mojo(
         name = "generate",
@@ -30,6 +32,9 @@ public class CodeGenMojo extends AbstractMojo {
 
     @Parameter(property = "checker")
     private Boolean checker;
+
+    @Parameter(property = "features")
+    private Map<String, Boolean> features;
 
     @Parameter(property = "language")
     private String language;
@@ -79,6 +84,8 @@ public class CodeGenMojo extends AbstractMojo {
         if (checker != null) {
             features.put(Features.FEATURE_CHECKER, checker);
         }
+
+        features.putAll(this.features);
 
         new Generator().generate(
                 project,

@@ -67,22 +67,6 @@ public class ClassPathScanner {
             //Ignore exceptions
         }
 
-        /*
-        try (final ZipInputStream inputStream = new ZipInputStream(location.openStream())) {
-            final var stream = StreamSupport.stream(new ZipSpliterator(inputStream), false);
-
-            stream.forEach(bytes -> {
-                final var beanDefinition = read(bytes);
-
-                if (beanDefinition != null) {
-                    beanDefinitions.add(beanDefinition);
-                }
-            });
-        } catch (final IOException e) {
-            throw new RuntimeException(e);
-        }
-        */
-
         return beanDefinitions;
     }
 

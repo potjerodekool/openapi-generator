@@ -1,15 +1,18 @@
 package io.github.potjerodekool.openapi;
 
+import io.github.potjerodekool.codegen.Language;
 import io.github.potjerodekool.openapi.dependency.Artifact;
 import io.github.potjerodekool.openapi.dependency.Dependency;
 import io.github.potjerodekool.openapi.dependency.DependencyChecker;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Set;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.util.*;
 import java.util.stream.Stream;
 
 class OpenApiParserHelperIT {
@@ -19,10 +22,13 @@ class OpenApiParserHelperIT {
             new Dependency("org.checkerframework", "checker-qual")
     );
 
+    private final File generatedSourcesDir = new File("target/generated-sources");
+
     @AfterEach
     void tearDown() {
-        emptyDir(new File("target/generated-sources"));
+        emptyDir(generatedSourcesDir);
     }
+
     private void emptyDir(final File dir) {
         final var files = dir.listFiles();
 
@@ -36,6 +42,7 @@ class OpenApiParserHelperIT {
         }
     }
 
+    @Disabled("resolve classpath")
     @Test
     void merge() {
         //final var apiFile = new File("../demo/petstore/petstore.yaml");
@@ -54,14 +61,16 @@ class OpenApiParserHelperIT {
         final var project = new Project(
                 new File("").toPath(),
                 List.of(),
-                List.of(),
+                List.of(generatedSourcesDir.toPath()),
                 new File("").toPath(),
                 dependencyChecker());
 
         new Generator().generate(
                 project,
                 List.of(apiConfiguration),
-                new HashMap<>(),
+                Map.of(
+                        Features.FEATURE_JAKARTA, true
+                ),
                 "org.some",
                 Language.JAVA
         );
@@ -82,7 +91,23 @@ class OpenApiParserHelperIT {
 
             @Override
             public Stream<Artifact> getProjectArtifacts() {
-                return Stream.empty();
+                final var classPath = System.getProperty("java.class.path")
+                        .split(File.pathSeparator);
+
+                final List<Artifact> artifacts = new ArrayList<>();
+
+                for (String classPathElement : classPath) {
+                    final var file = new File(classPathElement);
+                    final var artifact = new Artifact(
+                            "",
+                            "",
+                            file,
+                            "",
+                            ""
+                    );
+                    artifacts.add(artifact);
+                }
+                return artifacts.stream();
             }
 
         };

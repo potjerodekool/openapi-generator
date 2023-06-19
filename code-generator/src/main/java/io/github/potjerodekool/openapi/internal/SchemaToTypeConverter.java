@@ -1,13 +1,16 @@
 package io.github.potjerodekool.openapi.internal;
 
-import io.github.potjerodekool.openapi.internal.util.QualifiedName;
+import com.reprezen.jsonoverlay.Reference;
+import com.reprezen.kaizen.oasparser.model3.Schema;
+import com.reprezen.kaizen.oasparser.ovl3.SchemaImpl;
+import io.github.potjerodekool.codegen.model.util.StringUtils;
+import io.github.potjerodekool.openapi.ApiConfiguration;
+import io.github.potjerodekool.openapi.internal.util.GenerateException;
+import io.github.potjerodekool.openapi.internal.util.Utils;
 import io.github.potjerodekool.openapi.tree.Constraints;
 import io.github.potjerodekool.openapi.tree.Digits;
 import io.github.potjerodekool.openapi.tree.OpenApiProperty;
 import io.github.potjerodekool.openapi.tree.Package;
-import io.github.potjerodekool.openapi.internal.util.Utils;
-import com.reprezen.kaizen.oasparser.model3.Schema;
-import com.reprezen.kaizen.oasparser.ovl3.SchemaImpl;
 import io.github.potjerodekool.openapi.type.*;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -21,10 +24,15 @@ import java.util.Map;
  */
 public class SchemaToTypeConverter {
 
-    private final TypeNameResolver typeNameResolver;
+    private static final String SCHEMAS = "schemas";
+    private static final String SCHEMAS_SLASH = "schemas/";
 
-    public SchemaToTypeConverter(final TypeNameResolver typeNameResolver) {
-        this.typeNameResolver = typeNameResolver;
+    private final @Nullable File schemaDir;
+    private final String modelPackageName;
+
+    public SchemaToTypeConverter(final ApiConfiguration apiConfiguration) {
+        this.schemaDir = apiConfiguration.schemasDir();
+        this.modelPackageName = apiConfiguration.modelPackageName();
     }
 
     private File resolveDirOfSchema(final Schema schema,
@@ -80,18 +88,19 @@ public class SchemaToTypeConverter {
             final var propertyType = build(propertySchema, dir, requestContext, openApiContext.child(propertySchema));
 
             final var constraints = new Constraints();
-            constraints.minimum(schema.getMinimum());
-            constraints.exclusiveMinimum(schema.getExclusiveMinimum());
-            constraints.maximum(schema.getMaximum());
-            constraints.exclusiveMaximum(schema.getExclusiveMaximum());
-            constraints.minLength(schema.getMinLength());
-            constraints.maxLength(schema.getMaxLength());
-            constraints.pattern(schema.getPattern());
-            constraints.minItems(schema.getMinItems());
-            constraints.maxItems(schema.getMinItems());
-            constraints.uniqueItems(schema.getUniqueItems());
-            constraints.enums(schema.getEnums());
+            constraints.minimum(propertySchema.getMinimum());
+            constraints.exclusiveMinimum(propertySchema.getExclusiveMinimum());
+            constraints.maximum(propertySchema.getMaximum());
+            constraints.exclusiveMaximum(propertySchema.getExclusiveMaximum());
+            constraints.minLength(propertySchema.getMinLength());
+            constraints.maxLength(propertySchema.getMaxLength());
+            constraints.pattern(propertySchema.getPattern());
+            constraints.minItems(propertySchema.getMinItems());
+            constraints.maxItems(propertySchema.getMinItems());
+            constraints.uniqueItems(propertySchema.getUniqueItems());
+            constraints.enums(propertySchema.getEnums());
 
+            //TODO remove. Should use extensions.
             propertySchema.getExtensions().forEach( (k, value) -> {
                 if (k.startsWith("x-")) {
                     final var name = k.substring(2);
@@ -110,6 +119,8 @@ public class SchemaToTypeConverter {
                     }
                 }
             });
+
+            constraints.extensions(propertySchema.getExtensions());
 
             properties.put(propertyName, new OpenApiProperty(
                     propertyType,
@@ -149,8 +160,7 @@ public class SchemaToTypeConverter {
         return switch (type) {
             case "object" -> postProcessType(
                     schema,
-                    new OpenApiObjectType("object", properties, openApiAdditionalProperties),
-                    requestContext
+                    new OpenApiObjectType( "object", properties, openApiAdditionalProperties)
             );
             case "array" -> {
                 final var items = build(schema.getItemsSchema(), dir, requestContext, openApiContext.child(schema.getItemsSchema()));
@@ -171,8 +181,7 @@ public class SchemaToTypeConverter {
     }
 
     private OpenApiType postProcessType(final Schema schema,
-                                        final OpenApiType type,
-                                        final RequestContext requestContext) {
+                                        final OpenApiType type) {
         if (type instanceof OpenApiObjectType ot) {
             final var schemaImp = (SchemaImpl) schema;
 
@@ -183,22 +192,95 @@ public class SchemaToTypeConverter {
             }
 
             final var refString = creatingRef.getNormalizedRef();
-            typeNameResolver.validateRefString(refString);
+            validateRefString(refString);
 
-            final QualifiedName qualifiedName = typeNameResolver.createTypeName(creatingRef, requestContext);
-            final var packageNameValue = (String) schema.getExtension("x-package-name");
-            final Package pck;
+            final var resolvePackage = resolvePackage(creatingRef, schema);
 
-            if (packageNameValue != null && packageNameValue.length() > 0) {
-                pck = new Package(packageNameValue);
+            final String name;
+
+            if (refString.contains("#/components/schemas/")) {
+                final var nameStart = refString.lastIndexOf("/") + 1;
+                name = refString.substring(nameStart);
             } else {
-                final String packageName = qualifiedName.packageName();
-                pck = packageName.isEmpty() ? Package.UNNAMED : new Package(packageName);
+                name = null;
             }
-
-            return ot.withPackage(pck).withName(qualifiedName.simpleName());
+            return ot.withPackage(resolvePackage)
+                    .withName(name);
         } else {
             return type;
+        }
+    }
+
+    public void validateRefString(final String refString) {
+        if (!refString.contains("#/components/schemas")) {
+            if (schemaDir == null) {
+                throw new NullPointerException("schemaDir is null");
+            }
+            final var absoluteSchemaUri = Utils.toUriString(schemaDir);
+            if (!refString.startsWith(absoluteSchemaUri)) {
+                throw new GenerateException(refString + " doesn't start with " + absoluteSchemaUri);
+            }
+        }
+    }
+
+    private Package resolvePackage(final Reference creatingRef, final Schema schema) {
+        final var packageNameValue = (String) schema.getExtension("x-package-name");
+
+        final Package pck;
+
+        if (StringUtils.hasLength(packageNameValue)) {
+            pck = new Package(packageNameValue);
+        } else {
+            final var normalizedRef = creatingRef.getNormalizedRef();
+            final var resolvedPackageName = normalizedRef.contains("#/components/schemas/")
+                ? createTypeNameForInternalModel()
+                : createTypeNameForExternalModel(creatingRef);
+            pck = resolvedPackageName.isEmpty() ? Package.UNNAMED : new Package(resolvedPackageName);
+        }
+        return pck;
+    }
+
+    private String createTypeNameForInternalModel() {
+        return modelPackageName != null
+                ? modelPackageName
+                : "";
+    }
+
+    private String createTypeNameForExternalModel(final Reference creatingRef) {
+        if (schemaDir == null) {
+            return "";
+        }
+
+        final var refString = creatingRef.getNormalizedRef();
+        final var absoluteSchemaUri = Utils.toUriString(schemaDir);
+
+        if (!refString.startsWith(absoluteSchemaUri)) {
+            throw new GenerateException(refString + " doesn't start with " + absoluteSchemaUri);
+        }
+
+        final var path = refString.substring(absoluteSchemaUri.length());
+
+        final var qualifiedName = refString.substring(absoluteSchemaUri.length());
+        final var packageSepIndex = qualifiedName.lastIndexOf('/');
+
+        final String packageName;
+
+        if (packageSepIndex > 0) {
+            packageName = removeSchemasPart(path.substring(0, packageSepIndex)).replace('/', '.');
+        } else {
+            packageName = "";
+        }
+
+        return packageName;
+    }
+
+    protected String removeSchemasPart(final String value) {
+        if (value.startsWith(SCHEMAS)) {
+            return value.substring(SCHEMAS.length());
+        } else if (value.startsWith(SCHEMAS_SLASH)) {
+            return value.substring(SCHEMAS_SLASH.length());
+        } else {
+            return value;
         }
     }
 }

@@ -6,17 +6,7 @@ import org.springframework.security.core.GrantedAuthority;
 import java.util.Collection;
 import java.util.List;
 
-public class JwtUser implements Authentication {
-
-    private final String bearerToken;
-
-    public JwtUser(final String bearerToken) {
-        this.bearerToken = bearerToken;
-    }
-
-    public String getBearerToken() {
-        return bearerToken;
-    }
+public record JwtUser(String bearerToken) implements Authentication {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {

@@ -1,9 +1,9 @@
 package io.github.potjerodekool.demo.service;
 
-import io.github.petstore.model.PetPatchRequestDto;
-import io.github.petstore.model.PetRequestDto;
 import io.github.potjerodekool.demo.model.Pet;
 import io.github.potjerodekool.demo.model.ResourceWithMediaType;
+import io.github.potjerodekool.petstore.api.model.PatchPetDto;
+import io.github.potjerodekool.petstore.api.model.PetDto;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 
@@ -18,7 +18,7 @@ public class PetService {
 
     private final Map<Long, Pet> pets = new HashMap<>();
 
-    public Long createPet(final PetRequestDto petRequestDto) {
+    public Long createPet(final PetDto petRequestDto) {
         final var pet = new Pet();
         final long id = pets.size() + 1;
         pet.setId(id);
@@ -27,7 +27,7 @@ public class PetService {
         return id;
     }
 
-    private void copyValues(final PetRequestDto petRequestDto,
+    private void copyValues(final PetDto petRequestDto,
                             final Pet pet) {
         pet.setName(petRequestDto.getName());
         pet.setTag(petRequestDto.getTag());
@@ -48,7 +48,7 @@ public class PetService {
     }
 
     public CrudOperationResult updatePet(final long petId,
-                                         final PetRequestDto petRequestDto) {
+                                         final PetDto petRequestDto) {
         final var pet = pets.get(petId);
 
         if (pet == null) {
@@ -60,7 +60,7 @@ public class PetService {
     }
 
     public CrudOperationResult patchPet(final long petId,
-                                        final PetPatchRequestDto petPatchRequestDto) {
+                                        final PatchPetDto petPatchRequestDto) {
         final var pet = pets.get(petId);
 
         if (pet == null) {

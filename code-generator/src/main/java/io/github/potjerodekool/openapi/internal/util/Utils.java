@@ -4,20 +4,17 @@ import com.reprezen.jsonoverlay.JsonOverlay;
 import com.reprezen.kaizen.oasparser.model3.Parameter;
 import com.reprezen.kaizen.oasparser.model3.Schema;
 import com.reprezen.kaizen.oasparser.ovl3.SchemaImpl;
+import io.github.potjerodekool.codegen.model.element.Name;
+import io.github.potjerodekool.codegen.model.util.QualifiedName;
 import io.github.potjerodekool.openapi.internal.OpenApiContext;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.function.Function;
 
 public final class Utils {
 
     private Utils() {
-    }
-
-    public static boolean isEmpty(final String value) {
-        return value == null || value.isEmpty();
     }
 
     public static @Nullable String getCreateRef(final Schema schema) {
@@ -62,39 +59,18 @@ public final class Utils {
         }
     }
 
-    public static String firstUpper(final String value) {
-        return replaceFirst(value, Character::toUpperCase);
-    }
-
-    public static String firstLower(final String value) {
-        return replaceFirst(value, Character::toLowerCase);
-    }
-
-    private static String replaceFirst(final String value,
-                                       final Function<Character, Character> replaceFunction) {
-        if (value.length() < 1) {
-            return value;
-        } else {
-            final var first = replaceFunction.apply(value.charAt(0));
-
-            return value.length() == 1
-                    ? Character.toString(first)
-                    : first + value.substring(1);
-        }
-    }
-
     public static QualifiedName resolveQualified(final String path) {
         final var packageSepIndex = path.lastIndexOf('/');
 
         if (packageSepIndex < 0) {
             final var nameSep = path.lastIndexOf('.');
             final var name = nameSep > 0 ? path.substring(0, nameSep) : path;
-            return new QualifiedName("", name);
+            return new QualifiedName(Name.of(""), Name.of(name));
         } else {
             final var packageName = path.substring(0, packageSepIndex).replace('/', '.');
             final var nameSep = path.lastIndexOf('.');
             final var name = nameSep > 0 ? path.substring(packageSepIndex + 1, nameSep) : path.substring(packageSepIndex + 1);
-            return new QualifiedName(packageName, name);
+            return new QualifiedName(Name.of(packageName), Name.of(name));
         }
     }
 

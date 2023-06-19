@@ -1,11 +1,13 @@
 package io.github.potjerodekool.openapi;
 
-import io.github.potjerodekool.openapi.internal.FileManager;
-import io.github.potjerodekool.openapi.internal.FileObject;
-import io.github.potjerodekool.openapi.internal.Location;
+import io.github.potjerodekool.codegen.io.FileManager;
+import io.github.potjerodekool.codegen.io.FileObject;
+import io.github.potjerodekool.codegen.io.Location;
 
 import java.io.*;
+import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class InMemoryFileManager implements FileManager {
@@ -34,6 +36,11 @@ public class InMemoryFileManager implements FileManager {
         );
         subMap.put(fileName, fileObject);
         return fileObject;
+    }
+
+    @Override
+    public void setPathsForLocation(final Location location,
+                                    final List<Path> list) {
     }
 
     private FileObject.Kind resolveKind(final String fileName) {

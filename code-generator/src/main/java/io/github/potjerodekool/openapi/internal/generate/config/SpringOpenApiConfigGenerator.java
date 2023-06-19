@@ -1,13 +1,15 @@
 package io.github.potjerodekool.openapi.internal.generate.config;
 
+import io.github.potjerodekool.codegen.Environment;
+import io.github.potjerodekool.codegen.model.element.Modifier;
+import io.github.potjerodekool.codegen.model.symbol.AbstractSymbol;
+import io.github.potjerodekool.codegen.model.symbol.ClassSymbol;
+import io.github.potjerodekool.codegen.model.tree.expression.*;
+import io.github.potjerodekool.codegen.model.tree.statement.BlockStatement;
+import io.github.potjerodekool.codegen.model.tree.statement.ReturnStatement;
+import io.github.potjerodekool.codegen.model.type.AbstractType;
+import io.github.potjerodekool.codegen.model.type.DeclaredType;
 import io.github.potjerodekool.openapi.GeneratorConfig;
-import io.github.potjerodekool.openapi.internal.Filer;
-import io.github.potjerodekool.openapi.internal.ast.Modifier;
-import io.github.potjerodekool.openapi.internal.ast.util.TypeUtils;
-import io.github.potjerodekool.openapi.internal.ast.element.TypeElement;
-import io.github.potjerodekool.openapi.internal.ast.expression.*;
-import io.github.potjerodekool.openapi.internal.ast.statement.BlockStatement;
-import io.github.potjerodekool.openapi.internal.ast.statement.ReturnStatement;
 import io.github.potjerodekool.openapi.tree.*;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -22,9 +24,8 @@ import java.util.Map;
 public class SpringOpenApiConfigGenerator extends AbstractSpringApiConfigGenerator {
 
     public SpringOpenApiConfigGenerator(final GeneratorConfig generatorConfig,
-                                        final TypeUtils typeUtils,
-                                        final Filer filer) {
-        super(generatorConfig, typeUtils, filer);
+                                        final Environment environment) {
+        super(generatorConfig, environment);
     }
 
     @Override
@@ -34,13 +35,15 @@ public class SpringOpenApiConfigGenerator extends AbstractSpringApiConfigGenerat
 
     @Override
     protected void fillClass(final OpenApi api,
-                             final TypeElement typeElement) {
-        final var openApiType = getTypeUtils().createDeclaredType("io.swagger.v3.oas.models.OpenAPI");
+                             final ClassSymbol typeElement) {
+        final var openApiType = (AbstractType) getTypes().getDeclaredType(
+                getElementUtils().getTypeElement("io.swagger.v3.oas.models.OpenAPI")
+        );
 
         final var method = typeElement.addMethod("api", openApiType, Modifier.PUBLIC);
-        method.addAnnotation("org.springframework.context.annotation.Bean");
+        method.addAnnotation((ClassSymbol) getElementUtils().getTypeElement("org.springframework.context.annotation.Bean"));
 
-        Expression openApiInstance = new NewClassExpression(openApiType);
+        Expression openApiInstance = new NewClassExpression((DeclaredType) openApiType);
 
         openApiInstance = new MethodCallExpression(openApiInstance, "info", List.of(createInfo(api)));
 
@@ -66,7 +69,7 @@ public class SpringOpenApiConfigGenerator extends AbstractSpringApiConfigGenerat
         final var apiInfo = api.info();
 
         Expression lastExpression = new NewClassExpression(
-                getTypeUtils().createDeclaredType("io.swagger.v3.oas.models.info.Info")
+                getTypes().getDeclaredType(getElementUtils().getTypeElement("io.swagger.v3.oas.models.info.Info"))
         );
 
         final var title = apiInfo.title();
@@ -132,7 +135,8 @@ public class SpringOpenApiConfigGenerator extends AbstractSpringApiConfigGenerat
         final var extensions = licence.extensions();
 
         Expression lastExpression = new NewClassExpression(
-                getTypeUtils().createDeclaredType("io.swagger.v3.oas.models.info.License")
+                getTypes().getDeclaredType(
+                        getElementUtils().getTypeElement("io.swagger.v3.oas.models.info.License"))
         );
 
         if (name != null) {
@@ -157,7 +161,9 @@ public class SpringOpenApiConfigGenerator extends AbstractSpringApiConfigGenerat
         final var extensions = contact.extensions();
 
         Expression lastExpression = new NewClassExpression(
-                getTypeUtils().createDeclaredType("io.swagger.v3.oas.models.info.Contact")
+                getTypes().getDeclaredType(
+                        getElementUtils().getTypeElement("io.swagger.v3.oas.models.info.Contact")
+                )
         );
 
         if (name != null) {
@@ -216,7 +222,8 @@ public class SpringOpenApiConfigGenerator extends AbstractSpringApiConfigGenerat
         var created = false;
 
         Expression lastExpression = new NewClassExpression(
-                getTypeUtils().createDeclaredType("io.swagger.v3.oas.models.Components")
+                getTypes().getDeclaredType(
+                        getElementUtils().getTypeElement("io.swagger.v3.oas.models.Components"))
         );
 
         final var securitySchemas = openApi.securitySchemas();
@@ -241,11 +248,14 @@ public class SpringOpenApiConfigGenerator extends AbstractSpringApiConfigGenerat
         final var in = openApiSecurityScheme.in();
 
         Expression lastExpression = new NewClassExpression(
-                getTypeUtils().createDeclaredType("io.swagger.v3.oas.models.security.SecurityScheme")
+                getTypes().getDeclaredType(getElementUtils().getTypeElement("io.swagger.v3.oas.models.security.SecurityScheme"))
         );
         lastExpression = call(lastExpression, "name", LiteralExpression.createStringLiteralExpression(openApiSecurityScheme.name()));
+
+        final var securitySchemeType = (AbstractSymbol<?>) getElementUtils().getTypeElement("io.swagger.v3.oas.models.security.SecurityScheme$Type");
+
         lastExpression = call(lastExpression, "type", new FieldAccessExpression(
-                new NameExpression("io.swagger.v3.oas.models.security.SecurityScheme.Type"),
+                new NameExpression("io.swagger.v3.oas.models.security.SecurityScheme.Type", securitySchemeType),
                 type
         ));
         lastExpression = call(lastExpression, "scheme", LiteralExpression.createStringLiteralExpression(openApiSecurityScheme.schema()));
@@ -259,8 +269,10 @@ public class SpringOpenApiConfigGenerator extends AbstractSpringApiConfigGenerat
         }
 
         if (in != null) {
+            final var securitySchemaInElement = (AbstractSymbol<?>) getElementUtils().getTypeElement("io.swagger.v3.oas.models.security.SecurityScheme$In");
+
             lastExpression = call(lastExpression, "in", new FieldAccessExpression(
-                    new NameExpression("io.swagger.v3.oas.models.security.SecurityScheme.In"),
+                    new NameExpression("io.swagger.v3.oas.models.security.SecurityScheme.In", securitySchemaInElement),
                     in.name()
             ));
         }
@@ -274,7 +286,7 @@ public class SpringOpenApiConfigGenerator extends AbstractSpringApiConfigGenerat
         final var securityParameter = requirements.get(name);
 
         Expression lastExpression = new NewClassExpression(
-                getTypeUtils().createDeclaredType("io.swagger.v3.oas.models.security.SecurityRequirement")
+                getTypes().getDeclaredType(getElementUtils().getTypeElement("io.swagger.v3.oas.models.security.SecurityRequirement"))
         );
 
         final List<Expression> parameters = securityParameter.parameters().stream()
@@ -285,6 +297,8 @@ public class SpringOpenApiConfigGenerator extends AbstractSpringApiConfigGenerat
         arguments.add(LiteralExpression.createStringLiteralExpression(name));
 
         if (parameters.size() > 0) {
+            final var listElement = (AbstractSymbol<?>) getElementUtils().getTypeElement("java.util.List");
+
             arguments.add(
                 new MethodCallExpression(
                         new NameExpression("java.util.List"),

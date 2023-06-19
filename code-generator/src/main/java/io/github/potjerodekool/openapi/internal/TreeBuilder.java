@@ -3,6 +3,7 @@ package io.github.potjerodekool.openapi.internal;
 import com.reprezen.kaizen.oasparser.model3.*;
 import com.reprezen.kaizen.oasparser.ovl3.PathImpl;
 import com.reprezen.kaizen.oasparser.ovl3.SchemaImpl;
+import io.github.potjerodekool.codegen.model.util.StringUtils;
 import io.github.potjerodekool.openapi.*;
 import io.github.potjerodekool.openapi.internal.util.GenerateException;
 import io.github.potjerodekool.openapi.internal.util.Utils;
@@ -26,7 +27,7 @@ public class TreeBuilder {
 
     public TreeBuilder(final ApiConfiguration apiConfiguration) {
         this.schemaDir = apiConfiguration.schemasDir();
-        this.schemaToTypeConverter = new SchemaToTypeConverter(new GeneralTypeNameResolver(apiConfiguration));
+        this.schemaToTypeConverter = new SchemaToTypeConverter(apiConfiguration);
     }
 
     public OpenApi build(final OpenApi3 openApi,
@@ -38,11 +39,14 @@ public class TreeBuilder {
                 .map(entry -> processPath(entry.getKey(), entry.getValue(), rootDir))
                 .toList();
 
+        final var schemas = processSchemas(openApi.getSchemas(), rootDir);
+
         return new OpenApi(
                 createInfo(openApi.getInfo()),
                 paths,
                 securitySchemas,
-                securityRequirements
+                securityRequirements,
+                schemas
         );
     }
 
@@ -79,6 +83,29 @@ public class TreeBuilder {
                 .collect(Collectors.toMap(
                         Map.Entry::getKey,
                         Map.Entry::getValue
+                ));
+    }
+
+    private Map<String, OpenApiType> processSchemas(final Map<String, Schema> schemas,
+                                                    final File rootDir) {
+
+        return schemas.entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        schemaEntry -> {
+                            final var schema = schemaEntry.getValue();
+                            final var schemaContext = new SchemaContext(schema, null);
+
+                            return schemaToTypeConverter.build(
+                                    schema,
+                                    rootDir,
+                                    new RequestContext(
+                                            HttpMethod.GET,
+                                            RequestCycleLocation.REQUEST
+                                    ),
+                                    schemaContext
+                            );
+                        }
                 ));
     }
 
@@ -176,7 +203,8 @@ public class TreeBuilder {
     private OpenApiParameter processParameter(final HttpMethod httpMethod,
                                               final String pathStr,
                                               final Parameter parameter,
-                                              final File rootDir, final OpenApiContext openApiContext) {
+                                              final File rootDir,
+                                              final OpenApiContext openApiContext) {
 
         var parameterType = processSchema(
                 parameter.getSchema(),
@@ -219,7 +247,7 @@ public class TreeBuilder {
 
             final String value = Arrays.stream(pathString.split("/"))
                     .filter(it -> !it.isEmpty())
-                    .map(Utils::firstUpper)
+                    .map(StringUtils::firstUpper)
                     .collect(Collectors.joining());
             return prefix + value;
         } else {

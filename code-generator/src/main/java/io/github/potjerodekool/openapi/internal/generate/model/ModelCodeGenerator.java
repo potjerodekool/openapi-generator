@@ -1,404 +1,430 @@
 package io.github.potjerodekool.openapi.internal.generate.model;
 
-import io.github.potjerodekool.openapi.HttpMethod;
-import io.github.potjerodekool.openapi.Language;
-import io.github.potjerodekool.openapi.RequestCycleLocation;
-import io.github.potjerodekool.openapi.internal.Filer;
-import io.github.potjerodekool.openapi.internal.ast.Attribute;
-import io.github.potjerodekool.openapi.internal.ast.CompilationUnit;
-import io.github.potjerodekool.openapi.internal.ast.Modifier;
-import io.github.potjerodekool.openapi.internal.ast.Operator;
-import io.github.potjerodekool.openapi.internal.ast.element.*;
-import io.github.potjerodekool.openapi.internal.ast.expression.*;
-import io.github.potjerodekool.openapi.internal.ast.statement.BlockStatement;
-import io.github.potjerodekool.openapi.internal.ast.statement.ReturnStatement;
-import io.github.potjerodekool.openapi.internal.ast.type.*;
-import io.github.potjerodekool.openapi.internal.ast.type.java.WildcardType;
-import io.github.potjerodekool.openapi.internal.ast.util.TypeUtils;
+import io.github.potjerodekool.codegen.Environment;
+import io.github.potjerodekool.codegen.Language;
+import io.github.potjerodekool.codegen.io.Filer;
+import io.github.potjerodekool.codegen.model.CompilationUnit;
+import io.github.potjerodekool.codegen.model.element.ElementKind;
+import io.github.potjerodekool.codegen.model.element.Modifier;
+import io.github.potjerodekool.codegen.model.element.Name;
+import io.github.potjerodekool.codegen.model.symbol.MethodSymbol;
+import io.github.potjerodekool.codegen.model.symbol.VariableSymbol;
+import io.github.potjerodekool.codegen.model.tree.AnnotationExpression;
+import io.github.potjerodekool.codegen.model.tree.PackageDeclaration;
+import io.github.potjerodekool.codegen.model.tree.expression.*;
+import io.github.potjerodekool.codegen.model.tree.statement.BlockStatement;
+import io.github.potjerodekool.codegen.model.tree.statement.ClassDeclaration;
+import io.github.potjerodekool.codegen.model.tree.statement.ReturnStatement;
+import io.github.potjerodekool.codegen.model.tree.statement.VariableDeclaration;
+import io.github.potjerodekool.codegen.model.tree.type.ParameterizedType;
+import io.github.potjerodekool.codegen.model.tree.type.PrimitiveTypeExpression;
+import io.github.potjerodekool.codegen.model.tree.type.TypeExpression;
+import io.github.potjerodekool.codegen.model.tree.type.WildCardTypeExpression;
+import io.github.potjerodekool.codegen.model.type.ArrayType;
+import io.github.potjerodekool.codegen.model.type.PrimitiveType;
+import io.github.potjerodekool.codegen.model.type.TypeKind;
+import io.github.potjerodekool.codegen.model.util.Elements;
+import io.github.potjerodekool.codegen.model.util.StringUtils;
+import io.github.potjerodekool.codegen.model.util.SymbolTable;
+import io.github.potjerodekool.openapi.generate.model.ModelAdapter;
 import io.github.potjerodekool.openapi.internal.di.ApplicationContext;
+import io.github.potjerodekool.openapi.internal.generate.BasicResolver;
+import io.github.potjerodekool.openapi.internal.generate.FullResolver;
+import io.github.potjerodekool.openapi.internal.generate.annotation.openapi.media.ArraySchemaAnnotationBuilder;
+import io.github.potjerodekool.openapi.internal.generate.annotation.openapi.media.SchemaAnnotationBuilder;
+import io.github.potjerodekool.openapi.internal.type.OpenApiTypeUtils;
 import io.github.potjerodekool.openapi.internal.util.GenerateException;
-import io.github.potjerodekool.openapi.internal.util.Utils;
-import io.github.potjerodekool.openapi.tree.*;
+import io.github.potjerodekool.openapi.internal.util.TypeUtils;
+import io.github.potjerodekool.openapi.log.LogLevel;
+import io.github.potjerodekool.openapi.log.Logger;
+import io.github.potjerodekool.openapi.tree.OpenApiProperty;
 import io.github.potjerodekool.openapi.type.OpenApiArrayType;
 import io.github.potjerodekool.openapi.type.OpenApiObjectType;
-import io.github.potjerodekool.openapi.type.OpenApiType;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import javax.lang.model.type.TypeKind;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
+import java.util.List;
+import java.util.Set;
 
 public class ModelCodeGenerator {
 
+    private static final Logger LOGGER = Logger.getLogger(ModelCodeGenerator.class.getName());
     private static final String JSON_NULLABLE_CLASS_NAME = "org.openapitools.jackson.nullable.JsonNullable";
 
+    private final OpenApiTypeUtils openApiTypeUtils;
     private final TypeUtils typeUtils;
-
+    private final SymbolTable symbolTable;
     private final Filer filer;
+    private final Elements elements;
     private final Language language;
+    private final ModelAdapter modelAdapter;
 
-    private final CombinedModelAdapter modelAdapter;
+    private final BasicResolver basicResolver;
+    private final FullResolver fullResolver;
 
-    public ModelCodeGenerator(final Filer filer,
-                              final TypeUtils typeUtils,
-                              final ApplicationContext applicationContext,
-                              final Language language) {
-        this.filer = filer;
+    public ModelCodeGenerator(final TypeUtils typeUtils,
+                               final OpenApiTypeUtils openApiTypeUtils,
+                               final Environment environment,
+                               final Language language,
+                               final ApplicationContext applicationContext) {
+        this.openApiTypeUtils = openApiTypeUtils;
         this.typeUtils = typeUtils;
+        this.symbolTable = environment.getSymbolTable();
+        final var types = environment.getTypes();
+        this.filer = environment.getFiler();
+        this.elements = environment.getElementUtils();
         this.language = language;
         this.modelAdapter = new CombinedModelAdapter(applicationContext);
+        this.basicResolver = new BasicResolver(elements, types, environment.getSymbolTable());
+        this.fullResolver = new FullResolver(elements, types);
     }
 
-    public void generate(final OpenApi api) {
-        api.paths().forEach(this::processPath);
+
+    public void generateSchemaModel(final String schemaName,
+                                    final OpenApiObjectType schema,
+                                    final boolean isPatchModel) {
+        final var cu = new CompilationUnit(Language.JAVA);
+        final var pck = schema.pck();
+
+        final var packageDeclaration = new PackageDeclaration(new NameExpression(pck.getName()));
+        final var packageSymbol = symbolTable.findOrCreatePackageSymbol(Name.of(pck.getName()));
+
+        packageDeclaration.setPackageSymbol(packageSymbol);
+        cu.add(packageDeclaration);
+        cu.setPackageElement(packageSymbol);
+
+        final var classDeclaration = new ClassDeclaration(
+                Name.of(schemaName),
+                ElementKind.CLASS,
+                Set.of(),
+                List.of()
+        );
+
+        cu.add(classDeclaration);
+        classDeclaration.addModifier(Modifier.PUBLIC);
+        classDeclaration.setEnclosing(packageDeclaration);
+
+        addFields(schema, classDeclaration, isPatchModel);
+        addConstructors(schema, classDeclaration, isPatchModel);
+        generateAccessors(schema, classDeclaration, isPatchModel);
+
+        classDeclaration.accept(basicResolver, null);
+        classDeclaration.accept(fullResolver, null);
+
+        symbolTable.addClass(classDeclaration.getClassSymbol());
+
+        try {
+            filer.writeSource(cu, this.language);
+        } catch (final IOException e) {
+            LOGGER.log(LogLevel.SEVERE, String.format("Failed to write code for schema %s", schemaName), e);
+        }
     }
 
-    private void processPath(final OpenApiPath path) {
-        processOperation(HttpMethod.POST, path.post());
-        processOperation(HttpMethod.GET, path.get());
-        processOperation(HttpMethod.PUT, path.put());
-        processOperation(HttpMethod.PATCH, path.patch());
-    }
+    private void addConstructors(final OpenApiObjectType schema,
+                                 final ClassDeclaration classDeclaration,
+                                 final boolean isPatchModel) {
+        final var generatedDefaultConstructor = !schema.properties().values().stream()
+                .allMatch(OpenApiProperty::required);
 
-    private void processOperation(final HttpMethod httpMethod,
-                                  final @Nullable OpenApiOperation operation) {
-        if (operation == null) {
+        if (generatedDefaultConstructor) {
+            final var defaultConstructor = classDeclaration.addConstructor(Set.of(Modifier.PUBLIC));
+            final var constructorSymbol = MethodSymbol.createConstructor(
+                    classDeclaration.getSimpleName()
+            );
+            constructorSymbol.addModifier(Modifier.PUBLIC);
+
+            defaultConstructor.setMethodSymbol(constructorSymbol);
+
+            defaultConstructor.setBody(new BlockStatement());
+            modelAdapter.adaptConstructor(defaultConstructor);
+        }
+
+        if (isPatchModel) {
             return;
         }
 
-        processRequestBody(httpMethod, operation.requestBody());
-        operation.responses().values()
-                        .forEach(response -> processResponse(httpMethod, response));
-    }
-
-    private void processRequestBody(final HttpMethod httpMethod,
-                                    final @Nullable OpenApiRequestBody requestBody) {
-        if (requestBody == null) {
-            return;
-        }
-
-        requestBody.contentMediaType().values()
-                .forEach(content -> processMediaType(httpMethod, content.schema(), RequestCycleLocation.REQUEST));
-    }
-
-
-    private void processResponse(final HttpMethod httpMethod,
-                                 final @Nullable OpenApiResponse openApiResponse) {
-        if (openApiResponse == null) {
-            return;
-        }
-
-        openApiResponse.contentMediaType().values()
-                .forEach(content -> processMediaType(httpMethod, content.schema(), RequestCycleLocation.RESPONSE));
-    }
-
-    private void processMediaType(final HttpMethod httpMethod,
-                                  final OpenApiType type,
-                                  final RequestCycleLocation requestCycleLocation) {
-        if (type instanceof OpenApiObjectType ot) {
-            final var pck = ot.pck();
-            final var typeName = ot.name();
-
-            ot.properties().values().stream()
-                    .map(OpenApiProperty::type)
-                    .forEach(propertyType -> processMediaType(httpMethod, propertyType, requestCycleLocation));
-
-            final var additionalProperty = ot.additionalProperties();
-
-            if (additionalProperty != null) {
-                processMediaType(httpMethod, additionalProperty.type(), requestCycleLocation);
-            }
-
-            if ("object".equals(typeName) && pck.isUnnamed()) {
-                //Don't generate object
-                return;
-            }
-
-            final var name = Utils.firstUpper(typeName);
-
-            final var cu = new CompilationUnit(Language.JAVA);
-
-            cu.setPackageElement(PackageElement.create(pck.getName()));
-
-            final var typeElement = cu.addClass(name).addModifier(Modifier.PUBLIC);
-
-            ot.properties().entrySet().stream()
-                    .filter(entry -> propertyFilter(entry.getValue(), requestCycleLocation))
-                    .forEach(entry -> addField(entry.getKey(), entry.getValue(), typeElement, httpMethod, requestCycleLocation));
-
-            var constructor = generateConstructor(ot, typeElement, httpMethod, requestCycleLocation, false);
-
-            if (shouldGenerateAllArgConstructor(ot, requestCycleLocation, typeElement)) {
-                constructor = generateConstructor(ot, typeElement, httpMethod, requestCycleLocation, true);
-            }
-
-            constructor.addAnnotation("com.fasterxml.jackson.annotation.JsonCreator");
-
-            ot.properties().entrySet().stream()
-                    .filter(it -> this.propertyFilter(it.getValue(), requestCycleLocation))
-                            .forEach(entry -> {
-                                final var propertyName = entry.getKey();
-                                final var property = entry.getValue();
-
-                                addGetter(propertyName, property, typeElement, httpMethod, requestCycleLocation);
-
-                                if (!hasFinalField(typeElement, propertyName)) {
-                                    addSetter(propertyName, property, typeElement, false, httpMethod, requestCycleLocation);
-                                    addSetter(propertyName, property, typeElement, true, httpMethod, requestCycleLocation);
-                                }
-                            });
-
-            try {
-                filer.writeSource(cu, language);
-            } catch (final IOException e) {
-                throw new GenerateException(e);
-            }
-        } else if (type instanceof OpenApiArrayType at) {
-            processMediaType(httpMethod, at.items(), requestCycleLocation);
-        }
-    }
-
-    private boolean propertyFilter(final OpenApiProperty property,
-                                   final RequestCycleLocation requestCycleLocation) {
-        return Boolean.TRUE.equals(property.readOnly())
-                ? requestCycleLocation == RequestCycleLocation.RESPONSE
-                : !Boolean.TRUE.equals(property.writeOnly()) || requestCycleLocation == RequestCycleLocation.REQUEST;
-    }
-
-    private boolean constructorParameterFilter(final OpenApiProperty property,
-                                               final RequestCycleLocation requestCycleLocation,
-                                               final boolean allArg) {
-        if (requestCycleLocation == RequestCycleLocation.REQUEST) {
-            if (Boolean.TRUE.equals(property.readOnly())) {
-                return false;
-            }
-        }
-
-        return property.required() || allArg;
-    }
-
-    private boolean hasFinalField(final TypeElement typeElement,
-                                  final String propertyName) {
-        final var fieldOptional =
-                ElementFilter.fields(typeElement)
-                        .filter(field -> field.getSimpleName().equals(propertyName))
-                        .findFirst();
-
-        if (fieldOptional.isEmpty()) {
-            return false;
-        }
-
-        return fieldOptional.get().isFinal();
-    }
-
-    private boolean shouldGenerateAllArgConstructor(final OpenApiObjectType ot,
-                                                    final RequestCycleLocation requestCycleLocation,
-                                                    final TypeElement typeElement) {
-        final var allArgConstructorParameterCount = ot.properties().entrySet().stream()
-                .filter(it -> this.propertyFilter(it.getValue(), requestCycleLocation))
-                .count();
-
-        final var constructors = ElementFilter.constructors(typeElement).toList();
-
-        if (constructors.isEmpty()) {
-            return true;
-        }
+        final var requiredArgsConstructor = classDeclaration.addConstructor(Set.of(Modifier.PUBLIC));
+        final var constructorSymbol = MethodSymbol.createConstructor(classDeclaration.getSimpleName());
+        constructorSymbol.addModifier(Modifier.PUBLIC);
         
-        final var existingConstructor = constructors.get(0);
-        return existingConstructor.getParameters().size() < allArgConstructorParameterCount;
-    }
+        requiredArgsConstructor.setMethodSymbol(constructorSymbol);
 
-    private MethodElement generateConstructor(final OpenApiObjectType ot,
-                                              final TypeElement typeElement,
-                                              final HttpMethod httpMethod, RequestCycleLocation requestCycleLocation,
-                                              final boolean allArg) {
-        final var initPropertyNames = new HashSet<String>();
-
-        final var parameters = new ArrayList<VariableElement>();
-
-        ot.properties().entrySet().stream()
-                .filter(it -> this.constructorParameterFilter(it.getValue(), requestCycleLocation, allArg))
+        schema.properties().entrySet().stream()
+                .filter(entry -> entry.getValue().required())
                 .forEach(entry -> {
                     final var propertyName = entry.getKey();
                     final var property = entry.getValue();
-                    var paramType = typeUtils.createType(property.type());
+                    final var paramType = openApiTypeUtils.createTypeExpression(property.type());
 
-                    if (httpMethod == HttpMethod.PATCH && requestCycleLocation == RequestCycleLocation.REQUEST) {
-                        paramType = typeUtils.createDeclaredType(JSON_NULLABLE_CLASS_NAME)
-                                .withTypeArgument(paramType.asNullableType());
-                    }
-
-                    parameters.add(VariableElement.createParameter(propertyName, paramType)
-                            .addModifier(Modifier.FINAL)
+                    final var parameter = new VariableDeclaration(
+                            ElementKind.PARAMETER,
+                            Set.of(Modifier.FINAL),
+                            paramType,
+                            propertyName,
+                            null,
+                            null
                     );
-                    initPropertyNames.add(propertyName);
+
+                    final var parameterSymbol = VariableSymbol.createParameter(
+                            propertyName,
+                            null
+                    );
+
+                    requiredArgsConstructor.addParameter(parameter);
+                    parameter.setSymbol(parameterSymbol);
+
+                    constructorSymbol.addParameter(parameterSymbol);
                 });
 
         final var body = new BlockStatement();
 
-        ot.properties().entrySet().stream()
-                .filter(entry -> initPropertyNames.contains(entry.getKey()))
+        schema.properties().entrySet().stream()
+                .filter(entry -> entry.getValue().required())
                 .forEach(entry -> {
                     final var value = new NameExpression(entry.getKey());
 
                     body.add(new BinaryExpression(
-                                new FieldAccessExpression(
-                                        new NameExpression("this"),
-                                        entry.getKey()
-                                ),
-                                value,
-                                Operator.ASSIGN
-                        )
-                      );
+                                    new FieldAccessExpression(
+                                            new NameExpression("this"),
+                                            entry.getKey()
+                                    ),
+                                    value,
+                                    Operator.ASSIGN
+                            )
+                    );
                 });
 
+        requiredArgsConstructor.setBody(body);
+        modelAdapter.adaptConstructor(requiredArgsConstructor);
+    }
 
-        final var constructor = typeElement.addConstructor(Modifier.PUBLIC);
-        parameters.forEach(constructor::addParameter);
-
-        constructor.setBody(body);
-        modelAdapter.adaptConstructor(httpMethod, requestCycleLocation, constructor);
-        return constructor;
+    private void addFields(final OpenApiObjectType schema,
+                           final ClassDeclaration classDeclaration,
+                           final boolean isPatchModel) {
+        schema.properties().forEach((propertyName, property) ->
+                addField(propertyName,  property, classDeclaration, isPatchModel));
     }
 
     private void addField(final String propertyName,
                           final OpenApiProperty property,
-                          final TypeElement clazz,
-                          final HttpMethod httpMethod,
-                          final RequestCycleLocation requestCycleLocation) {
+                          final ClassDeclaration classDeclaration,
+                          final boolean isPatchModel) {
+        if (isPatchModel && Boolean.TRUE.equals(property.readOnly())) {
+            return;
+        }
+
         final var propertyType = property.type();
-        var fieldType = typeUtils.createType(propertyType);
+        var fieldType = openApiTypeUtils.createTypeExpression(propertyType);
 
-        final var isPatchRequest = httpMethod == HttpMethod.PATCH && requestCycleLocation == RequestCycleLocation.REQUEST;
+        fieldType.accept(this.basicResolver, null);
 
-        if (isPatchRequest) {
-            if (fieldType.isPrimitiveType()) {
-                fieldType = typeUtils.getBoxedType(fieldType);
+        var fieldTypeMirror = fieldType.getType();
+
+        if (isPatchModel) {
+            if (fieldType instanceof PrimitiveTypeExpression pt) {
+                fieldType = toBoxedType(pt);
             }
 
-            fieldType = typeUtils.createDeclaredType(JSON_NULLABLE_CLASS_NAME)
-                    .withTypeArgument(fieldType);
+            fieldType = new ParameterizedType(
+                    new NameExpression(JSON_NULLABLE_CLASS_NAME),
+                    List.of(fieldType)
+            );
         }
 
-        final var field = clazz.addField(fieldType, propertyName, Modifier.PRIVATE);
+        final Expression initExpression;
 
-        if (property.required()) {
-            field.addModifier(Modifier.FINAL);
+        if (isPatchModel) {
+            initExpression = new MethodCallExpression(
+                    new NameExpression(JSON_NULLABLE_CLASS_NAME),
+                    "undefined");
         } else {
-            if (isPatchRequest) {
-                final var defaultValue = new MethodCallExpression(
-                        new NameExpression(JSON_NULLABLE_CLASS_NAME),
-                        "undefined");
-                field.setInitExpression(defaultValue);
+            if (fieldTypeMirror.isDeclaredType() && !fieldType.isNullable()) {
+                initExpression = null;
             } else {
-                if (fieldType.isDeclaredType() && !fieldType.isNullable()) {
-                    field.setInitExpression(null);
-                } else {
-                    final var defaultValue = getDefaultValue(fieldType);
-
-                    if (defaultValue != null) {
-                        field.setInitExpression(defaultValue);
-                    }
-                }
+                initExpression = getDefaultValue(fieldType);
             }
         }
+
+        fieldType.accept(basicResolver, null);
+
+        final var fieldSymbol = VariableSymbol.createField(propertyName, fieldType.getType());
+
+        var field = new VariableDeclaration(
+                ElementKind.FIELD,
+                Set.of(Modifier.PRIVATE),
+                fieldType,
+                propertyName,
+                initExpression,
+                fieldSymbol
+        );
+
+        classDeclaration.addEnclosed(field);
 
         if (propertyType instanceof OpenApiArrayType) {
-            Type<?> elementType;
+            TypeExpression elementType;
 
-            if (fieldType.isArrayType()) {
-                final var arrayType = (ArrayType) fieldType;
-                elementType = arrayType.getComponentType();
+            if (fieldType instanceof ArrayType arrayType) {
+                //elementType = arrayType.getComponentType();
+                throw new UnsupportedOperationException();
             } else {
-                elementType = fieldType.getFirstTypeArg().get();
+                //elementType = ((DeclaredType)fieldType).getTypeArguments().get(0);
+                throw new UnsupportedOperationException();
             }
 
-            if (isPatchRequest) {
-                if (elementType.isArrayType()) {
-                    final var arrayType = (ArrayType) elementType;
-                    elementType = arrayType.getComponentType();
-                } else {
-                    elementType = elementType.getFirstTypeArg().get();
-                }
-            }
-
-            field.addAnnotation(createArraySchemaAnnotation(elementType));
+            //TODO field.addAnnotation(createArraySchemaAnnotation(elementType));
         } else {
-            final var type = typeUtils.createType(propertyType);
-            field.addAnnotation(createSchemaAnnotation(type, property.required(), property.description()));
-        }
+            final var type = openApiTypeUtils.createTypeExpression(propertyType);
+            final var typeMirror = openApiTypeUtils.createType(propertyType);
+            type.setType(typeMirror);
 
-        this.modelAdapter.adaptField(httpMethod, requestCycleLocation, property, field);
+            final boolean required;
+            final Boolean readOnly;
+            final Boolean writeOnly;
+
+            if (isPatchModel) {
+                required = false;
+                readOnly = null;
+                writeOnly = true;
+            } else {
+                required = property.required();
+                readOnly = property.readOnly();
+                writeOnly = property.writeOnly();
+            }
+
+            field.addAnnotation(createSchemaAnnotation(
+                    type,
+                    required,
+                    property.description(),
+                    readOnly,
+                    writeOnly
+            ));
+        }
+        modelAdapter.adaptField(property, field);
+    }
+
+    private TypeExpression toBoxedType(final PrimitiveTypeExpression primitiveTypeExpression) {
+        throw new UnsupportedOperationException();
+    }
+
+    public AnnotationExpression createSchemaAnnotation(final TypeExpression type,
+                                                       final boolean required,
+                                                       final String description,
+                                                       final Boolean readOnly,
+                                                       final Boolean writeOnly) {
+        final var implementationType = resolveImplementationType(type);
+
+        return new SchemaAnnotationBuilder()
+                .implementation(implementationType)
+                .requiredMode(required)
+                .description(description)
+                .accessMode(readOnly, writeOnly)
+                .build();
+    }
+
+    private void generateAccessors(final OpenApiObjectType schema,
+                                   final ClassDeclaration classDeclaration,
+                                   final boolean isPatchModel) {
+        schema.properties()
+                .forEach((propertyName, property) -> {
+                    addGetter(propertyName, property, classDeclaration, isPatchModel);
+
+                    addSetter(propertyName, property, classDeclaration, isPatchModel, false);
+                    addSetter(propertyName, property, classDeclaration, isPatchModel, true);
+                });
     }
 
     private void addGetter(final String propertyName,
                            final OpenApiProperty property,
-                           final TypeElement typeElement,
-                           final HttpMethod httpMethod,
-                           final RequestCycleLocation requestCycleLocation) {
-        final var methodName = "get" + Utils.firstUpper(propertyName);
-        final var method = typeElement.addMethod(
+                           final ClassDeclaration classDeclaration,
+                           final boolean isPatchModel) {
+        if (isPatchModel && Boolean.TRUE.equals(property.readOnly())) {
+            return;
+        }
+
+        final var methodName = "get" + StringUtils.firstUpper(propertyName);
+        final var method = classDeclaration.addMethod(
                 methodName,
-                Modifier.PUBLIC
+                Set.of(Modifier.PUBLIC)
         );
 
         final var propertyType = property.type();
-        var returnType = typeUtils.createType(propertyType);
+        var returnType = openApiTypeUtils.createTypeExpression(propertyType);
 
-        final var isPatchRequest = httpMethod == HttpMethod.PATCH && requestCycleLocation == RequestCycleLocation.REQUEST;
-
-        if (isPatchRequest) {
-            if (returnType.isPrimitiveType()) {
-                returnType = typeUtils.getBoxedType(returnType);
+        if (isPatchModel) {
+            if (returnType instanceof PrimitiveTypeExpression pt) {
+                returnType = toBoxedType(pt);
             }
 
-            returnType = typeUtils.createDeclaredType(JSON_NULLABLE_CLASS_NAME)
-                    .withTypeArgument(returnType);
+            returnType = new ParameterizedType(
+                    new NameExpression(JSON_NULLABLE_CLASS_NAME),
+                    List.of(returnType)
+            );
         }
 
         method.setReturnType(returnType);
+
+        final var methodSymbol = MethodSymbol.createMethod(methodName);
+        methodSymbol.addModifier(Modifier.PUBLIC);
+
+        method.setMethodSymbol(methodSymbol);
 
         final var body = new BlockStatement(
                 new ReturnStatement(new FieldAccessExpression(new NameExpression("this"), propertyName))
         );
         method.setBody(body);
-
-        modelAdapter.adaptGetter(httpMethod, requestCycleLocation, property, method);
+        modelAdapter.adaptGetter(property, method);
     }
 
     private void addSetter(final String propertyName,
                            final OpenApiProperty property,
-                           final TypeElement clazz,
-                           final boolean isBuilder,
-                           final HttpMethod httpMethod,
-                           final RequestCycleLocation requestCycleLocation) {
-        final var methodName = isBuilder ? propertyName : "set" + Utils.firstUpper(propertyName);
+                           final ClassDeclaration clazz,
+                           final boolean isPatchModel,
+                           final boolean isBuilder) {
+        if (isPatchModel && Boolean.TRUE.equals(property.readOnly())) {
+            return;
+        }
+
+        final var methodName = isBuilder ? propertyName : "set" + StringUtils.firstUpper(propertyName);
         final var method = clazz.addMethod(
                 methodName,
-                Modifier.PUBLIC
+                Set.of(Modifier.PUBLIC)
         );
 
         final var propertyType = property.type();
-        var parameterType = typeUtils.createType(propertyType);
+        var parameterType = openApiTypeUtils.createTypeExpression(propertyType);
 
-
-        final var isPatchRequest = httpMethod == HttpMethod.PATCH && requestCycleLocation == RequestCycleLocation.REQUEST;
-
-        if (isPatchRequest) {
-            if (parameterType.isPrimitiveType()) {
-                parameterType = typeUtils.getBoxedType(parameterType);
+        if (isPatchModel) {
+            if (parameterType instanceof PrimitiveTypeExpression pt) {
+                parameterType = toBoxedType(pt);
             }
-            parameterType = typeUtils.createDeclaredType(JSON_NULLABLE_CLASS_NAME)
-                    .withTypeArgument(parameterType);
+
+            parameterType = new ParameterizedType(
+                    new NameExpression(JSON_NULLABLE_CLASS_NAME),
+                    List.of(parameterType)
+            );
         }
 
-        final var parameter = VariableElement.createParameter(propertyName, parameterType);
-        parameter.addModifier(Modifier.FINAL);
+        final var parameter = new VariableDeclaration(
+                ElementKind.PARAMETER,
+                Set.of(Modifier.FINAL),
+                parameterType,
+                propertyName,
+                null,
+                null
+        );
+
+        final var parameterSymbol = VariableSymbol.createParameter(
+                propertyName,
+                null
+        );
+        parameter.setSymbol(parameterSymbol);
 
         method.addParameter(parameter);
+
+        final var methodSymbol = MethodSymbol.createMethod(methodName);
+        methodSymbol.addParameter(parameterSymbol);
+
+        method.setMethodSymbol(methodSymbol);
 
         final var body = new BlockStatement();
 
@@ -412,82 +438,19 @@ public class ModelCodeGenerator {
 
         if (isBuilder) {
             body.add(new ReturnStatement(new NameExpression("this")));
-            method.setReturnType(typeUtils.createDeclaredType(clazz.getQualifiedName()));
+            final var returnType = new NameExpression(clazz.getQualifiedName().toString());
+            method.setReturnType(returnType);
         }
 
         method.setBody(body);
-
-        modelAdapter.adaptSetter(httpMethod, requestCycleLocation, property, method);
+        modelAdapter.adaptSetter(property, method);
     }
 
-    public Attribute.Compound createSchemaAnnotation(final Type<?> type,
-                                                     final Boolean required,
-                                                     final @Nullable String description) {
-        final var members = new HashMap<ExecutableElement, AnnotationValue>();
+    public @Nullable Expression getDefaultValue(final TypeExpression type) {
+        final var typeMirror = type.getType();
 
-        final Type<?> implementationType;
-
-        if (type instanceof WildcardType wt) {
-            if (wt.getExtendsBound().isPresent()) {
-                implementationType = wt.getExtendsBound().get();
-            } else if (wt.getSuperBound().isPresent()) {
-                implementationType = wt.getSuperBound().get();
-            } else {
-                //Will result in compilation error in generated code.
-                implementationType = wt;
-            }
-        } else if (typeUtils.isMapType(type)) {
-            implementationType = typeUtils.createMapType();
-        } else {
-            implementationType = type;
-        }
-
-        members.put(
-                MethodElement.createMethod("implementation"),
-                Attribute.clazz(implementationType)
-        );
-
-        if (Utils.isTrue(required)) {
-            members.put(
-                    MethodElement.createMethod("required"),
-                    Attribute.constant(true));
-        }
-
-        if (description != null) {
-            members.put(
-                    MethodElement.createMethod(("description")),
-                    Attribute.constant(description)
-            );
-        }
-
-        return Attribute.compound(
-                "io.swagger.v3.oas.annotations.media.Schema",
-                members
-        );
-    }
-
-    public AnnotationMirror createArraySchemaAnnotation(final Type<?> elementType) {
-        return createAnnotation("io.swagger.v3.oas.annotations.media.ArraySchema", "schema",
-                createSchemaAnnotation(elementType, false, null)
-        );
-    }
-
-    public AnnotationMirror createAnnotation(final String name,
-                                             final String memberName,
-                                             final Attribute value) {
-        return Attribute.compound(
-                name,
-                Map.of(
-                        MethodElement.createMethod(memberName),
-                        value
-                )
-        );
-    }
-
-    public @Nullable Expression getDefaultValue(final Type<?> type) {
-        if (type.isPrimitiveType()) {
-            final var primitiveType = ((PrimitiveType) type);
-
+        if (typeMirror.isPrimitiveType()) {
+            final var primitiveType = (PrimitiveType) typeMirror;
             return switch (primitiveType.getKind()) {
                 case BOOLEAN -> LiteralExpression.createBooleanLiteralExpression();
                 case CHAR -> LiteralExpression.createCharLiteralExpression();
@@ -497,17 +460,42 @@ public class ModelCodeGenerator {
                 case DOUBLE -> LiteralExpression.createDoubleLiteralExpression();
                 default -> throw new GenerateException(String.format("%s is not a primitive", primitiveType.getKind()));
             };
-        } else if (typeUtils.isListType(type)) {
+        } else if (typeUtils.isListType(typeMirror)) {
             return new MethodCallExpression(
                     new NameExpression(typeUtils.getListTypeName()),
                     "of"
             );
         } else if (type.getKind() == TypeKind.DECLARED) {
             return LiteralExpression.createNullLiteralExpression();
-        } else if (type.isArrayType()) {
+        } else if (type.getKind() == TypeKind.ARRAY) {
             return new ArrayInitializerExpression();
         } else {
             return null;
         }
     }
+
+    public AnnotationExpression createArraySchemaAnnotation(final TypeExpression elementType) {
+        final var implementationType = resolveImplementationType(elementType);
+
+        return new ArraySchemaAnnotationBuilder()
+                .schema(new SchemaAnnotationBuilder()
+                        .implementation(implementationType)
+                        .requiredMode(false)
+                        .build())
+                .build();
+    }
+
+    //TODO duplicate code
+    public TypeExpression resolveImplementationType(final TypeExpression type) {
+        final TypeExpression implementationType;
+
+        if (type instanceof WildCardTypeExpression wildcardType) {
+            implementationType = wildcardType.getTypeExpression();
+        } else {
+            implementationType = type;
+        }
+        return implementationType;
+    }
+
+
 }

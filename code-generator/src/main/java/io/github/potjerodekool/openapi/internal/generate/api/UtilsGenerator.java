@@ -1,21 +1,22 @@
 package io.github.potjerodekool.openapi.internal.generate.api;
 
+import io.github.potjerodekool.codegen.Environment;
+import io.github.potjerodekool.codegen.Language;
+import io.github.potjerodekool.codegen.io.Filer;
+import io.github.potjerodekool.codegen.model.CompilationUnit;
+import io.github.potjerodekool.codegen.model.element.ElementKind;
+import io.github.potjerodekool.codegen.model.element.Modifier;
+import io.github.potjerodekool.codegen.model.element.Name;
+import io.github.potjerodekool.codegen.model.tree.PackageDeclaration;
+import io.github.potjerodekool.codegen.model.tree.expression.*;
+import io.github.potjerodekool.codegen.model.tree.statement.*;
+import io.github.potjerodekool.codegen.model.tree.type.AnnotatedTypeExpression;
+import io.github.potjerodekool.codegen.model.util.SymbolTable;
 import io.github.potjerodekool.openapi.Features;
 import io.github.potjerodekool.openapi.GeneratorConfig;
-import io.github.potjerodekool.openapi.Language;
 import io.github.potjerodekool.openapi.internal.ClassNames;
-import io.github.potjerodekool.openapi.internal.Filer;
-import io.github.potjerodekool.openapi.internal.ast.CompilationUnit;
-import io.github.potjerodekool.openapi.internal.ast.Modifier;
-import io.github.potjerodekool.openapi.internal.ast.Operator;
-import io.github.potjerodekool.openapi.internal.ast.util.TypeUtils;
-import io.github.potjerodekool.openapi.internal.ast.element.PackageElement;
-import io.github.potjerodekool.openapi.internal.ast.element.VariableElement;
-import io.github.potjerodekool.openapi.internal.ast.expression.*;
-import io.github.potjerodekool.openapi.internal.ast.statement.BlockStatement;
-import io.github.potjerodekool.openapi.internal.ast.statement.ExpressionStatement;
-import io.github.potjerodekool.openapi.internal.ast.statement.IfStatement;
-import io.github.potjerodekool.openapi.internal.ast.statement.ReturnStatement;
+import io.github.potjerodekool.openapi.internal.generate.BasicResolver;
+import io.github.potjerodekool.openapi.internal.generate.FullResolver;
 import io.github.potjerodekool.openapi.log.LogLevel;
 import io.github.potjerodekool.openapi.log.Logger;
 
@@ -27,25 +28,35 @@ public class UtilsGenerator {
 
     private static final Logger LOGGER = Logger.getLogger(UtilsGenerator.class.getName());
 
+    private final SymbolTable symbolTable;
     private final Filer filer;
-    private final TypeUtils typeUtils;
 
     private final Language language;
     private final String basePackageName;
-
     private final String httpServletClassName;
+    private final BasicResolver basicResolver;
+    private final FullResolver fullResolver;
 
     public UtilsGenerator(final GeneratorConfig generatorConfig,
-                          final Filer filer,
-                          final TypeUtils typeUtils) {
-        this.filer = filer;
-        this.typeUtils = typeUtils;
+                          final Environment environment) {
+        this.symbolTable = environment.getSymbolTable();
+        this.filer = environment.getFiler();
         this.language = generatorConfig.language();
         this.basePackageName = generatorConfig.basePackageName();
 
         this.httpServletClassName = generatorConfig.isFeatureEnabled(Features.FEATURE_JAKARTA)
                 ? ClassNames.JAKARTA_HTTP_SERVLET_REQUEST
                 : ClassNames.JAVA_HTTP_SERVLET_REQUEST;
+
+        this.basicResolver = new BasicResolver(
+                environment.getElementUtils(),
+                environment.getTypes(),
+                environment.getSymbolTable()
+        );
+        this.fullResolver = new FullResolver(
+                environment.getElementUtils(),
+                environment.getTypes()
+        );
     }
 
     public void generate() {
@@ -53,51 +64,73 @@ public class UtilsGenerator {
 
         //Try to make the package name end with .api
         if (!packageName.endsWith(".api")) {
-            final var index = packageName.lastIndexOf(".api.");
-            if (index > 0) {
-                packageName = packageName.substring(0, index + 4);
-            }
+            packageName += ".api";
         }
 
         final var cu = new CompilationUnit(Language.JAVA);
-        cu.setPackageElement(PackageElement.create(packageName));
 
-        final var clazz = cu.addClass("ApiUtils", Modifier.PUBLIC, Modifier.FINAL);
-        final var constructor = clazz.addConstructor(Modifier.PRIVATE);
+        final var packageDeclaration = new PackageDeclaration(new NameExpression(packageName));
+        final var packageSymbol = symbolTable.findOrCreatePackageSymbol(Name.of(packageName));
+        packageDeclaration.setPackageSymbol(packageSymbol);
+        cu.setPackageElement(packageSymbol);
+
+        final var classDeclaration = new ClassDeclaration(
+                Name.of("ApiUtils"),
+                ElementKind.CLASS,
+                Set.of(Modifier.PUBLIC, Modifier.FINAL),
+                List.of()
+        );
+        cu.add(classDeclaration);
+
+        final var constructor = classDeclaration.addConstructor(Set.of(Modifier.PRIVATE));
         constructor.setBody(new BlockStatement());
 
-        final var createLocationMethod = clazz.addMethod("createLocation", Modifier.PUBLIC, Modifier.STATIC);
-        createLocationMethod.setReturnType(typeUtils.createDeclaredType("java.net.URI"));
+        final var createLocationMethod = classDeclaration.addMethod("createLocation", Set.of(Modifier.PUBLIC, Modifier.STATIC));
 
-        VariableElement.createParameter(
+        final var returnType = new AnnotatedTypeExpression(
+                new NameExpression("java.net.URI"),
+                List.of()
+        );
+
+        createLocationMethod.setReturnType(returnType);
+
+        createLocationMethod.addParameter(new VariableDeclaration(
+                ElementKind.PARAMETER,
+                Set.of(Modifier.FINAL),
+                new AnnotatedTypeExpression(
+                        new NameExpression(httpServletClassName),
+                        List.of()
+                ),
                 "request",
-                typeUtils.createDeclaredType(httpServletClassName)
-        ).addModifier(Modifier.FINAL);
+                null,
+                null
+        ));
 
-        createLocationMethod.addParameter(
-                VariableElement.createParameter(
-                        "request",
-                        typeUtils.createDeclaredType(httpServletClassName)
-                ).addModifier(Modifier.FINAL)
-        );
-        createLocationMethod.addParameter(
-                VariableElement.createParameter(
-                        "id",
-                        typeUtils.createDeclaredType("java.lang.Object")
-                ).addModifier(Modifier.FINAL)
-        );
+        createLocationMethod.addParameter(new VariableDeclaration(
+                ElementKind.PARAMETER,
+                Set.of(Modifier.FINAL),
+                new AnnotatedTypeExpression(
+                        new NameExpression("java.lang.Object"),
+                        List.of()
+                ),
+                "id",
+                null,
+                null
+        ));
 
         // final StringBuffer location = request.getRequestURL();
         final var body = new BlockStatement();
         body.add(
-                new VariableDeclarationExpression(
+                new VariableDeclaration(
+                        ElementKind.LOCAL_VARIABLE,
                         Set.of(Modifier.FINAL),
-                        typeUtils.createDeclaredType("java.lang.StringBuffer"),
+                        new NameExpression("java.lang.StringBuffer"),
                         "locationBuffer",
                         new MethodCallExpression(
                                 new NameExpression("request"),
                                 "getRequestURL"
-                        )
+                        ),
+                        null
                 )
         );
 
@@ -154,6 +187,10 @@ public class UtilsGenerator {
         );
 
         createLocationMethod.setBody(body);
+
+        basicResolver.resolve(classDeclaration);
+        fullResolver.resolve(classDeclaration);
+        symbolTable.addClass(classDeclaration.getClassSymbol());
 
         try {
             filer.writeSource(cu, language);

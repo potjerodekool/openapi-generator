@@ -1,29 +1,34 @@
 package io.github.potjerodekool.openapi.internal.generate.model;
 
-import io.github.potjerodekool.openapi.internal.ast.type.Type;
+import io.github.potjerodekool.codegen.model.type.TypeMirror;
+import io.github.potjerodekool.codegen.model.util.type.Types;
 
 import java.util.Set;
 
 public class TypeTest {
 
-    private final Set<Type<?>> typeList;
+    private final Set<TypeMirror> typeList;
 
-    private final Set<Type<?>> resolvedTypeList;
+    private final Set<TypeMirror> resolvedTypeList;
 
-    public TypeTest(final Set<Type<?>> typeSet,
-                    final Set<Type<?>> resolvedTypeSet) {
+    private final Types types;
+
+    public TypeTest(final Set<TypeMirror> typeSet,
+                    final Set<TypeMirror> resolvedTypeSet,
+                    final Types types) {
         this.typeList = typeSet;
         this.resolvedTypeList = resolvedTypeSet;
+        this.types = types;
     }
 
-    public boolean test(final Type<?> type) {
+    public boolean test(final TypeMirror type) {
         if (this.typeList.contains(type)) {
             return true;
         }
 
         try {
             return resolvedTypeList.stream()
-                    .anyMatch(rt -> rt.isAssignableBy(type));
+                    .anyMatch(rt -> types.isAssignable(rt, type));
         } catch (final Exception e) {
             return false;
         }

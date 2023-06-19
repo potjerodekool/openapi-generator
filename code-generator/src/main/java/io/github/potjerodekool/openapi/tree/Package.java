@@ -10,6 +10,14 @@ public class Package {
         this.name = name;
     }
 
+    public static Package of(final String name) {
+        if ("".equals(name)) {
+            return UNNAMED;
+        } else {
+            return new Package(name);
+        }
+    }
+
     private Package() {
         this("");
     }

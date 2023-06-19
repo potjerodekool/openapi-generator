@@ -1,8 +1,8 @@
 package io.github.potjerodekool.openapi.internal.generate.config;
 
+import io.github.potjerodekool.codegen.io.Filer;
+import io.github.potjerodekool.codegen.io.Location;
 import io.github.potjerodekool.openapi.InMemoryFileManager;
-import io.github.potjerodekool.openapi.internal.Filer;
-import io.github.potjerodekool.openapi.internal.Location;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

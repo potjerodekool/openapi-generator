@@ -1,5 +1,7 @@
 package io.github.potjerodekool.openapi;
 
+import io.github.potjerodekool.codegen.Language;
+
 import java.util.Map;
 
 public record GeneratorConfig(Language language,

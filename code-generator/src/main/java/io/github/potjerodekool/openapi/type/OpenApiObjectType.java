@@ -21,8 +21,8 @@ public record OpenApiObjectType(Package pck,
         return new OpenApiObjectType(pck, name, properties, additionalProperties);
     }
 
-    public OpenApiObjectType withName(final String name) {
-        return new OpenApiObjectType(pck, name, properties, additionalProperties);
+    public OpenApiObjectType withName(final String schemaName) {
+        return new OpenApiObjectType(pck, schemaName, properties, additionalProperties);
     }
 
     @Override

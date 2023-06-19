@@ -1,14 +1,13 @@
 package io.github.potjerodekool.demo.api;
 
-import io.github.petstore.ApiUtils;
-import io.github.petstore.PetsApi;
-import io.github.petstore.model.ErrorResponseDto;
-import io.github.petstore.model.PetPatchRequestDto;
-import io.github.petstore.model.PetRequestDto;
-import io.github.petstore.model.PetResponseDto;
 import io.github.potjerodekool.demo.model.Pet;
 import io.github.potjerodekool.demo.service.CrudOperationResult;
 import io.github.potjerodekool.demo.service.PetService;
+import io.github.potjerodekool.petstore.api.ApiUtils;
+import io.github.potjerodekool.petstore.api.PetsApi;
+import io.github.potjerodekool.petstore.api.model.ErrorDto;
+import io.github.potjerodekool.petstore.api.model.PatchPetDto;
+import io.github.potjerodekool.petstore.api.model.PetDto;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
@@ -32,7 +31,7 @@ public class PetstoreController implements PetsApi {
     }
 
     @Override
-    public ResponseEntity<Void> createPet(final PetRequestDto body, final HttpServletRequest request) {
+    public ResponseEntity<Void> createPet(final PetDto body, final HttpServletRequest request) {
         final var id = petService.createPet(body);
 
         if (id != null) {
@@ -43,16 +42,16 @@ public class PetstoreController implements PetsApi {
     }
 
     @Override
-    public ResponseEntity<PetResponseDto> getPetById(final long petId,
-                                                     final HttpServletRequest request) {
+    public ResponseEntity<PetDto> getPetById(final long petId,
+                                          final HttpServletRequest request) {
         return petService.getPetById(petId)
                 .map(pet -> ResponseEntity.ok(createResponse(pet)))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @Override
-    public ResponseEntity<List<PetResponseDto>> listPets(final Integer limit,
-                                                         final HttpServletRequest request) {
+    public ResponseEntity<List<PetDto>> listPets(final int limit,
+                                                 final HttpServletRequest request) {
 
         var pets = petService.listPets(limit);
 
@@ -64,21 +63,25 @@ public class PetstoreController implements PetsApi {
     }
 
     @Override
-    public ResponseEntity<Object> updatePet(final long petId, PetRequestDto petRequestDto, HttpServletRequest request) {
+    public ResponseEntity<ErrorDto> updatePet(final long petId, PetDto petRequestDto, HttpServletRequest request) {
         final var result = petService.updatePet(petId, petRequestDto);
         return switch (result.status()) {
             case SUCCESS -> ResponseEntity.noContent().build();
-            case FAILED -> ResponseEntity.unprocessableEntity().body(new ErrorResponseDto(0, result.message()));
+            case FAILED -> ResponseEntity.unprocessableEntity().body(
+                    new ErrorDto(0, result.message())
+            );
             case NOT_FOUND -> ResponseEntity.notFound().build();
         };
     }
 
     @Override
-    public ResponseEntity<Object> patchPet(final long petId, PetPatchRequestDto petPatchRequestDto, HttpServletRequest request) {
+    public ResponseEntity<ErrorDto> patchPet(final long petId, PatchPetDto petPatchRequestDto, HttpServletRequest request) {
         final var result = petService.patchPet(petId, petPatchRequestDto);
         return switch (result.status()) {
             case SUCCESS -> ResponseEntity.noContent().build();
-            case FAILED -> ResponseEntity.unprocessableEntity().body(new ErrorResponseDto(0, result.message()));
+            case FAILED -> ResponseEntity.unprocessableEntity().body(
+                    new ErrorDto(0, result.message())
+            );
             case NOT_FOUND -> ResponseEntity.notFound().build();
         };
     }
@@ -131,12 +134,9 @@ public class PetstoreController implements PetsApi {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    private PetResponseDto createResponse(final Pet pet) {
-        final var response = new PetResponseDto(pet.getId(), pet.getName(),
-                LocalDate.now(),
-                pet.getTag(
-                )
-        );
-        return response;
+    private PetDto createResponse(final Pet pet) {
+        return new PetDto(pet.getId(), pet.getName())
+                .birthDate(LocalDate.now())
+                .tag(pet.getTag());
     }
 }
