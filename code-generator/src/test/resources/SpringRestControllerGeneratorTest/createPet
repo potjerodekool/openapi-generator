@@ -1,0 +1,5 @@
+{
+    service.createPet(body, new org.some.api.HttpServletRequestWrapper(request));
+        final var location = org.some.api.ApiUtils.createLocation(request, result.getId());
+    return org.springframework.http.ResponseEntity.created(location).build();
+}

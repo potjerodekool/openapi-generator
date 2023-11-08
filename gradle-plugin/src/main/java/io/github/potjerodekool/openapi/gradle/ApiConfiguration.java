@@ -5,7 +5,8 @@ public class ApiConfiguration {
     private String openApiFile;
     private String basePackageName;
     private Boolean generateModels = true;
-    private Boolean generateDefinitions = true;
+    private Boolean generateApiDefinitions = false;
+    private Boolean generateApiImplementations = false;
 
     public ApiConfiguration() {
     }
@@ -13,11 +14,13 @@ public class ApiConfiguration {
     public ApiConfiguration(final String openApiFile,
                             final String basePackageName,
                             final Boolean generateModels,
-                            final Boolean generateDefinitions) {
+                            final Boolean generateApiDefinitions,
+                            final Boolean generateApiImplementations) {
         this.openApiFile = openApiFile;
         this.basePackageName = basePackageName;
         this.generateModels = generateModels;
-        this.generateDefinitions = generateDefinitions;
+        this.generateApiDefinitions = generateApiDefinitions;
+        this.generateApiImplementations = generateApiImplementations;
     }
 
     public String getOpenApiFile() {
@@ -48,11 +51,19 @@ public class ApiConfiguration {
     }
 
     public Boolean generateApiDefinitions() {
-        return generateDefinitions;
+        return generateApiDefinitions;
     }
 
-    public ApiConfiguration setGenerateDefinitions(final Boolean generateDefinitions) {
-        this.generateDefinitions = generateDefinitions;
+    public ApiConfiguration setGenerateApiDefinitions(final Boolean generateApiDefinitions) {
+        this.generateApiDefinitions = generateApiDefinitions;
         return this;
+    }
+
+    public Boolean getGenerateApiDefinitions() {
+        return generateApiDefinitions;
+    }
+
+    public void setGenerateApiImplementations(final Boolean generateApiImplementations) {
+        this.generateApiImplementations = generateApiImplementations;
     }
 }

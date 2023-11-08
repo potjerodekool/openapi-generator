@@ -31,8 +31,8 @@
     </developers>
 
     <scm>
-        <connection>scm:git:git://github.com/potjerodekool/openapi-generator.git</connection>
-        <developerConnection>scm:git:ssh://github.com:potjerodekool/openapi-generator.git</developerConnection>
+        <connection>https://github.com/potjerodekool/openapi-generator.git</connection>
+        <developerConnection>https://github.com/potjerodekool/openapi-generator.git</developerConnection>
         <url>http://github.com/potjerodekool/openapi-generator/tree/master</url>
     </scm>
 
@@ -45,8 +45,7 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <java.version>16</java.version>
-        <maven.compiler.source>${java.version}</maven.compiler.source>
+        <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>${java.version}</maven.compiler.target>
         <checkerFrameworkVersion>3.28.0</checkerFrameworkVersion>
         <junit.version>5.9.0</junit.version>
@@ -61,16 +60,46 @@
             <version>1.0-SNAPSHOT</version>
         </dependency>
 
-        <dependency>
-            <groupId>org.ow2.asm</groupId>
-            <artifactId>asm</artifactId>
-            <version>9.4</version>
-        </dependency>
+        <!--
         <dependency>
             <groupId>com.reprezen.kaizen</groupId>
             <artifactId>openapi-parser</artifactId>
             <version>4.0.4</version>
+
+            <!- Needed since swagger parser uses newer versions ->
+            <exclusions>
+                <exclusion>
+                    <groupId>com.fasterxml.jackson.core</groupId>
+                    <artifactId>jackson-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.fasterxml.jackson.dataformat</groupId>
+                    <artifactId>jackson-dataformat-yaml</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.fasterxml.jackson.core</groupId>
+                    <artifactId>jackson-databind</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
+        -->
+
+        <dependency>
+            <groupId>io.swagger.parser.v3</groupId>
+            <artifactId>swagger-parser</artifactId>
+            <version>2.1.16</version>
+        </dependency>
+
+        <!--
+        Maven: com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.14.1
+
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-core</artifactId>
+            <version>2.14.1</version>
+        </dependency>
+        -->
+
         <dependency>
             <groupId>jakarta.annotation</groupId>
             <artifactId>jakarta.annotation-api</artifactId>
@@ -92,16 +121,14 @@
             <artifactId>checker</artifactId>
             <version>${checkerFrameworkVersion}</version>
         </dependency>
-        <dependency>
-            <groupId>com.github.javaparser</groupId>
-            <artifactId>javaparser-core</artifactId>
-            <version>3.24.10</version>
-        </dependency>
+
+        <!--
         <dependency>
             <groupId>org.yaml</groupId>
             <artifactId>snakeyaml</artifactId>
-            <version>1.33</version>
+            <version>2.0</version>
         </dependency>
+        -->
 
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -155,7 +182,7 @@
         <dependency>
             <groupId>org.apache.tomcat.embed</groupId>
             <artifactId>tomcat-embed-core</artifactId>
-            <version>10.1.4</version>
+            <version>10.1.6</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -196,7 +223,7 @@
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>build-helper-maven-plugin</artifactId>
-                <version>3.2.0</version>
+                <version>${build-helper.maven.plugin.version}</version>
                 <executions>
                     <execution>
                         <id>add-source</id>
@@ -214,7 +241,7 @@
             </plugin>
             <plugin>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.10.1</version>
+                <version>${maven.compiler.plugin.version}</version>
                 <executions>
                     <execution>
                         <id>compile</id>
@@ -241,50 +268,16 @@
                 <configuration>
                     <fork>true</fork>
                     <release>${java.version}</release>
-                    <compilerArgs combine.children="append">
-                        <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED</arg>
-                        <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED</arg>
-                        <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED</arg>
-                        <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED</arg>
-                        <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.model=ALL-UNNAMED</arg>
-                        <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED</arg>
-                        <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED</arg>
-                        <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED</arg>
-                        <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED</arg>
-                    </compilerArgs>
-                    <!--
-                    <annotationProcessorPaths>
-                        <path>
-                            <groupId>org.checkerframework</groupId>
-                            <artifactId>checker</artifactId>
-                            <version>${checkerFrameworkVersion}</version>
-                        </path>
-                    </annotationProcessorPaths>
-
-                    <annotationProcessors>
-                        <annotationProcessor>org.checkerframework.checker.nullness.NullnessChecker</annotationProcessor>
-                        <annotationProcessor>org.checkerframework.checker.regex.RegexChecker</annotationProcessor>
-                        <annotationProcessor>org.checkerframework.checker.formatter.FormatterChecker</annotationProcessor>
-                        <annotationProcessor>org.checkerframework.framework.util.PurityChecker</annotationProcessor>
-
-                        <annotationProcessor>org.checkerframework.checker.optional.OptionalChecker</annotationProcessor>
-                        <annotationProcessor>org.checkerframework.checker.interning.InterningChecker</annotationProcessor>
-                        <annotationProcessor>org.checkerframework.checker.tainting.TaintingChecker</annotationProcessor>
-                        <annotationProcessor>org.checkerframework.checker.calledmethods.CalledMethodsChecker</annotationProcessor>
-                        <annotationProcessor>org.checkerframework.checker.resourceleak.ResourceLeakChecker</annotationProcessor>
-                        <annotationProcessor>org.checkerframework.checker.index.IndexChecker</annotationProcessor>
-                    </annotationProcessors>
-                    -->
                 </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.0.0-M7</version>
+                <version>${maven.surefire.plugin.version}</version>
             </plugin>
             <plugin>
                 <artifactId>maven-failsafe-plugin</artifactId>
-                <version>3.0.0-M7</version>
+                <version>${maven.failsafe.plugin.version}</version>
                 <executions>
                     <execution>
                         <goals>
@@ -297,7 +290,7 @@
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
-                <version>0.8.8</version>
+                <version>${jacoco.maven.plugin.version}</version>
                 <executions>
                     <execution>
                         <id>jacoco-initialize</id>
@@ -337,7 +330,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-source-plugin</artifactId>
-                <version>3.2.1</version>
+                <version>${maven.source.plugin.version}</version>
                 <executions>
                     <execution>
                         <id>attach-sources</id>
@@ -375,7 +368,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-gpg-plugin</artifactId>
-                <version>3.0.1</version>
+                <version>${maven.gpg.plugin.version}</version>
                 <configuration>
                     <keyname>${gpg.keyname}</keyname>
                     <passphraseServerId>${gpg.keyname}</passphraseServerId>
@@ -390,6 +383,7 @@
                     </execution>
                 </executions>
             </plugin>
+            <!--
             <plugin>
                 <groupId>org.sonatype.plugins</groupId>
                 <artifactId>nexus-staging-maven-plugin</artifactId>
@@ -401,6 +395,7 @@
                     <autoReleaseAfterClose>true</autoReleaseAfterClose>
                 </configuration>
             </plugin>
+            -->
         </plugins>
     </build>
 

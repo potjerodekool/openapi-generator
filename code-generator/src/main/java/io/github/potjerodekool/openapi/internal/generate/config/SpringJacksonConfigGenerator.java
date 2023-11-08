@@ -1,12 +1,15 @@
 package io.github.potjerodekool.openapi.internal.generate.config;
 
 import io.github.potjerodekool.codegen.Environment;
-import io.github.potjerodekool.codegen.model.Attribute;
 import io.github.potjerodekool.codegen.model.element.Modifier;
-import io.github.potjerodekool.codegen.model.symbol.ClassSymbol;
+import io.github.potjerodekool.codegen.model.tree.AnnotationExpression;
 import io.github.potjerodekool.codegen.model.tree.expression.*;
 import io.github.potjerodekool.codegen.model.tree.statement.BlockStatement;
 import io.github.potjerodekool.codegen.model.tree.statement.ReturnStatement;
+import io.github.potjerodekool.codegen.model.tree.statement.java.JClassDeclaration;
+import io.github.potjerodekool.codegen.model.tree.type.ClassOrInterfaceTypeExpression;
+import io.github.potjerodekool.codegen.model.tree.type.NoTypeExpression;
+import io.github.potjerodekool.codegen.model.type.TypeKind;
 import io.github.potjerodekool.codegen.model.util.StringUtils;
 import io.github.potjerodekool.openapi.GeneratorConfig;
 import io.github.potjerodekool.openapi.dependency.Artifact;
@@ -68,12 +71,12 @@ public class SpringJacksonConfigGenerator extends AbstractSpringConfigGenerator 
     }
 
     @Override
-    protected void fillClass(final ClassSymbol typeElement) {
+    protected void fillClass(final JClassDeclaration classDeclaration) {
         this.resolvedJaxsonModuleClasses.forEach(jaxsonModuleClassName -> {
             if ("com.fasterxml.jackson.module.kotlin.KotlinModule".equals(jaxsonModuleClassName)) {
-                addKotlinModuleBeanMethod(typeElement, jaxsonModuleClassName);
+                addKotlinModuleBeanMethod(classDeclaration, jaxsonModuleClassName);
             } else {
-                addBeanMethod(typeElement, jaxsonModuleClassName);
+                addBeanMethod(classDeclaration, jaxsonModuleClassName);
             }
         });
     }
@@ -83,62 +86,53 @@ public class SpringJacksonConfigGenerator extends AbstractSpringConfigGenerator 
         return this.resolvedJaxsonModuleClasses.isEmpty();
     }
 
-    private void addBeanMethod(final ClassSymbol typeElement,
+    private void addBeanMethod(final JClassDeclaration classDeclaration,
                                final String moduleClassName) {
-        final var parameterNamesModuleType = getTypes().getDeclaredType(
-                getElementUtils().getTypeElement(moduleClassName)
-        );
-
         final var sepIndex = moduleClassName.lastIndexOf(".");
         final String simpleName = sepIndex < 0 ? moduleClassName : moduleClassName.substring(sepIndex + 1);
         final var methodName = StringUtils.firstLower(simpleName);
+        final var method = classDeclaration.addMethod(new NoTypeExpression(TypeKind.VOID), methodName, Set.of(Modifier.PUBLIC));
 
-        final var method = typeElement.addMethod(methodName, parameterNamesModuleType, Modifier.PUBLIC);
-        method.addAnnotation(loadClass("org.springframework.context.annotation.Bean"));
-        method.addAnnotation(
-                loadClass("org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean"),
-                Attribute.array(
-                        Attribute.clazz(parameterNamesModuleType)
+        method.annotation(new AnnotationExpression("org.springframework.context.annotation.Bean"))
+                .annotation(new AnnotationExpression(
+                "org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean",
+                new ArrayInitializerExpression(
+                        LiteralExpression.createClassLiteralExpression(new ClassOrInterfaceTypeExpression(moduleClassName))
                 )
+        ));
+
+        method.setBody(new BlockStatement(new ReturnStatement(
+                new NewClassExpression(new ClassOrInterfaceTypeExpression(moduleClassName))
+            ))
         );
-        method.setBody(new BlockStatement(new ReturnStatement(new NewClassExpression(parameterNamesModuleType))));
+        method.setReturnType(new ClassOrInterfaceTypeExpression(moduleClassName));
     }
 
-    private void addKotlinModuleBeanMethod(final ClassSymbol typeElement,
+    private void addKotlinModuleBeanMethod(final JClassDeclaration classDeclaration,
                                            final String moduleClassName) {
-        final var builderTypeElement = getElementUtils().getTypeElement(moduleClassName + ".Builder");
-
-        if (builderTypeElement == null) {
-            return;
-        }
-
-        final var parameterNamesModuleType = getTypes().getDeclaredType(
-                getElementUtils().getTypeElement(moduleClassName));
+        final var parameterNamesModuleType = new ClassOrInterfaceTypeExpression(moduleClassName);
 
         final var sepIndex = moduleClassName.lastIndexOf(".");
         final String simpleName = sepIndex < 0 ? moduleClassName : moduleClassName.substring(sepIndex + 1);
         final var methodName = StringUtils.firstLower(simpleName);
 
-        final var method = typeElement.addMethod(methodName, parameterNamesModuleType, Modifier.PUBLIC);
-        method.addAnnotation(loadClass("org.springframework.context.annotation.Bean"));
-        method.addAnnotation(
-                loadClass("org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean"),
-                Attribute.array(
-                        Attribute.clazz(parameterNamesModuleType)
-                )
-        );
-
-        final var builderType = getTypes().getDeclaredType(
-                builderTypeElement
+        final var method = classDeclaration.addMethod(parameterNamesModuleType, methodName, Set.of(Modifier.PUBLIC));
+        method.annotation(new AnnotationExpression("org.springframework.context.annotation.Bean"))
+                .annotation(
+                        new AnnotationExpression("org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean",
+                                new ArrayInitializerExpression(
+                                        LiteralExpression.createClassLiteralExpression(new ClassOrInterfaceTypeExpression(moduleClassName)
+                                        )
+                                ))
         );
 
         final var buildCall = new MethodCallExpression(
                 new MethodCallExpression(
-                        new NewClassExpression(builderType),
+                        new NewClassExpression(new ClassOrInterfaceTypeExpression(moduleClassName + ".Builder")),
                         "configure",
                         List.of(
                                 new FieldAccessExpression(
-                                        new NameExpression("com.fasterxml.jackson.module.kotlin.KotlinFeature"),
+                                        new ClassOrInterfaceTypeExpression("com.fasterxml.jackson.module.kotlin.KotlinFeature"),
                                         "StrictNullChecks"
                                 ),
                                 LiteralExpression.createBooleanLiteralExpression(true)
@@ -148,9 +142,5 @@ public class SpringJacksonConfigGenerator extends AbstractSpringConfigGenerator 
         );
 
         method.setBody(new BlockStatement(new ReturnStatement(buildCall)));
-    }
-
-    private ClassSymbol loadClass(final String className) {
-        return (ClassSymbol) getElementUtils().getTypeElement(className);
     }
 }

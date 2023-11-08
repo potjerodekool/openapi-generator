@@ -22,15 +22,12 @@ public class WebSecurity {
 
     @Bean
     public SecurityFilterChain filterChain(final HttpSecurity http) throws Exception {
-        http.authorizeHttpRequests(authorize -> {
-                    authorize
-                            .requestMatchers("/swagger-ui.html").permitAll()
-                            .requestMatchers("/swagger-ui/**").permitAll()
-                            .requestMatchers("/v3/api-docs/**").permitAll()
-                            .requestMatchers("/persons/**").permitAll()
-                            .requestMatchers("/login").permitAll()
-                            .anyRequest().authenticated();
-                });
+        http.authorizeHttpRequests(authorize -> authorize
+                .requestMatchers("/swagger-ui/**").permitAll()
+                .requestMatchers("/v3/api-docs/**").permitAll()
+                .requestMatchers("/persons/**").permitAll()
+                .requestMatchers("/login").permitAll()
+                .anyRequest().authenticated());
 
         http.cors().and().csrf().disable()
                 .exceptionHandling().authenticationEntryPoint(unauthorizedHandler).and()

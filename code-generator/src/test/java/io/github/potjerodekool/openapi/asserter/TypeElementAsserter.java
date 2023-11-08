@@ -1,6 +1,6 @@
 package io.github.potjerodekool.openapi.asserter;
 
-import io.github.potjerodekool.codegen.model.element.ElementFilter;
+import io.github.potjerodekool.codegen.model.element.java.ElementFilter;
 import io.github.potjerodekool.codegen.model.symbol.ClassSymbol;
 import io.github.potjerodekool.codegen.model.util.type.JavaTypes;
 import org.junit.jupiter.api.Assertions;

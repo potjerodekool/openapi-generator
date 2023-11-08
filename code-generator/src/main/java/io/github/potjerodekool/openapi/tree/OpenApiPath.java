@@ -10,4 +10,5 @@ public record OpenApiPath(String path,
                           @Nullable OpenApiOperation delete,
                           String creatingReference) {
 
+
 }

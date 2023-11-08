@@ -1,5 +1,6 @@
 package io.github.potjerodekool.openapi.internal.generate.annotation.openapi;
 
+import io.github.potjerodekool.codegen.model.tree.AnnotationExpression;
 import io.github.potjerodekool.openapi.internal.generate.annotation.AbstractAnnotationBuilder;
 
 import java.util.List;
@@ -20,5 +21,9 @@ public class OperationAnnotationBuilder extends AbstractAnnotationBuilder<Operat
 
     public OperationAnnotationBuilder tags(final List<String> tags) {
         return addStringArray("tags", tags);
+    }
+
+    public OperationAnnotationBuilder requestBody(final AnnotationExpression requestBodyAnnotation) {
+        return add("requestBody", requestBodyAnnotation);
     }
 }

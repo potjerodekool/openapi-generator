@@ -1,33 +1,23 @@
 package io.github.potjerodekool.openapi.internal.generate.model;
 
 import io.github.potjerodekool.codegen.Environment;
-import io.github.potjerodekool.codegen.Language;
+import io.github.potjerodekool.openapi.internal.OpenApiEnvironment;
 import io.github.potjerodekool.openapi.internal.di.ApplicationContext;
 import io.github.potjerodekool.openapi.internal.type.OpenApiTypeUtils;
-import io.github.potjerodekool.openapi.internal.util.TypeUtils;
 import io.github.potjerodekool.openapi.tree.*;
-import io.github.potjerodekool.openapi.type.OpenApiObjectType;
-import io.github.potjerodekool.openapi.type.OpenApiType;
+import io.github.potjerodekool.openapi.tree.media.OpenApiObjectSchema;
+import io.github.potjerodekool.openapi.tree.media.OpenApiSchema;
 
 public class ModelsCodeGenerator {
 
     private final OpenApiTypeUtils openApiTypeUtils;
-    private final TypeUtils typeUtils;
     private final Environment environment;
     private final ApplicationContext applicationContext;
 
-    private final Language language;
-
-    public ModelsCodeGenerator(final TypeUtils typeUtils,
-                               final OpenApiTypeUtils openApiTypeUtils,
-                               final Environment environment,
-                               final Language language,
-                               final ApplicationContext applicationContext) {
-        this.openApiTypeUtils = openApiTypeUtils;
-        this.typeUtils = typeUtils;
-        this.environment = environment;
-        this.applicationContext = applicationContext;
-        this.language = language;
+    public ModelsCodeGenerator(final OpenApiEnvironment openApiEnvironment) {
+        this.openApiTypeUtils = openApiEnvironment.getOpenApiTypeUtils();
+        this.environment = openApiEnvironment.getEnvironment();
+        this.applicationContext = openApiEnvironment.getApplicationContext();
     }
 
     public void generate(final OpenApi api) {
@@ -71,9 +61,9 @@ public class ModelsCodeGenerator {
         }
     }
 
-    private void processPatchSchema(final OpenApiType schema) {
-        if (schema instanceof OpenApiObjectType ot) {
-            final var name = ot.name();
+    private void processPatchSchema(final OpenApiSchema<?> schema) {
+        if (schema instanceof OpenApiObjectSchema os) {
+            final var name = os.name();
             final String patchSchemaName;
 
             if (name.toLowerCase().contains("patch")) {
@@ -81,28 +71,26 @@ public class ModelsCodeGenerator {
             } else {
                 patchSchemaName = "Patch" + name;
             }
-            generateSchemaModel(patchSchemaName, ot, true);
+            generateSchemaModel(patchSchemaName, os, true);
         }
     }
 
     private void generateSchemaModels(final OpenApi api) {
-        api.schemas().entrySet().stream()
-                .filter(it -> it.getValue() instanceof OpenApiObjectType)
+        api.components().schemas().entrySet().stream()
+                .filter(it -> it.getValue() instanceof OpenApiObjectSchema)
                 .forEach( entry -> {
                     final var schemaName = entry.getKey();
-                    final var schema = (OpenApiObjectType) entry.getValue();
+                    final var schema = (OpenApiObjectSchema) entry.getValue();
             generateSchemaModel(schemaName, schema, false);
         });
     }
 
     private void generateSchemaModel(final String schemaName,
-                                     final OpenApiObjectType schema,
+                                     final OpenApiObjectSchema schema,
                                      final boolean isPatchModel) {
         new ModelCodeGenerator(
-                typeUtils,
                 openApiTypeUtils,
                 environment,
-                language,
                 applicationContext
         ).generateSchemaModel(schemaName, schema, isPatchModel);
     }

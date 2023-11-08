@@ -48,7 +48,11 @@ public class TypeTestLoader {
             for (final var className : property.split(",")) {
                 if (className.startsWith("+")) {
                     try {
-                        resolvedTypeSet.add(types.getDeclaredType(elements.getTypeElement(className.substring(1))));
+                        final var typeElement = elements.getTypeElement(className.substring(1));
+
+                        if (typeElement != null) {
+                            resolvedTypeSet.add(types.getDeclaredType(typeElement));
+                        }
                     } catch (final Exception e) {
                         //Ignore
                     }

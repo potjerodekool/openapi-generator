@@ -16,6 +16,9 @@ public class ApiConfiguration {
     @Parameter(property = "generateApiDefinitions", defaultValue = "false")
     private boolean generateApiDefinitions = false;
 
+    @Parameter(property = "generateApiImplementations", defaultValue = "false")
+    private boolean generateApiImplementations = false;
+
     public String getOpenApiFile() {
         return openApiFile;
     }
@@ -48,4 +51,11 @@ public class ApiConfiguration {
         this.generateApiDefinitions = generateApiDefinitions;
     }
 
+    public boolean isGenerateApiImplementations() {
+        return generateApiImplementations;
+    }
+
+    public void setGenerateApiImplementations(final boolean generateApiImplementations) {
+        this.generateApiImplementations = generateApiImplementations;
+    }
 }

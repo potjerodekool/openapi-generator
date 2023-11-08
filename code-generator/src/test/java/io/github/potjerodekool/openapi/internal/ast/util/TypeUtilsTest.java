@@ -46,17 +46,17 @@ class TypeUtilsTest {
     }
 
     private void assertDeclaredType(final String className,
-                                    final Type type) {
-        assertTrue(type.isDeclaredType());
-        final var declaredType = (DeclaredType) type;
+                                    final Type schema) {
+        assertTrue(schema.isDeclaredType());
+        final var declaredType = (DeclaredType) schema;
         assertEquals(className, declaredType.asElement().getQualifiedName().toString());
     }
 
     private void assertDeclaredType(final String className,
                                     final List<String> typeArguments,
-                                    final Type type) {
-        assertTrue(type.isDeclaredType());
-        final var declaredType = (DeclaredType) type;
+                                    final Type schema) {
+        assertTrue(schema.isDeclaredType());
+        final var declaredType = (DeclaredType) schema;
         assertEquals(className, declaredType.asElement().getQualifiedName().toString());
 
         final var typeArgs = declaredType.getTypeArguments();

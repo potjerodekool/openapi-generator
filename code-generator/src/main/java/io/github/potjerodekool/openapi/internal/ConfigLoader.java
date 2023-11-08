@@ -13,7 +13,6 @@ public final class ConfigLoader {
     public static void loadConfig(final File file) throws IOException {
         if (file.exists()) {
             final var config = new ObjectMapper().readValue(file, ConfigFile.class);
-            System.out.println(config);
         }
     }
 }

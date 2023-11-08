@@ -8,15 +8,25 @@ public record ApiConfiguration(File apiFile,
                                File pathsDir,
                                String basePackageName,
                                boolean generateApiDefinitions,
+                               boolean generateApiImplementations,
                                boolean generateModels,
                                Map<String, String> controllers) {
 
     public ApiConfiguration(File apiFile,
                             String basePackageName,
                             boolean generateApiDefinitions,
+                            boolean generateApiImplementations,
                             boolean generateModels,
                             Map<String, String> controllers) {
-        this(apiFile, createRelativeFile(apiFile, "schemas"), createRelativeFile(apiFile, "paths"), basePackageName, generateApiDefinitions, generateModels, controllers);
+        this(
+                apiFile,
+                createRelativeFile(apiFile, "schemas"),
+                createRelativeFile(apiFile, "paths"),
+                basePackageName,
+                generateApiDefinitions,
+                generateApiImplementations,
+                generateModels,
+                controllers);
     }
 
     private static File createRelativeFile(final File file,
@@ -33,8 +43,10 @@ public record ApiConfiguration(File apiFile,
                 apiFile,
                 basePackageName,
                 generateApiDefinitions,
+                generateApiImplementations,
                 generateModels,
                 controllers
         );
     }
 }
+

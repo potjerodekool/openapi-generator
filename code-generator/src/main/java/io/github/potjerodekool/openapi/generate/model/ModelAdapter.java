@@ -2,61 +2,47 @@ package io.github.potjerodekool.openapi.generate.model;
 
 import io.github.potjerodekool.codegen.model.element.ElementKind;
 import io.github.potjerodekool.codegen.model.tree.MethodDeclaration;
-import io.github.potjerodekool.codegen.model.tree.statement.ClassDeclaration;
+import io.github.potjerodekool.codegen.model.tree.Tree;
+import io.github.potjerodekool.codegen.model.tree.java.JMethodDeclaration;
 import io.github.potjerodekool.codegen.model.tree.statement.VariableDeclaration;
-import io.github.potjerodekool.codegen.model.type.TypeKind;
-import io.github.potjerodekool.openapi.tree.OpenApiProperty;
+import io.github.potjerodekool.codegen.model.tree.statement.java.JVariableDeclaration;
+import io.github.potjerodekool.codegen.model.tree.type.NoTypeExpression;
 
 public interface ModelAdapter {
 
-    default void adaptConstructor(MethodDeclaration constructor) {
+    default void adaptConstructor(MethodDeclaration<?> constructor) {
     }
 
-    default void adaptField(OpenApiProperty property,
-                            VariableDeclaration field) {
+    default void adaptField(VariableDeclaration<?> field) {
     }
 
-    default void adaptGetter(OpenApiProperty property,
-                             MethodDeclaration method) {
-
+    default void adaptGetter(MethodDeclaration<?> method) {
     }
 
-    default void adaptSetter(OpenApiProperty property,
-                             MethodDeclaration method) {
+    default void adaptSetter(MethodDeclaration<?> method) {
     }
 
-    default void adapt(final ClassDeclaration classDeclaration) {
-        classDeclaration.getEnclosed().forEach(enclosed -> {
-            if (enclosed instanceof MethodDeclaration methodDeclaration) {
-                adaptMethodDeclaration(methodDeclaration);
-            } else if (enclosed instanceof VariableDeclaration variableDeclaration) {
-                //TODO
-            }
-        });
-    }
-
-    private void adaptMethodDeclaration(final MethodDeclaration methodDeclaration) {
-        if (methodDeclaration.getKind() == ElementKind.CONSTRUCTOR) {
-            adaptConstructor(methodDeclaration);
-        } else if (methodDeclaration.getKind() == ElementKind.METHOD) {
-            if (isGetter(methodDeclaration)) {
-                adaptGetter(null, methodDeclaration);
+    default void adapt(final Tree tree) {
+        if (tree instanceof JMethodDeclaration methodDeclaration) {
+            if (methodDeclaration.getKind() == ElementKind.CONSTRUCTOR) {
+                adaptConstructor(methodDeclaration);
+            } else if (isGetter(methodDeclaration)) {
+                adaptGetter(methodDeclaration);
             } else if (isSetter(methodDeclaration)) {
-                adaptSetter(null, methodDeclaration);
+                adaptSetter(methodDeclaration);
             }
+        } else if (tree instanceof JVariableDeclaration variableDeclaration
+            && variableDeclaration.getKind() == ElementKind.FIELD) {
+            adaptField(variableDeclaration);
         }
     }
 
-    private boolean isGetter(final MethodDeclaration methodDeclaration) {
-        if (methodDeclaration.getParameters().size() > 0) {
-            return false;
-        }
-
-        final var returnType = methodDeclaration.getReturnType().getType();
-        return returnType.getKind() != TypeKind.VOID;
+    private boolean isGetter(final JMethodDeclaration methodDeclaration) {
+        return methodDeclaration.getParameters().isEmpty()
+                || !(methodDeclaration.getReturnType() instanceof NoTypeExpression);
     }
 
-    private boolean isSetter(final MethodDeclaration methodDeclaration) {
+    private boolean isSetter(final JMethodDeclaration methodDeclaration) {
         return methodDeclaration.getParameters().size() == 1;
     }
 }

@@ -2,6 +2,7 @@ package io.github.potjerodekool.openapi.internal.generate.config;
 
 import io.github.potjerodekool.codegen.io.Filer;
 import io.github.potjerodekool.codegen.io.Location;
+import io.github.potjerodekool.codegen.model.CompilationUnit;
 import io.github.potjerodekool.openapi.InMemoryFileManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.yaml.snakeyaml.Yaml;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 

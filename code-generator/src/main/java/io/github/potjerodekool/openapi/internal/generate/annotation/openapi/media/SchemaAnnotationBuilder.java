@@ -1,9 +1,12 @@
 package io.github.potjerodekool.openapi.internal.generate.annotation.openapi.media;
 
 import io.github.potjerodekool.codegen.model.element.Name;
+import io.github.potjerodekool.codegen.model.tree.expression.ArrayInitializerExpression;
 import io.github.potjerodekool.codegen.model.tree.expression.LiteralExpression;
 import io.github.potjerodekool.codegen.model.tree.type.TypeExpression;
 import io.github.potjerodekool.openapi.internal.generate.annotation.AbstractAnnotationBuilder;
+
+import java.util.List;
 
 public class SchemaAnnotationBuilder extends AbstractAnnotationBuilder<SchemaAnnotationBuilder> {
 
@@ -12,7 +15,9 @@ public class SchemaAnnotationBuilder extends AbstractAnnotationBuilder<SchemaAnn
     }
 
     public SchemaAnnotationBuilder implementation(final TypeExpression implementationClass) {
-        return add("implementation", LiteralExpression.createClassLiteralExpression(implementationClass));
+        return implementationClass != null
+            ? add("implementation", LiteralExpression.createClassLiteralExpression(implementationClass))
+            : this;
     }
 
     public SchemaAnnotationBuilder requiredMode(final Boolean required) {
@@ -50,6 +55,29 @@ public class SchemaAnnotationBuilder extends AbstractAnnotationBuilder<SchemaAnn
             accessMode = "AUTO";
         }
 
-        return addEnumAttribute("accessMode", "io.swagger.v3.oas.annotations.media.Schema$AccessMode", Name.of(accessMode));
+        return addEnumAttribute("accessMode", "io.swagger.v3.oas.annotations.media.Schema.AccessMode", Name.of(accessMode));
+    }
+
+    public SchemaAnnotationBuilder nullable(final Boolean nullable) {
+        if (nullable != null) {
+            add("nullable", nullable);
+        }
+        return this;
+    }
+
+    public SchemaAnnotationBuilder requiredProperties(final List<LiteralExpression> requiredProperties) {
+        return addCompoundArray("requiredProperties", requiredProperties);
+    }
+
+    public SchemaAnnotationBuilder name(final String name) {
+        return add("name", name);
+    }
+
+    public SchemaAnnotationBuilder title(final String title) {
+        return add("title", title);
+    }
+
+    public SchemaAnnotationBuilder extensions(final ArrayInitializerExpression extensions) {
+        return add("extensions", extensions);
     }
 }

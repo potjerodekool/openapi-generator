@@ -9,9 +9,6 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.net.URISyntaxException;
-import java.net.URL;
-import java.net.URLClassLoader;
 import java.util.*;
 import java.util.stream.Stream;
 
@@ -53,6 +50,7 @@ class OpenApiParserHelperIT {
         final var apiConfiguration = new ApiConfiguration(
                 apiFile,
                 "org.some",
+                true,
                 true,
                 true,
                 new HashMap<>()

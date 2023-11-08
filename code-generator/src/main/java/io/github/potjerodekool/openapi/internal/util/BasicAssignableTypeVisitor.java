@@ -2,9 +2,10 @@ package io.github.potjerodekool.openapi.internal.util;
 
 import io.github.potjerodekool.codegen.model.symbol.ClassSymbol;
 import io.github.potjerodekool.codegen.model.type.*;
+import io.github.potjerodekool.codegen.model.type.immutable.WildcardType;
 
 
-// A basic assignable visitor to test if one type is assignable to another type that ignores the type variables.
+// A basic assignable visitor to test if one schema is assignable to another schema that ignores the schema variables.
 public class BasicAssignableTypeVisitor implements TypeVisitor<Boolean, TypeMirror> {
 
     @Override
@@ -96,7 +97,7 @@ public class BasicAssignableTypeVisitor implements TypeVisitor<Boolean, TypeMirr
     }
 
     @Override
-    public Boolean visitVarType(final VarTypeImpl varType,
+    public Boolean visitVarType(final VarType varType,
                                 final TypeMirror typeMirror) {
         if (varType.getInterferedType() == null) {
             return false;

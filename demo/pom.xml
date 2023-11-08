@@ -5,7 +5,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.0.1</version>
+        <version>3.1.4</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <modelVersion>4.0.0</modelVersion>
@@ -13,10 +13,11 @@
     <artifactId>demo</artifactId>
 
     <properties>
-        <maven.compiler.source>16</maven.compiler.source>
-        <maven.compiler.target>16</maven.compiler.target>
+        <java.version>17</java.version>
+        <maven.compiler.source>${java.version}</maven.compiler.source>
+        <maven.compiler.target>${java.version}</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <kotlin.version>1.7.22</kotlin.version>
+        <kotlin.version>1.8.10</kotlin.version>
     </properties>
 
     <dependencies>
@@ -56,42 +57,18 @@
             <artifactId>jackson-module-kotlin</artifactId>
             <version>2.14.0</version>
         </dependency>
+
+        <!--
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
+        -->
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
-        </dependency>
-        <!--
-        <dependency>
-            <groupId>au.com.dius</groupId>
-            <artifactId>pact-jvm-consumer-junit5_2.12</artifactId>
-            <version>3.6.15</version>
-            <scope>test</scope>
-        </dependency>
-        -->
-        <!--
-        <dependency>
-            <groupId>au.com.dius</groupId>
-            <artifactId>pact-jvm-provider-junit5_2.12</artifactId>
-            <version>3.6.15</version>
-        </dependency>
-        -->
-
-        <dependency>
-            <groupId>au.com.dius.pact.consumer</groupId>
-            <artifactId>junit5</artifactId>
-            <version>4.4.0-beta.4</version>
-        </dependency>
-
-        <dependency>
-            <groupId>au.com.dius.pact.provider</groupId>
-            <artifactId>junit5spring</artifactId>
-            <version>4.4.0-beta.4</version>
         </dependency>
 
         <dependency>
@@ -102,15 +79,12 @@
         <dependency>
             <groupId>org.openapitools</groupId>
             <artifactId>jackson-databind-nullable</artifactId>
-            <version>0.2.3</version>
+            <version>0.2.6</version>
         </dependency>
         <dependency>
             <groupId>org.hibernate.validator</groupId>
             <artifactId>hibernate-validator</artifactId>
-            <version>6.2.3.Final</version>
-            <!--
-            <version>8.0.0.CR3</version>
-            -->
+            <version>8.0.0.Final</version>
         </dependency>
     </dependencies>
 
@@ -119,7 +93,7 @@
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>build-helper-maven-plugin</artifactId>
-                <version>3.2.0</version>
+                <version>3.4.0</version>
                 <executions>
                     <execution>
                         <id>add-source</id>
@@ -145,16 +119,17 @@
                             <goal>generate</goal>
                         </goals>
                         <configuration>
-                            <basePackageName>io.github.potjerodekool.petstore</basePackageName>
+                            <basePackageName>io.github.potjerodekool.demo.api</basePackageName>
                             <language>java</language>
-                            <features>
-                                <model.generate.experialmental>true</model.generate.experialmental>
-                            </features>
                             <apis>
                                 <api>
+                                    <!--
                                     <openApiFile>petstore/petstore.yaml</openApiFile>
-                                    <basePackageName>io.github.potjerodekool.petstore.api</basePackageName>
+                                    -->
+                                    <openApiFile>api.json</openApiFile>
+                                    <basePackageName>io.github.potjerodekool.demo.api</basePackageName>
                                     <generateApiDefinitions>true</generateApiDefinitions>
+                                    <generateApiImplementations>true</generateApiImplementations>
                                 </api>
                                 <!--
                                 <api>
@@ -213,7 +188,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.10.1</version>
+                <version>3.11.0</version>
                 <executions>
                     <!-- Replacing default-compile as it is treated specially by maven -->
                     <execution>

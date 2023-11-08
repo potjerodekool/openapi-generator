@@ -23,7 +23,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (authorizationStr != null && authorizationStr.startsWith(BEARER_PREFIX)) {
             final var bearerToken = authorizationStr.substring(BEARER_PREFIX.length());
 
-            if (bearerToken.length() > 0) {
+            if (!bearerToken.isEmpty()) {
                 final var context = SecurityContextHolder.getContext();
                 context.setAuthentication(new JwtUser(bearerToken));
             }

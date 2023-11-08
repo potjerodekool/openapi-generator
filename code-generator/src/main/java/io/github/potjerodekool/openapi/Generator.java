@@ -7,24 +7,18 @@ import io.github.potjerodekool.codegen.Language;
 import io.github.potjerodekool.codegen.io.Location;
 import io.github.potjerodekool.codegen.model.util.type.Types;
 import io.github.potjerodekool.openapi.dependency.DependencyChecker;
-import io.github.potjerodekool.openapi.generate.config.ApiConfigGenerator;
-import io.github.potjerodekool.openapi.generate.config.ConfigGenerator;
-import io.github.potjerodekool.openapi.internal.ClassNames;
-import io.github.potjerodekool.openapi.internal.ConfigFile;
-import io.github.potjerodekool.openapi.internal.OpenApiParserHelper;
-import io.github.potjerodekool.openapi.internal.TreeBuilder;
+import io.github.potjerodekool.openapi.internal.*;
 import io.github.potjerodekool.openapi.internal.di.ApplicationContext;
 import io.github.potjerodekool.openapi.internal.di.ClassPathScanner;
-import io.github.potjerodekool.openapi.internal.generate.api.SpringApiDefinitionGenerator;
-import io.github.potjerodekool.openapi.internal.generate.api.UtilsGenerator;
-import io.github.potjerodekool.openapi.internal.generate.config.SpringApplicationConfigGenerator;
-import io.github.potjerodekool.openapi.internal.generate.config.SpringJacksonConfigGenerator;
-import io.github.potjerodekool.openapi.internal.generate.config.SpringOpenApiConfigGenerator;
-import io.github.potjerodekool.openapi.internal.generate.model.ModelsCodeGenerator;
+import io.github.potjerodekool.openapi.internal.generate.Resolver;
+import io.github.potjerodekool.openapi.internal.generate.api.AbstractCodeGenerator;
+import io.github.potjerodekool.openapi.internal.generate.springmvc.SpringMvcGenerator;
+import io.github.potjerodekool.openapi.internal.resolve.Enter;
 import io.github.potjerodekool.openapi.internal.type.OpenApiTypeUtils;
-import io.github.potjerodekool.openapi.internal.util.GenerateException;
-import io.github.potjerodekool.openapi.internal.util.TypeUtils;
-import io.github.potjerodekool.openapi.tree.OpenApi;
+import io.github.potjerodekool.openapi.log.LogLevel;
+import io.github.potjerodekool.openapi.log.Logger;
+import io.swagger.parser.OpenAPIParser;
+import io.swagger.v3.parser.core.models.SwaggerParseResult;
 
 import java.io.File;
 import java.io.IOException;
@@ -34,6 +28,8 @@ import java.util.Map;
 
 public class Generator {
 
+    private static final Logger LOGGER = Logger.getLogger(Generator.class.getName());
+
     public void generate(final Project project,
                          final List<ApiConfiguration> apiConfigurations,
                          final Map<String, Boolean> features,
@@ -42,25 +38,31 @@ public class Generator {
         final var environment = new Environment(ClassPath.getFullClassPath(project));
         configureFileManager(project, environment);
 
-        final var typeUtils = new TypeUtils(
-                environment.getTypes(),
-                environment.getElementUtils()
-        );
+        final var springGenerator = new SpringMvcGenerator();
+        final var openApiTypeUtils = springGenerator.getOpenApiTypeUtils();
 
-        final var openApiTypeUtils = createOpenApiTypeUtils(
-                environment,
-                typeUtils
-        );
-
-        generateCommon(
-                project,
-                basePackageName,
+        final var generatorConfig = createGeneratorConfig(
                 language,
-                features,
-                typeUtils,
-                openApiTypeUtils,
-                environment
+                basePackageName,
+                resolveFeatures(project, features)
         );
+
+        final var applicationContext = createApplicationContext(
+                project.dependencyChecker(),
+                generatorConfig,
+                environment,
+                openApiTypeUtils
+        );
+
+        final var openApiEnvironment = new OpenApiEnvironment(
+                project,
+                openApiTypeUtils,
+                environment,
+                generatorConfig,
+                applicationContext
+        );
+
+        springGenerator.generateCommon(openApiEnvironment);
 
         final var standardApiConfiguration = apiConfigurations.stream()
                 .filter(ApiConfiguration::generateApiDefinitions)
@@ -70,65 +72,43 @@ public class Generator {
         apiConfigurations.forEach(apiConfiguration -> {
             final var generateConfig = apiConfiguration == standardApiConfiguration;
             generateApi(
-                    project,
+                    openApiEnvironment,
+                    springGenerator,
                     apiConfiguration,
-                    features,
-                    basePackageName,
-                    language,
-                    typeUtils,
-                    openApiTypeUtils,
-                    environment,
                     generateConfig
             );
         });
+
+        generateCompilationUnits(environment, language);
+        springGenerator.generate(environment);
     }
 
-    private void generateCommon(final Project project,
-                                final String basePackageName,
-                                final Language language,
-                                final Map<String, Boolean> features,
-                                final TypeUtils typeUtils,
-                                final OpenApiTypeUtils openApiTypeUtils,
-                                final Environment environment) {
-        final var generatorConfig = createGeneratorConfig(
-                language,
-                basePackageName,
-                resolveFeatures(project, features)
-        );
+    private void generateCompilationUnits(final Environment environment,
+                                          final Language language) {
+        final var filer = environment.getFiler();
 
-        generateUtils(
-                generatorConfig,
-                environment
-        );
+        final var enter = new Enter(environment.getSymbolTable());
+        final var resolver = new Resolver(
+                environment.getElementUtils(),
+                environment.getTypes(),
+                environment.getSymbolTable());
 
-        final var applicationContext = createApplicationContext(
-                project.dependencyChecker(),
-                generatorConfig,
-                environment,
-                typeUtils,
-                openApiTypeUtils
-        );
+        environment.getCompilationUnits().forEach(compilationUnit -> {
+            compilationUnit.accept(enter, null);
+            resolver.resolve(compilationUnit);
 
-        generateConfigs(
-                generatorConfig,
-                applicationContext,
-                project.dependencyChecker(),
-                environment
-        );
-
-        final var additionalApplicationProperties = new HashMap<String, Object>();
-
-        generateSpringConfig(additionalApplicationProperties, environment);
+            try {
+                filer.writeSource(compilationUnit, language);
+            } catch (final IOException e) {
+                LOGGER.log(LogLevel.SEVERE, "Fail to generate code", e);
+            }
+        });
     }
 
-    private void generateApi(final Project project,
+
+    private void generateApi(final OpenApiEnvironment openApiEnvironment,
+                             final AbstractCodeGenerator codeGenerator,
                              final ApiConfiguration apiConfiguration,
-                             final Map<String, Boolean> features,
-                             final String basePackageName,
-                             final Language language,
-                             final TypeUtils typeUtils,
-                             final OpenApiTypeUtils openApiTypeUtils,
-                             final Environment environment,
                              final boolean generateConfigs) {
         final var apiFile = apiConfiguration.apiFile().getAbsoluteFile();
         final var rootDir = apiFile.getParentFile();
@@ -140,23 +120,12 @@ public class Generator {
         final var configurationFile = loadConfigFor(apiFile);
 
         final var controllers = configurationFile.getControllers();
-        final var resolvedFeatures = resolveFeatures(project, features);
-
-        final var generatorConfig = createGeneratorConfig(
-                language,
-                basePackageName,
-                resolvedFeatures
-        );
 
         doGenerateApi(
+                openApiEnvironment,
+                codeGenerator,
                 apiFile,
-                rootDir,
-                generatorConfig,
                 apiConfiguration.withControllers(controllers),
-                project.dependencyChecker(),
-                openApiTypeUtils,
-                typeUtils,
-                environment,
                 generateConfigs
         );
     }
@@ -177,7 +146,6 @@ public class Generator {
     }
 
     private ConfigFile loadConfigFor(final File apiFile) {
-        //spec.yaml
         final var rootDir = apiFile.getParentFile();
         final var apiFileName = apiFile.getName();
         final var separatorIndex = apiFileName.lastIndexOf('.');
@@ -196,62 +164,23 @@ public class Generator {
         }
     }
 
-    private void doGenerateApi(final File apiFile,
-                               final File rootDir,
-                               final GeneratorConfig generatorConfig,
+    private void doGenerateApi(final OpenApiEnvironment openApiEnvironment,
+                               final AbstractCodeGenerator codeGenerator,
+                               final File apiFile,
                                final ApiConfiguration apiConfiguration,
-                               final DependencyChecker dependencyChecker,
-                               final OpenApiTypeUtils openApiTypeUtils,
-                               final TypeUtils typeUtils,
-                               final Environment environment,
                                final boolean generateConfigs) {
-        final var openApi = OpenApiParserHelper.merge(apiFile);
-        final var builder = new TreeBuilder(apiConfiguration);
-        final var api = builder.build(openApi, rootDir);
+        final var builder = new OpenApiTreeBuilder(apiConfiguration);
+        final var api = builder.build(parse(apiFile));
 
-        final var applicationContext = createApplicationContext(
-                dependencyChecker,
-                generatorConfig,
-                environment,
-                typeUtils,
-                openApiTypeUtils
-        );
-
-        generateModels(
+        codeGenerator.generateApi(
+                openApiEnvironment,
                 api,
                 apiConfiguration,
-                generatorConfig,
-                applicationContext,
-                typeUtils,
-                openApiTypeUtils,
-                environment
-        );
-
-        generateApiDefinitions(
-                api,
-                apiConfiguration,
-                generatorConfig,
-                typeUtils,
-                openApiTypeUtils,
-                environment
-        );
-
-        final var additionalApplicationProperties = new HashMap<String, Object>();
-
-        generateApiConfigs(
-                api,
-                generatorConfig,
-                applicationContext,
-                environment,
-                generateConfigs
-        );
-
-        generateSpringConfig(additionalApplicationProperties, environment);
+                generateConfigs);
     }
 
-    private OpenApiTypeUtils createOpenApiTypeUtils(final Environment environment,
-                                                    final TypeUtils typeUtils) {
-        return new OpenApiTypeUtils(environment.getTypes(), typeUtils, environment.getElementUtils());
+    private SwaggerParseResult parse(final File file) {
+        return new OpenAPIParser().readLocation(file.getAbsolutePath(), null, null);
     }
 
     private void configureFileManager(final Project project,
@@ -260,86 +189,6 @@ public class Generator {
         fileManager.setPathsForLocation(Location.RESOURCE_PATH, project.resourcePaths());
         fileManager.setPathsForLocation(Location.RESOURCE_OUTPUT, List.of(project.generatedSourcesDirectory().resolve("resources")));
         fileManager.setPathsForLocation(Location.SOURCE_OUTPUT, List.of(project.generatedSourcesDirectory()));
-    }
-
-    private void generateModels(final OpenApi api,
-                                final ApiConfiguration apiConfiguration,
-                                final GeneratorConfig generatorConfig,
-                                final ApplicationContext applicationContext,
-                                final TypeUtils typeUtils,
-                                final OpenApiTypeUtils openApiTypeUtils,
-                                final Environment environment) {
-        final var generateModels = apiConfiguration.generateModels();
-
-        if (generateModels) {
-            new ModelsCodeGenerator(
-                    typeUtils,
-                    openApiTypeUtils,
-                    environment,
-                    generatorConfig.language(),
-                    applicationContext
-            ).generate(api);
-        }
-    }
-
-    private void generateApiDefinitions(final OpenApi api,
-                                        final ApiConfiguration apiConfiguration,
-                                        final GeneratorConfig generatorConfig,
-                                        final TypeUtils typeUtils,
-                                        final OpenApiTypeUtils openApiTypeUtils,
-                                        final Environment environment) {
-        if (apiConfiguration.generateApiDefinitions()) {
-            new SpringApiDefinitionGenerator(
-                    generatorConfig,
-                    apiConfiguration,
-                    typeUtils,
-                    openApiTypeUtils,
-                    environment
-            ).generate(api);
-        }
-    }
-
-    private void generateUtils(final GeneratorConfig generatorConfig,
-                               final Environment environment) {
-        new UtilsGenerator(
-                generatorConfig,
-                environment
-        ).generate();
-    }
-
-    private void generateConfigs(final GeneratorConfig generatorConfig,
-                                 final ApplicationContext applicationContext,
-                                 final DependencyChecker dependencyChecker,
-                                 final Environment environment) {
-        new SpringJacksonConfigGenerator(
-                generatorConfig,
-                environment,
-                dependencyChecker
-        ).generate();
-
-        final var configGenerators = applicationContext.getBeansOfType(ConfigGenerator.class);
-        configGenerators.forEach(ConfigGenerator::generate);
-    }
-
-    private void generateApiConfigs(final OpenApi api,
-                                    final GeneratorConfig generatorConfig,
-                                    final ApplicationContext applicationContext,
-                                    final Environment environment,
-                                    final boolean generateConfigs) {
-        if (!generateConfigs) {
-            return;
-        }
-
-        new SpringOpenApiConfigGenerator(generatorConfig, environment).generate(api);
-
-        final var configGenerators = applicationContext.getBeansOfType(ApiConfigGenerator.class);
-        configGenerators.forEach(configGenerator -> configGenerator.generate(api));
-    }
-
-    private void generateSpringConfig(final Map<String, Object> additionalApplicationProperties,
-                                      final Environment environment) {
-        new SpringApplicationConfigGenerator(environment.getFiler())
-                .generate(additionalApplicationProperties);
     }
 
     private Map<String, Boolean> checkFeatures(final Map<String, Boolean> configuredFeatures,
@@ -364,14 +213,12 @@ public class Generator {
     private ApplicationContext createApplicationContext(final DependencyChecker dependencyChecker,
                                                         final GeneratorConfig generatorConfig,
                                                         final Environment environment,
-                                                        final TypeUtils typeUtils,
                                                         final OpenApiTypeUtils openApiTypeUtils) {
         final ApplicationContext context = new ApplicationContext(dependencyChecker);
         context.registerBean(GeneratorConfig.class, generatorConfig);
         context.registerBean(DependencyChecker.class, dependencyChecker);
         context.registerBean(Types.class, environment.getTypes());
         context.registerBean(Environment.class, environment);
-        context.registerBean(TypeUtils.class, typeUtils);
         context.registerBean(OpenApiTypeUtils.class, openApiTypeUtils);
 
         final var beanDefinitions = ClassPathScanner.scan();

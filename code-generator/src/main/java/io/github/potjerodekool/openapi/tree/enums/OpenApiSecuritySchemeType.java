@@ -8,7 +8,8 @@ public enum OpenApiSecuritySchemeType {
     APIKEY("apiKey"),
     HTTP("http"),
     OPENIDCONNECT("openIdConnect"),
-    OAUTH2("oauth2");
+    OAUTH2("oauth2"),
+    MUTUALTLS("mutualTLS");
 
     private final String value;
 

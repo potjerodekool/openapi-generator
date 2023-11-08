@@ -23,4 +23,8 @@ public enum ParameterLocation {
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException(in));
     }
+
+    public String value() {
+        return value;
+    }
 }

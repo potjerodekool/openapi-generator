@@ -3,6 +3,7 @@ package io.github.potjerodekool.openapi.tree;
 import java.util.Map;
 
 public record OpenApiInfo(String title,
+                          String summary,
                           String description,
                           String termsOfService,
                           OpenApiContact contact,

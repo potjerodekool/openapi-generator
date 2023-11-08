@@ -1,38 +1,196 @@
-openapi: "3.0.0"
+---
+openapi: 3.0.1
 info:
-  version: 1.0.0
   title: Swagger Petstore
   license:
     name: MIT
+  version: 1.0.0
 servers:
   - url: http://petstore.swagger.io/v1
+    description: petstore url
+security:
+  - bearerAuth: []
 paths:
-  /login:
-    post:
-      summary: Login
-      operationId: login
-      security:
-        - {}
+  "/pets/{petId}":
+    get:
+      tags:
+        - pets
+      summary: Info for a specific pet
+      operationId: getPetById
+      parameters:
+        - name: petId
+          in: path
+          description: The id of the pet to retrieve
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Expected response to a valid request
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/PetDto"
+              examples:
+                foo:
+                  summary: pets response example
+                  description: foo
+                  value:
+                    id: 1
+                    name: Sylvester
+                    tag: cat
+        default:
+          description: unexpected error
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorDto"
+      security: [
+        {
+          "petstore_auth": [
+            "write:pets",
+            "read:pets"
+          ]
+        },
+        {
+        }
+      ]
+    put:
+      tags:
+        - pets
+      summary: Update a pet
+      operationId: updatePet
+      parameters:
+        - name: petId
+          in: path
+          description: The id of the pet to update
+          required: true
+          schema:
+            type: integer
+            format: int64
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LoginRequest'
+              "$ref": "#/components/schemas/PetDto"
       responses:
-        '200':
-          description: 'Login success response'
+        '204':
+          description: No content
+        '404':
+          description: Not found
+        '422':
+          description: Unprocessable request
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LoginResponse'
-        '401':
-          description: 'Unauthorised'
-  /pets:
-    get:
-      summary: List all pets
-      operationId: listPets
+                "$ref": "#/components/schemas/ErrorDto"
+      security: []
+    delete:
       tags:
         - pets
+      summary: Delete a pet
+      operationId: deletePet
+      parameters:
+        - name: petId
+          in: path
+          description: The id of the pet to delete
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: No content
+        '404':
+          description: Not found
+      security: []
+    patch:
+      tags:
+        - pets
+      summary: Patch a pet
+      operationId: patchPet
+      parameters:
+        - name: petId
+          in: path
+          description: The id of the pet to patch
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/PetDto"
+      responses:
+        '204':
+          description: No content
+        '404':
+          description: Not found
+        '422':
+          description: Unprocessable request
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/ErrorDto"
+      security: []
+  "/pets/{petId}/image":
+    get:
+      tags:
+        - pets
+      summary: Info image for a specific pet
+      operationId: getPetImageById
+      parameters:
+        - name: petId
+          in: path
+          description: The id of the pet of which image to retrieve
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Expected response to a valid request
+          content:
+            "*/*":
+              schema:
+                type: string
+                format: binary
+      security: []
+    put:
+      tags:
+        - pets
+      summary: Update image of pet
+      operationId: updatePetImage
+      parameters:
+        - name: petId
+          in: path
+          description: The id of the pet to update
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        content:
+          image/png:
+            schema:
+              type: string
+              format: binary
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '204':
+          description: No content
+      security: []
+  "/pets":
+    get:
+      tags:
+        - pets
+      summary: List all pets
+      operationId: listPets
       parameters:
         - name: limit
           in: query
@@ -47,28 +205,30 @@ paths:
           headers:
             x-next:
               description: A link to the next page of responses
-              schema:
-                type: string
+              style: simple
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PetsDto'
+                type: array
+                items:
+                  "$ref": "#/components/schemas/PetDto"
         default:
           description: unexpected error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorDto'
+                "$ref": "#/components/schemas/ErrorDto"
+      security: []
     post:
-      summary: Create a pet
-      operationId: createPet
       tags:
         - pets
+      summary: Create a pet
+      operationId: createPet
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PetDto'
+              "$ref": "#/components/schemas/PetDto"
       responses:
         '201':
           description: Null response
@@ -77,180 +237,43 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorDto'
-  /pets/{petId}:
-    get:
-      summary: Info for a specific pet
-      operationId: getPetById
+                "$ref": "#/components/schemas/ErrorDto"
+      security: []
+  "/login":
+    post:
       tags:
-        - pets
-      parameters:
-        - name: petId
-          in: path
-          required: true
-          description: The id of the pet to retrieve
-          schema:
-            type: integer
-            format: int64
-            nullable: false
-      responses:
-        '200':
-          description: Expected response to a valid request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PetDto'
-              examples:
-                foo:
-                  summary: 'pets response example'
-                  value: '{ "id": 1, "name": "Sylvester", "tag": "cat" }'
-        default:
-          description: unexpected error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorDto'
-    put:
-      summary: Update a pet
-      operationId: updatePet
-      parameters:
-        - name: petId
-          in: path
-          required: true
-          description: The id of the pet to update
-          schema:
-            type: integer
-            format: int64
-            nullable: false
-      tags:
-        - pets
+        - login-controller
+      summary: Login
+      operationId: login
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PetDto'
-      responses:
-        '204':
-          description: 'No content'
-        '404':
-          description: 'Not found'
-        422:
-          description: 'Unprocessable request'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorDto'
-    patch:
-      summary: Patch a pet
-      operationId: patchPet
-      parameters:
-        - name: petId
-          in: path
-          required: true
-          description: The id of the pet to patch
-          schema:
-            type: integer
-            format: int64
-            nullable: false
-      tags:
-        - pets
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PetDto'
-      responses:
-        '204':
-          description: 'No content'
-        '404':
-          description: 'Not found'
-        422:
-          description: 'Unprocessable request'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorDto'
-    delete:
-      summary: Delete a pet
-      operationId: deletePet
-      parameters:
-        - name: petId
-          in: path
-          required: true
-          description: The id of the pet to delete
-          schema:
-            type: integer
-            format: int64
-            nullable: false
-      tags:
-        - pets
-      responses:
-        '204':
-          description: 'No content'
-        '404':
-          description: 'Not found'
-  /pets/{petId}/image:
-    get:
-      summary: Info image for a specific pet
-      operationId: getPetImageById
-      tags:
-        - pets
-      parameters:
-        - name: petId
-          in: path
-          required: true
-          description: The id of the pet of which image to retrieve
-          schema:
-            type: integer
-            format: int64
-            nullable: false
+              "$ref": "#/components/schemas/LoginRequest"
       responses:
         '200':
-          description: Expected response to a valid request
+          description: Login success response
           content:
-            '*/*':
+            application/json:
               schema:
-                type: 'string'
-                format: 'binary'
-    put:
-      summary: Update image of pet
-      operationId: updatePetImage
-      parameters:
-        - name: petId
-          in: path
-          required: true
-          description: The id of the pet to update
-          schema:
-            type: integer
-            format: int64
-            nullable: false
+                "$ref": "#/components/schemas/LoginResponse"
+        '401':
+          description: Unauthorised
+      security: []
+  "/pets/{petId}/details":
+    get:
       tags:
         - pets
-      requestBody:
-        content:
-          'multipart/form-data':
-            schema:
-              required: ["image"]
-              type: object
-              properties:
-                image:
-                  type: string
-                  format: binary
-  /pets/{petId}/details:
-    get:
       summary: Details for a specific pet
       operationId: getPetDetailsById
-      tags:
-        - pets
       parameters:
         - name: petId
           in: path
-          required: true
           description: The id of the pet of which details to retrieve
+          required: true
           schema:
             type: integer
             format: int64
-            nullable: false
       responses:
         '200':
           description: Expected response to a valid request
@@ -260,35 +283,14 @@ paths:
                 type: object
                 additionalProperties:
                   type: object
-
+      security: []
 components:
   schemas:
-    LoginRequest:
-      type: object
-      required:
-        - username
-        - password
-      properties:
-        username:
-          type: string
-          writeOnly: true
-        password:
-          type: string
-          format: password
-          writeOnly: true
-    LoginResponse:
-      type: object
-      required:
-        - token
-      properties:
-        token:
-          type: string
-          readOnly: true
     PetDto:
-      type: object
       required:
         - id
         - name
+      type: object
       properties:
         id:
           type: integer
@@ -301,19 +303,16 @@ components:
           type: string
           format: date
           nullable: true
-          x-allowed-value: pastOrPresent
+          x-validation:
+            allowed-value: pastOrPresent
         tag:
           type: string
           nullable: true
-    PetsDto:
-      type: array
-      items:
-        $ref: '#/components/schemas/PetDto'
     ErrorDto:
-      type: object
       required:
         - code
         - message
+      type: object
       properties:
         code:
           type: integer
@@ -322,10 +321,29 @@ components:
         message:
           type: string
           readOnly: true
+    LoginRequest:
+      required:
+        - password
+        - username
+      type: object
+      properties:
+        username:
+          type: string
+          writeOnly: true
+        password:
+          type: string
+          format: password
+          writeOnly: true
+    LoginResponse:
+      required:
+        - token
+      type: object
+      properties:
+        token:
+          type: string
+          readOnly: true
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-security:
-  - bearerAuth: []

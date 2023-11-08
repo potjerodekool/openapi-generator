@@ -1,315 +1,189 @@
-package io.github.potjerodekool.openapi.internal.type;
+    package io.github.potjerodekool.openapi.internal.type;
 
-import io.github.potjerodekool.codegen.model.symbol.ErrorSymbol;
-import io.github.potjerodekool.codegen.model.symbol.PackageSymbol;
-import io.github.potjerodekool.codegen.model.tree.expression.Expression;
-import io.github.potjerodekool.codegen.model.tree.expression.NameExpression;
 import io.github.potjerodekool.codegen.model.tree.type.*;
-import io.github.potjerodekool.codegen.model.type.*;
-import io.github.potjerodekool.codegen.model.util.Elements;
-import io.github.potjerodekool.codegen.model.util.QualifiedName;
 import io.github.potjerodekool.codegen.model.util.StringUtils;
-import io.github.potjerodekool.codegen.model.util.type.Types;
-import io.github.potjerodekool.openapi.internal.util.TypeUtils;
-import io.github.potjerodekool.openapi.internal.util.Utils;
-import io.github.potjerodekool.openapi.tree.OpenApiProperty;
-import io.github.potjerodekool.openapi.tree.Package;
-import io.github.potjerodekool.openapi.type.OpenApiArrayType;
-import io.github.potjerodekool.openapi.type.OpenApiObjectType;
-import io.github.potjerodekool.openapi.type.OpenApiStandardType;
-import io.github.potjerodekool.openapi.type.OpenApiType;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import io.github.potjerodekool.openapi.internal.ClassNames;
+import io.github.potjerodekool.openapi.tree.media.*;
 
 import java.util.List;
 
-public class OpenApiTypeUtils {
+public abstract class OpenApiTypeUtils {
 
-    private final Types types;
-    private final TypeUtils typeUtils;
-    private final Elements elements;
-
-    public OpenApiTypeUtils(final Types types,
-                            final TypeUtils typeUtils,
-                            final Elements elements) {
-        this.types = types;
-        this.typeUtils = typeUtils;
-        this.elements = elements;
+    public TypeExpression createTypeExpression(final OpenApiSchema<?> schema) {
+        return createTypeExpression("", schema);
     }
 
-    private DeclaredType createDeclaredType(final String className,
-                                            final boolean isNullable) {
-        final var element = elements.getTypeElement(className);
-
-        if (element == null) {
-            final var errorSymbol = ErrorSymbol.create();
-            final var qualifiedName = QualifiedName.from(className);
-            errorSymbol.setSimpleName(qualifiedName.simpleName());
-            errorSymbol.setEnclosingElement(PackageSymbol.create(qualifiedName.packageName()));
-            return (DeclaredType) errorSymbol.asType();
+    public TypeExpression createTypeExpression(final String mediaType,
+                                               final OpenApiSchema<?> schema) {
+        if (schema instanceof OpenApiStringSchema
+            || schema instanceof OpenApiPasswordSchema) {
+            return createStringTypeExpression(schema);
+        } else if (schema instanceof OpenApiIntegerSchema openApiIntegerSchema) {
+            return createIntegerTypeExpression(openApiIntegerSchema);
+        } else if (schema instanceof OpenApiBooleanSchema openApiBooleanSchema) {
+            return createBooleanTypeExpression(openApiBooleanSchema);
+        } else if (schema instanceof OpenApiNumberSchema openApiNumberSchema) {
+            return createNumberTypeExpression(openApiNumberSchema);
+        } else if (schema instanceof OpenApiDateSchema openApiDateSchema) {
+            return createDateTypeExpression(openApiDateSchema);
+        } else if (schema instanceof OpenApiArraySchema openApiArraySchema) {
+            return createArrayTypeExpression(openApiArraySchema);
+        } else if (schema instanceof OpenApiObjectSchema openApiObjectSchema) {
+            return createObjectTypeExpression(openApiObjectSchema);
+        } else if (schema instanceof OpenApiBinarySchema openApiBinarySchema) {
+            return createBinaryTypeExpression(openApiBinarySchema);
+        } else if (schema instanceof OpenApiMapSchema openApiMapSchema) {
+            return createMapTypeExpression(openApiMapSchema);
+        } else if (schema instanceof OpenApiUUIDSchema openApiUUIDSchema) {
+            return createUUIDTypeExpression(openApiUUIDSchema);
+        } else if (schema instanceof OpenApiDateTimeSchema openApiDateTimeSchema) {
+            return createDateTimeExpression(openApiDateTimeSchema);
+        } else if (isImageOrVideo(mediaType)) {
+            return createMultipartTypeExpression();
         }
 
-        final var type = element.asType();
-        return (DeclaredType) (isNullable ? type.asNullableType() : type);
+        throw new UnsupportedOperationException("" + schema);
     }
 
-    public TypeExpression createTypeExpression(final OpenApiType type) {
-        return switch (type.kind()) {
-            case STANDARD -> createStandardTypeExpression((OpenApiStandardType) type);
-            case ARRAY -> {
-                final var at = (OpenApiArrayType) type;
-                final var componentType = createTypeExpression(at.items());
-
-                if (componentType instanceof PrimitiveTypeExpression) {
-                    yield new ArrayTypeExpression(componentType);
-                }
-
-                yield createAnnotatedType("java.util.List",
-                        List.of(componentType),
-                        Utils.isNullOrTrue(at.nullable()));
-            }
-            case OBJECT -> {
-                final var ot = (OpenApiObjectType) type;
-                final var name = StringUtils.firstUpper(ot.name());
-                final var pck = ot.pck();
-
-                if (isMapType(pck, ot.name(), ot.additionalProperties())) {
-                    yield createMapTypeExpression(ot);
-                } else if (pck.isUnnamed()) {
-                    if ("object".equals(ot.name())) {
-                        yield new AnnotatedTypeExpression(
-                                new NameExpression("java.lang.Object"),
-                                List.of(),
-                                Boolean.TRUE.equals(ot.nullable())
-                        );
-                    } else {
-                        yield new AnnotatedTypeExpression(
-                                new NameExpression(name),
-                                List.of(),
-                                Boolean.TRUE.equals(ot.nullable())
-                        );
-                    }
-                } else {
-                    final var qualifiedName = pck.getName() + "." + name;
-                    yield new AnnotatedTypeExpression(
-                            new NameExpression(qualifiedName),
-                            List.of(),
-                            Boolean.TRUE.equals(ot.nullable())
-                    );
-                }
-            }
-        };
+    private boolean isImageOrVideo(final String mediaType) {
+        return mediaType != null
+                && (mediaType.startsWith("image/")
+                    || mediaType.startsWith("video/"));
     }
 
-    public TypeMirror createType(final OpenApiType type) {
-        return switch (type.kind()) {
-            case STANDARD -> createStandardType((OpenApiStandardType) type);
-            case ARRAY -> {
-                final var at = (OpenApiArrayType) type;
-                final var componentType = createType(at.items());
+    private TypeExpression createObjectTypeExpression(final OpenApiObjectSchema schema) {
+        final String className;
 
-                if (componentType.isPrimitiveType()) {
-                    yield types.getArrayType(componentType);
-                }
+        if ("object".equals(schema.name()) && schema.pck().isUnnamed()) {
+            className = "java.lang.Object";
+        } else {
+            final var name = StringUtils.firstUpper(schema.name());
+            final var pck = schema.pck();
+            className = pck.isUnnamed()
+                    ? name
+                    : pck.getName() + "." + name;
+        }
 
-                yield typeUtils.createListType(
-                        (DeclaredType) componentType,
-                        Utils.isNullOrTrue(at.nullable())
-                );
-            }
-            case OBJECT -> {
-                final var ot = (OpenApiObjectType) type;
-                final var name = StringUtils.firstUpper(ot.name());
-                final var pck = ot.pck();
-
-                if (isMapType(pck, ot.name(), ot.additionalProperties())) {
-                    yield createMapType(ot);
-                } else if (pck.isUnnamed()) {
-                    if ("object".equals(ot.name())) {
-                        yield typeUtils.createObjectType(Boolean.TRUE.equals(ot.nullable()));
-                    } else {
-                        yield createDeclaredType(name, Boolean.TRUE.equals(ot.nullable()));
-                    }
-                } else {
-                    final var qualifiedName = pck.getName() + "." + name;
-                    yield createDeclaredType(qualifiedName, Boolean.TRUE.equals(ot.nullable()));
-                }
-            }
-        };
+        return createClassOrInterfaceTypeExpression(className, schema);
     }
 
-    private TypeExpression createStandardTypeExpression(final OpenApiStandardType st) {
-        var isNullable = Boolean.TRUE.equals(st.nullable());
-
-        return switch (st.typeEnum()) {
-            case STRING -> {
-                if (st.format() == null) {
-                    yield createAnnotatedType("java.lang.String", isNullable);
-                }
-                yield switch (st.format()) {
-                    case "date" -> createAnnotatedType("java.time.LocalDate", isNullable);
-                    case "date-time" -> createAnnotatedType( "java.time.LocalDateTime", isNullable);
-                    case "time" -> createAnnotatedType( "java.time.LocalTime", isNullable);
-                    case "uuid" -> createAnnotatedType("java.util.UUID", isNullable);
-                    //Since we currently only support Spring we return a Spring specific type
-                    case "binary"-> new WildCardTypeExpression(
-                            BoundKind.EXTENDS,
-                            createAnnotatedType("org.springframework.core.io.Resource", isNullable)
-                    );
-                    default -> createAnnotatedType("java.lang.String", isNullable);
-                };
-            }
-            case INTEGER -> {
-                if ("int64".equals(st.format())) {
-                    yield isNullable
-                            ? createAnnotatedType( "java.lang.Long", true)
-                            : new PrimitiveTypeExpression(TypeKind.LONG);
-                } else {
-                    yield isNullable
-                            ? createAnnotatedType( "java.lang.Integer", true)
-                            : new PrimitiveTypeExpression(TypeKind.INT);
-                }
-            }
-            case BOOLEAN -> isNullable
-                    ? createAnnotatedType( "java.lang.Boolean", true)
-                    : new PrimitiveTypeExpression(TypeKind.BOOLEAN);
-            case NUMBER -> {
-                if ("double".equals(st.format())) {
-                    yield isNullable
-                            ? createAnnotatedType( "java.lang.Double", true)
-                            : new PrimitiveTypeExpression(TypeKind.DOUBLE);
-                } else  {
-                    yield isNullable
-                            ? createAnnotatedType( "java.lang.Float", true)
-                            : new PrimitiveTypeExpression(TypeKind.FLOAT);
-                }
-            }
-            case BYTE -> isNullable
-                    ? createAnnotatedType( "java.lang.Byte", true):
-                    new PrimitiveTypeExpression(TypeKind.BYTE);
-            case SHORT -> isNullable
-                    ? createAnnotatedType( "java.lang.Short", true)
-                    : new PrimitiveTypeExpression(TypeKind.SHORT);
-        };
+    protected TypeExpression createStringTypeExpression(final OpenApiSchema<?> schema) {
+        return createClassOrInterfaceTypeExpression("java.lang.String", schema);
     }
 
-    private AnnotatedTypeExpression createAnnotatedType(final String name,
-                                                        final boolean isNullable) {
-        return new AnnotatedTypeExpression(
-                new NameExpression(name),
-                List.of(),
-                isNullable
+    private TypeExpression createUUIDTypeExpression(final OpenApiUUIDSchema schema) {
+        return createClassOrInterfaceTypeExpression("java.util.UUID", schema);
+    }
+
+    private TypeExpression createDateTimeExpression(final OpenApiDateTimeSchema openApiDateTimeSchema) {
+        return createClassOrInterfaceTypeExpression( "java.time.OffsetDateTime", openApiDateTimeSchema);
+    }
+
+    private TypeExpression createIntegerTypeExpression(final OpenApiIntegerSchema schema) {
+        final var isNullable = Boolean.TRUE.equals(schema.nullable());
+
+        if ("int64".equals(schema.format())) {
+            return isNullable
+                    ? createClassOrInterfaceTypeExpression( "java.lang.Long", true)
+                    : PrimitiveTypeExpression.longTypeExpression();
+        } else {
+            return isNullable
+                    ? createClassOrInterfaceTypeExpression( "java.lang.Integer", true)
+                    : PrimitiveTypeExpression.intTypeExpression();
+        }
+    }
+
+    private TypeExpression createBooleanTypeExpression(final OpenApiBooleanSchema schema) {
+        final var isNullable = Boolean.TRUE.equals(schema.nullable());
+        return isNullable
+                ? createClassOrInterfaceTypeExpression( "java.lang.Boolean", true)
+                : PrimitiveTypeExpression.booleanTypeExpression();
+    }
+
+    private TypeExpression createNumberTypeExpression(final OpenApiNumberSchema schema) {
+        final var isNullable = Boolean.TRUE.equals(schema.nullable());
+
+        if ("double".equals(schema.format())) {
+            return isNullable
+                    ? createClassOrInterfaceTypeExpression( "java.lang.Double", true)
+                    : PrimitiveTypeExpression.doubleTypeExpression();
+        } else  {
+            return isNullable
+                    ? createClassOrInterfaceTypeExpression( "java.lang.Float", true)
+                    : PrimitiveTypeExpression.floatTypeExpression();
+        }
+    }
+
+    private TypeExpression createDateTypeExpression(final OpenApiDateSchema schema) {
+        return createClassOrInterfaceTypeExpression("java.time.LocalDate", schema);
+    }
+
+    private TypeExpression createArrayTypeExpression(final OpenApiArraySchema schema) {
+        final var componentType = createTypeExpression(schema.itemschema());
+
+        if (componentType instanceof PrimitiveTypeExpression) {
+            return new ArrayTypeExpression(componentType);
+        }
+
+        return createClassOrInterfaceTypeExpression(ClassNames.LIST_CLASS_NAME,
+                List.of(componentType),
+                !Boolean.FALSE.equals(schema.nullable())
         );
     }
 
-    private AnnotatedTypeExpression createAnnotatedType(final String name,
-                                                        final List<Expression> typeArguments,
-                                                        final boolean isNullable) {
-        final var paramType = new ParameterizedType(
-                new NameExpression(name),
-                typeArguments
-        );
+    protected abstract TypeExpression createBinaryTypeExpression(final OpenApiBinarySchema schema);
 
-        return new AnnotatedTypeExpression(
-                paramType,
-                List.of(),
-                isNullable
-        );
+    protected ClassOrInterfaceTypeExpression createClassOrInterfaceTypeExpression(final String name,
+                                                                                  final boolean isNullable) {
+        final var expression = new ClassOrInterfaceTypeExpression(name);
+        expression.setNullable(isNullable);
+        return expression;
     }
 
-    private TypeMirror createStandardType(final OpenApiStandardType st) {
-        var isNullable = Boolean.TRUE.equals(st.nullable());
-
-        return switch (st.typeEnum()) {
-            case STRING -> {
-                if (st.format() == null) {
-                    yield typeUtils.getStringType(isNullable);
-                }
-                yield switch (st.format()) {
-                    case "date" -> typeUtils.getDeclaredType("java.time.LocalDate", isNullable);
-                    case "date-time" -> typeUtils.getDeclaredType( "java.time.LocalDateTime", isNullable);
-                    case "time" -> typeUtils.getDeclaredType( "java.time.LocalTime", isNullable);
-                    case "uuid" -> typeUtils.getDeclaredType("java.util.UUID", isNullable);
-                    //Since we currently only support Spring we return a Spring specific type
-                    case "binary"-> WildcardType.withExtendsBound(
-                            typeUtils.getDeclaredType("org.springframework.core.io.Resource", isNullable)
-                        );
-                    default -> typeUtils.getStringType(isNullable);
-                };
-            }
-            case INTEGER -> {
-                if ("int64".equals(st.format())) {
-                    yield isNullable
-                            ? typeUtils.getDeclaredType( "java.lang.Long", true)
-                            : createPrimitiveType(TypeKind.LONG);
-                } else {
-                    yield isNullable
-                            ? typeUtils.getDeclaredType( "java.lang.Integer", true)
-                            : createPrimitiveType(TypeKind.INT);
-                }
-            }
-            case BOOLEAN -> isNullable
-                            ? typeUtils.getDeclaredType( "java.lang.Boolean", true)
-                            : createPrimitiveType(TypeKind.BOOLEAN);
-            case NUMBER -> {
-                if ("double".equals(st.format())) {
-                    yield isNullable
-                            ? typeUtils.getDeclaredType( "java.lang.Double", true)
-                            : createPrimitiveType(TypeKind.DOUBLE);
-                } else  {
-                    yield isNullable
-                            ? typeUtils.getDeclaredType( "java.lang.Float", true)
-                            : createPrimitiveType(TypeKind.FLOAT);
-                }
-            }
-            case BYTE -> isNullable
-                    ? typeUtils.getDeclaredType( "java.lang.Byte", true):
-                     createPrimitiveType(TypeKind.BYTE);
-            case SHORT -> isNullable
-                    ? typeUtils.getDeclaredType( "java.lang.Short", true)
-                    : createPrimitiveType(TypeKind.SHORT);
-        };
+    protected ClassOrInterfaceTypeExpression createClassOrInterfaceTypeExpression(final String name,
+                                                                                  final OpenApiSchema<?> schema) {
+        final var isNullable = Boolean.TRUE.equals(schema.nullable());
+        return createClassOrInterfaceTypeExpression(name, isNullable);
     }
 
-    private boolean isMapType(final Package pck,
-                              final String name,
-                              final @Nullable OpenApiProperty additionalProperties) {
-        return pck.isUnnamed()
-                && "object".equals(name)
-                &&  additionalProperties != null;
+    private ClassOrInterfaceTypeExpression createClassOrInterfaceTypeExpression(final String name,
+                                                                                final List<TypeExpression> typeArguments,
+                                                                                final boolean isNullable) {
+        final var paramType = new ClassOrInterfaceTypeExpression(name,  typeArguments);
+        paramType.setNullable(isNullable);
+        return paramType;
     }
 
-    private TypeMirror createMapType(final OpenApiObjectType ot) {
-        final var additionalProperties = ot.additionalProperties();
+    private TypeExpression createMapTypeExpression(final OpenApiMapSchema schema) {
+        final var additionalProperties = schema.additionalProperties();
+
         if (additionalProperties == null) {
-            throw new IllegalArgumentException(String.format("type %s has no additionalProperties", ot.name()));
+            throw new IllegalArgumentException(String.format("schema %s has no additionalProperties", schema.name()));
         }
-        final var additionalPropertiesType = additionalProperties.type();
-        final var keyType = typeUtils.getStringType(Boolean.TRUE.equals(ot.nullable()));
-        final var valueType = (DeclaredType) createType(additionalPropertiesType);
-        return typeUtils.createMapType(keyType, valueType, Boolean.TRUE.equals(ot.nullable()));
-    }
+        final var keyType = createStringTypeExpression(Boolean.TRUE.equals(schema.nullable()));
+        final var valueType = createTypeExpression(additionalProperties);
 
-    private TypeExpression createMapTypeExpression(final OpenApiObjectType ot) {
-        final var additionalProperties = ot.additionalProperties();
-        if (additionalProperties == null) {
-            throw new IllegalArgumentException(String.format("type %s has no additionalProperties", ot.name()));
-        }
-        final var additionalPropertiesType = additionalProperties.type();
-        final var keyType = createStringTypeExpression(Boolean.TRUE.equals(ot.nullable()));
-        final var valueType = createTypeExpression(additionalPropertiesType);
-
-        return createAnnotatedType(
+        return createClassOrInterfaceTypeExpression(
                 "java.util.Map",
                 List.of(keyType, valueType),
-                Boolean.TRUE.equals(ot.nullable())
+                Boolean.TRUE.equals(schema.nullable())
         );
     }
 
-    private PrimitiveType createPrimitiveType(final TypeKind kind) {
-        return types.getPrimitiveType(kind);
+    private ClassOrInterfaceTypeExpression createStringTypeExpression(final boolean isNullable) {
+        return createClassOrInterfaceTypeExpression("java.lang.String", isNullable);
     }
 
-    private AnnotatedTypeExpression createStringTypeExpression(final boolean isNullable) {
-        return createAnnotatedType("java.lang.String", isNullable);
+    public abstract ClassOrInterfaceTypeExpression createMultipartTypeExpression();
+
+    public TypeExpression resolveImplementationType(final TypeExpression type) {
+        final TypeExpression implementationType;
+
+        if (type instanceof WildCardTypeExpression wildcardType) {
+            implementationType = wildcardType.getTypeExpression();
+        } else {
+            implementationType = type;
+        }
+        return implementationType;
     }
 }

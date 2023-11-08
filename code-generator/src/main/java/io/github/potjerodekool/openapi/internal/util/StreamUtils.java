@@ -22,7 +22,7 @@ public final class StreamUtils {
     }
 
     public static <E> Stream<E> of(final Iterator<E> iterator) {
-        return StreamSupport.stream(new IteratorSpliterator<E>(iterator), false);
+        return StreamSupport.stream(new IteratorSpliterator<>(iterator), false);
     }
 
     private static class IteratorSpliterator<E> implements Spliterator<E> {

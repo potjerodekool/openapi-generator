@@ -1,6 +1,6 @@
 package io.github.potjerodekool.openapi.internal.generate.annotation.openapi;
 
-import io.github.potjerodekool.codegen.model.Attribute;
+import io.github.potjerodekool.codegen.model.tree.AnnotationExpression;
 import io.github.potjerodekool.codegen.model.tree.expression.Expression;
 import io.github.potjerodekool.openapi.internal.generate.annotation.AbstractAnnotationBuilder;
 
@@ -36,5 +36,9 @@ public class ParameterAnnotationBuilder extends AbstractAnnotationBuilder<Parame
 
     public ParameterAnnotationBuilder example(final String example) {
         return add("example", example);
+    }
+
+    public ParameterAnnotationBuilder schema(final AnnotationExpression schemaAnnotation) {
+        return add("schema", schemaAnnotation);
     }
 }

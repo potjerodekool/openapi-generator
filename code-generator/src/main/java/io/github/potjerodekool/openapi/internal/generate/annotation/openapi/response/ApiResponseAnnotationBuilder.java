@@ -25,6 +25,9 @@ public class ApiResponseAnnotationBuilder extends AbstractAnnotationBuilder<ApiR
     }
 
     public ApiResponseAnnotationBuilder responseCode(final String responseCode) {
+        if ("default".equals(responseCode)) {
+            return this;
+        }
         return add("responseCode", responseCode);
     }
 

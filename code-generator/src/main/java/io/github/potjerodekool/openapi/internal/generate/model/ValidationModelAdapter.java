@@ -2,12 +2,9 @@ package io.github.potjerodekool.openapi.internal.generate.model;
 
 import io.github.potjerodekool.codegen.Environment;
 import io.github.potjerodekool.codegen.model.tree.AnnotationExpression;
-import io.github.potjerodekool.codegen.model.tree.MethodDeclaration;
-import io.github.potjerodekool.codegen.model.tree.expression.Expression;
 import io.github.potjerodekool.codegen.model.tree.expression.LiteralExpression;
-import io.github.potjerodekool.codegen.model.tree.expression.NameExpression;
 import io.github.potjerodekool.codegen.model.tree.statement.VariableDeclaration;
-import io.github.potjerodekool.codegen.model.tree.type.ParameterizedType;
+import io.github.potjerodekool.codegen.model.tree.type.ClassOrInterfaceTypeExpression;
 import io.github.potjerodekool.codegen.model.type.DeclaredType;
 import io.github.potjerodekool.codegen.model.type.PrimitiveType;
 import io.github.potjerodekool.codegen.model.type.TypeKind;
@@ -19,25 +16,24 @@ import io.github.potjerodekool.openapi.GeneratorConfig;
 import io.github.potjerodekool.openapi.generate.model.ModelAdapter;
 import io.github.potjerodekool.openapi.internal.di.Bean;
 import io.github.potjerodekool.openapi.internal.di.ConditionalOnMissingBean;
-import io.github.potjerodekool.openapi.internal.util.SetBuilder;
-import io.github.potjerodekool.openapi.internal.util.TypeUtils;
-import io.github.potjerodekool.openapi.tree.Constraints;
-import io.github.potjerodekool.openapi.tree.OpenApiProperty;
+import io.github.potjerodekool.openapi.internal.util.CollectionBuilder;
+import io.github.potjerodekool.openapi.tree.Extensions;
+import io.github.potjerodekool.openapi.tree.media.OpenApiSchema;
+import io.github.potjerodekool.openapi.tree.media.OpenApiStringSchema;
 import jakarta.inject.Inject;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
 import static io.github.potjerodekool.codegen.model.element.Name.getQualifiedNameOf;
+import static io.github.potjerodekool.openapi.internal.ClassNames.*;
 
 @Bean
 @ConditionalOnMissingBean
 //https://jakarta.ee/specifications/bean-validation/3.0/jakarta-bean-validation-spec-3.0.html
 public class ValidationModelAdapter implements ModelAdapter {
 
-    private static final String LIST_CLASS_NAME = "java.util.List";
     private static final String MAP_CLASS_NAME = "java.util.Map";
 
     private final Set<TypeMirror> minMaxTypes;
@@ -50,26 +46,21 @@ public class ValidationModelAdapter implements ModelAdapter {
 
     private final Set<TypeMirror> futureTypes;
 
-    private final String validAnnotationClassName;
     private final String constraintsPackage;
 
-    protected final TypeUtils typeUtils;
-    private final Elements elements;
     private final Types types;
 
     @Inject
     public ValidationModelAdapter(final GeneratorConfig generatorConfig,
-                                  final Environment environment,
-                                  final TypeUtils typeUtils) {
+                                  final Environment environment) {
+        final var types = environment.getTypes();
+        final var elements = environment.getElementUtils();
+
         final var validationBasePackage = (generatorConfig.isFeatureEnabled(Features.FEATURE_JAKARTA) ? "jakarta" : "javax") + ".validation";
         this.constraintsPackage = validationBasePackage + ".constraints";
-        this.validAnnotationClassName = validationBasePackage + ".Valid";
-        this.typeUtils = typeUtils;
-        this.elements = environment.getElementUtils();
         this.types = environment.getTypes();
-        this.charSequenceType = typeUtils.getCharSequenceType();
+        this.charSequenceType = types.getDeclaredType(elements.getTypeElement(CHAR_SEQUENCE_NAME));
 
-        final var types = environment.getTypes();
         this.minMaxTypes = initMinMaxTypes(types, environment.getElementUtils());
         this.sizeTypes = initSizeTypes(environment.getElementUtils());
         this.digitsTypes = initDigitsTypes(types, environment.getElementUtils());
@@ -117,7 +108,7 @@ public class ValidationModelAdapter implements ModelAdapter {
 
     private static Set<TypeMirror> initFutureTypes(final Types types,
                                                    final Elements elements) {
-        return new SetBuilder<TypeMirror>()
+        return new CollectionBuilder<TypeMirror>()
                 .add(types.getDeclaredType(elements.getTypeElement("java.util.Date")))
                 .add(types.getDeclaredType(elements.getTypeElement("java.util.Calendar")))
                 .add(types.getDeclaredType(elements.getTypeElement("java.time.Instant")))
@@ -134,50 +125,44 @@ public class ValidationModelAdapter implements ModelAdapter {
                 .add(types.getDeclaredType(elements.getTypeElement("java.time.chrono.JapaneseDate")))
                 .add(types.getDeclaredType(elements.getTypeElement("java.time.chrono.MinguoDate")))
                 .add(types.getDeclaredType(elements.getTypeElement("java.time.chrono.ThaiBuddhistDate")))
-                .build();
+                .buildSet();
     }
 
     @Override
-    public void adaptField(final OpenApiProperty property,
-                           final VariableDeclaration fieldDeclaration) {
-        final var symbol = fieldDeclaration.getSymbol();
-        if (!symbol.getCompleter().isComplete()) {
-            symbol.getCompleter().complete(symbol);
-        }
+    public void adaptField(final VariableDeclaration<?> fieldDeclaration) {
+        final var schema = (OpenApiSchema<?>) fieldDeclaration.getMetaData(OpenApiSchema.class.getSimpleName());
 
-        addMinAndMaxConstraint(property, fieldDeclaration);
-        addSizeConstraint(property, fieldDeclaration);
-        addPatternConstraint(property, fieldDeclaration);
-        addEmailConstraint(property, fieldDeclaration);
-        addAssertTrueOrFalseConstraint(property, fieldDeclaration);
-        addDigitsConstraint(property, fieldDeclaration);
-        addPastConstraint(property, fieldDeclaration);
-        addPastOrPresentConstraint(property, fieldDeclaration);
-        addFutureOrPresentConstraint(property, fieldDeclaration);
-        addFutureConstraint(property, fieldDeclaration);
-        addNullConstraint(property, fieldDeclaration);
-        addNotNullConstraint(property, fieldDeclaration);
-        addNegativeConstraint(property, fieldDeclaration);
-        addNegativeOrZeroConstraint(property, fieldDeclaration);
-        addPositiveConstraint(property, fieldDeclaration);
-        addPositiveOrZeroConstraint(property, fieldDeclaration);
+        addMinAndMaxConstraint(schema, fieldDeclaration);
+        addSizeConstraint(schema, fieldDeclaration);
+        addPatternConstraint(schema, fieldDeclaration);
+        addEmailConstraint(schema, fieldDeclaration);
+        addAssertTrueOrFalseConstraint(schema, fieldDeclaration);
+        addDigitsConstraint(schema, fieldDeclaration);
+        addPastConstraint(schema, fieldDeclaration);
+        addPastOrPresentConstraint(schema, fieldDeclaration);
+        addFutureOrPresentConstraint(schema, fieldDeclaration);
+        addFutureConstraint(schema, fieldDeclaration);
+        addNullConstraint(schema, fieldDeclaration);
+        addNotNullConstraint(schema, fieldDeclaration);
+        addNegativeConstraint(schema, fieldDeclaration);
+        addNegativeOrZeroConstraint(schema, fieldDeclaration);
+        addPositiveConstraint(schema, fieldDeclaration);
+        addPositiveOrZeroConstraint(schema, fieldDeclaration);
     }
 
-    private void addMinAndMaxConstraint(final OpenApiProperty property,
-                                        final VariableDeclaration fieldDeclaration) {
+    private void addMinAndMaxConstraint(final OpenApiSchema<?> schema,
+                                        final VariableDeclaration<?> fieldDeclaration) {
         final var fieldType = fieldDeclaration.getVarType().getType();
 
         if (!minMaxTypes.contains(fieldType)) {
             return;
         }
 
-        final var constraints = property.constraints();
+        final boolean isIntegerOrLong = schema.minimum() != null
+            ? isIntegerOrLong(schema.minimum())
+            : isIntegerOrLong(schema.maximum());
 
-        final boolean isIntegerOrLong = constraints.minimum() != null
-            ? isIntegerOrLong(constraints.minimum())
-            : isIntegerOrLong(constraints.maximum());
-
-        final var minimum = incrementAndToString(constraints.minimum(), constraints.exclusiveMinimum());
+        final var minimum = increment(schema.minimum(), schema.exclusiveMinimum());
 
         if (minimum != null) {
             final String annotationName;
@@ -188,16 +173,14 @@ public class ValidationModelAdapter implements ModelAdapter {
                 annotationName = constraintsPackage + ".DecimalMin";
             }
 
-            fieldDeclaration.addAnnotation(new AnnotationExpression(
-                    new ParameterizedType(new NameExpression(annotationName)),
-                    Map.of(
-                            "value",
-                            LiteralExpression.createLongLiteralExpression(minimum)
-                    )
-            ));
+            fieldDeclaration.annotation(new AnnotationExpression(
+                    new ClassOrInterfaceTypeExpression(annotationName),
+                    LiteralExpression.createLongLiteralExpression(minimum)
+                 )
+            );
         }
 
-        final var maximum = decrementAndToString(constraints.maximum(), constraints.exclusiveMaximum());
+        final var maximum = decrementAndToString(schema.maximum(), schema.exclusiveMaximum());
 
         if (maximum != null) {
             final String annotationName;
@@ -208,9 +191,9 @@ public class ValidationModelAdapter implements ModelAdapter {
                 annotationName = constraintsPackage + ".DecimalMax";
             }
 
-            fieldDeclaration.addAnnotation(
+            fieldDeclaration.annotation(
                     new AnnotationExpression(
-                            new ParameterizedType(new NameExpression(annotationName)),
+                            new ClassOrInterfaceTypeExpression(annotationName),
                             Map.of(
                                     "value", LiteralExpression.createLongLiteralExpression(maximum)
                             )
@@ -223,152 +206,118 @@ public class ValidationModelAdapter implements ModelAdapter {
         return number instanceof Integer || number instanceof Long;
     }
 
-    private void addSizeConstraint(final OpenApiProperty property,
-                                   final VariableDeclaration fieldDeclaration) {
+    private void addSizeConstraint(final OpenApiSchema<?> schema,
+                                   final VariableDeclaration<?> fieldDeclaration) {
         final var fieldType = fieldDeclaration.getVarType();
 
         if (!isCharSequenceField(fieldDeclaration) &&
-                !sizeTypes.contains(fieldType)) {
+                !sizeTypes.contains(fieldType.getType())) {
             return;
         }
 
         final Integer min;
         final Integer max;
 
-        final var constrains = property.constraints();
-
-        if (true) {
-            throw new UnsupportedOperationException();
-        }
-
-        /*
-        if (typeUtils.isStringType(fieldType)) {
-            min = constrains.minLength();
-            max = constrains.maxLength();
-        } else if (typeUtils.isListType(fieldType)
-                || fieldType instanceof ArrayType
-                || typeUtils.isMapType(fieldType)) {
-            min = constrains.minItems();
-            max = constrains.maxItems();
+        if (schema instanceof OpenApiStringSchema) {
+            min = schema.minLength();
+            max = schema.maxLength();
         } else {
-            min = null;
-            max = null;
+            min = schema.minItems();
+            max = schema.maxItems();
         }
-        */
 
         if (min != null || max != null) {
-            final var members = new HashMap<String, Expression>();
+            final var sizeAnnotation = new AnnotationExpression(new ClassOrInterfaceTypeExpression(constraintsPackage + ".Size"));
 
-            if (min != null && min > 0) {
-                members.put("min", LiteralExpression.createIntLiteralExpression(min.toString()));
+            if (min != null
+                    && min > 0) {
+                sizeAnnotation.argument("min", LiteralExpression.createIntLiteralExpression(min));
             }
 
-            if (max != null && max < Integer.MAX_VALUE) {
-                members.put("max", LiteralExpression.createIntLiteralExpression(max.toString()));
+            if (max != null
+                    && max < Integer.MAX_VALUE) {
+                sizeAnnotation.argument("max", LiteralExpression.createIntLiteralExpression(max));
             }
 
-            fieldDeclaration.addAnnotation(
-                    new AnnotationExpression(
-                            new ParameterizedType(new NameExpression(constraintsPackage + ".Size")),
-                            members
-                    )
-            );
+            fieldDeclaration.annotation(sizeAnnotation);
         }
     }
 
-    private void addPatternConstraint(final OpenApiProperty property,
-                                      final VariableDeclaration fieldDeclaration) {
+    private void addPatternConstraint(final OpenApiSchema<?> schema,
+                                      final VariableDeclaration<?> fieldDeclaration) {
         if (!isCharSequenceField(fieldDeclaration)) {
             return;
         }
 
-        final var constrains = property.constraints();
-
-        final var pattern = constrains.pattern();
+        final var pattern = schema.pattern();
 
         if (pattern != null) {
-            fieldDeclaration.addAnnotation(
-                    new AnnotationExpression(
-                            new ParameterizedType(new NameExpression(constraintsPackage + ".Pattern")),
-                            Map.of(
-                                    "regexp", LiteralExpression.createStringLiteralExpression(pattern)
-                            )
-                    )
+            fieldDeclaration.annotation(
+                    new AnnotationExpression(new ClassOrInterfaceTypeExpression(constraintsPackage + ".Pattern"))
+                            .argument("regexp", LiteralExpression.createStringLiteralExpression(pattern))
             );
         }
     }
 
-    private void addEmailConstraint(final OpenApiProperty property,
-                                    final VariableDeclaration fieldDeclaration) {
+    private void addEmailConstraint(final OpenApiSchema<?> schema,
+                                    final VariableDeclaration<?> fieldDeclaration) {
         if (!isCharSequenceField(fieldDeclaration)) {
             return;
         }
 
-        final var propertyType = property.type();
-        final var constrains = property.constraints();
+        if ("email".equals(schema.format())) {
+            final var emailAnnotation = new AnnotationExpression(new ClassOrInterfaceTypeExpression(constraintsPackage + ".Email"));
 
-        if ("email".equals(propertyType.format())) {
-            final var pattern = constrains.pattern();
-            final var members = new HashMap<String, Expression>();
+            final var pattern = schema.pattern();
 
             if (pattern != null) {
-                members.put("regexp", LiteralExpression.createStringLiteralExpression(pattern));
+                emailAnnotation.argument("regexp", LiteralExpression.createStringLiteralExpression(pattern));
             }
 
-            fieldDeclaration.addAnnotation(
-                new AnnotationExpression(
-                        new ParameterizedType(new NameExpression(constraintsPackage + ".Email")),
-                        members
-                )
-            );
+            fieldDeclaration.annotation(emailAnnotation);
         }
     }
-    private @Nullable String incrementAndToString(final @Nullable Number number,
-                                                  final @Nullable Boolean exclusiveMinimum) {
+    private @Nullable Long increment(final @Nullable Number number,
+                                     final @Nullable Boolean exclusiveMinimum) {
         if (number == null) {
             return null;
         } else if (Boolean.TRUE.equals(exclusiveMinimum)) {
-            return Long.valueOf(number instanceof Integer i ? i + 1 : ((Long)number) + 1L).toString();
+            return number instanceof Integer i
+                    ? Integer.valueOf(i + 1).longValue()
+                    : ((Long) number) + 1L;
         } else {
-            return number.toString();
+            return number.longValue();
         }
     }
 
-    private @Nullable String decrementAndToString(final @Nullable Number number,
-                                                  final @Nullable Boolean exclusiveMaximum) {
+    private @Nullable Long decrementAndToString(final @Nullable Number number,
+                                                final @Nullable Boolean exclusiveMaximum) {
         if (number == null) {
             return null;
         } else if (Boolean.TRUE.equals(exclusiveMaximum)) {
-            return Long.valueOf(number instanceof Integer i ? i - 1 : ((Long)number) - 1L).toString();
+            return number instanceof Integer i
+                    ? Integer.valueOf(i - 1).longValue()
+                    : ((Long)number) - 1L;
         } else {
-            return number.toString();
+            return number.longValue();
         }
     }
 
-
-    @Override
-    public void adaptGetter(final OpenApiProperty property,
-                            final MethodDeclaration method) {
-        if (property.type().format() != null) {
-            method.addAnnotation(new AnnotationExpression(new ParameterizedType(new NameExpression(validAnnotationClassName))));
-        }
-    }
-
-    private boolean isCharSequenceField(final VariableDeclaration fieldDeclaration) {
+    private boolean isCharSequenceField(final VariableDeclaration<?> fieldDeclaration) {
         final var fieldType = fieldDeclaration.getVarType();
         return types.isAssignable(charSequenceType, fieldType.getType());
     }
 
-    private void addAssertTrueOrFalseConstraint(final OpenApiProperty property,
-                                                final VariableDeclaration fieldDeclaration) {
+    private void addAssertTrueOrFalseConstraint(final OpenApiSchema<?> schema,
+                                                final VariableDeclaration<?> fieldDeclaration) {
         final var fieldType = fieldDeclaration.getVarType().getType();
         if (isBooleanType(fieldType)) {
-            final var xAssert = property.constraints().extension(Constraints.X_ASSERT);
+            final var xAssert = schema.extensions().get(Extensions.ASSERT);
 
             if (Boolean.TRUE.equals(xAssert)) {
-                fieldDeclaration.addAnnotation(new AnnotationExpression(constraintsPackage + ".AssertTrue"));
+                fieldDeclaration.annotation(new AnnotationExpression(constraintsPackage + ".AssertTrue"));
             } else if (Boolean.FALSE.equals(xAssert)) {
-                fieldDeclaration.addAnnotation(new AnnotationExpression(constraintsPackage + ".AssertFalse"));
+                fieldDeclaration.annotation(new AnnotationExpression(constraintsPackage + ".AssertFalse"));
             }
         }
     }
@@ -383,71 +332,76 @@ public class ValidationModelAdapter implements ModelAdapter {
         }
     }
 
-    private void addDigitsConstraint(final OpenApiProperty property,
-                                     final VariableDeclaration field) {
-        final var digits = property.constraints().digits();
-
-        if (digits != null && supportsDigits(field.getVarType().getType())) {
-            final var annotation = new AnnotationExpression(
-                    constraintsPackage + ".Digits",
-                    Map.of(
-                            "integer", LiteralExpression.createIntLiteralExpression(Integer.toString(digits.integer())),
-                            "fraction", LiteralExpression.createIntLiteralExpression(Integer.toString(digits.fraction()))
-                    )
-            );
-            field.addAnnotation(annotation);
+    private void addDigitsConstraint(final OpenApiSchema<?> schema,
+                                     final VariableDeclaration<?> field) {
+        if (!supportsDigits(field.getVarType().getType())) {
+            return;
         }
+
+        final var digitsOptional = ValidationExtensions.digits(schema.extensions());
+
+        digitsOptional.ifPresent(digits -> {
+            final var annotation = new AnnotationExpression(constraintsPackage + ".Digits")
+                    .argument("integer", LiteralExpression.createIntLiteralExpression(digits.integer()))
+                    .argument("fraction", LiteralExpression.createIntLiteralExpression(digits.fraction()));
+            field.annotation(annotation);
+        });
     }
 
     protected boolean supportsDigits(final TypeMirror type) {
         return digitsTypes.contains(type) || types.isAssignable(charSequenceType, type);
     }
-    private void addPastConstraint(final OpenApiProperty property,
-                                   final VariableDeclaration field) {
-        if ("past".equals(property.constraints().allowedValue())
+    private void addPastConstraint(final OpenApiSchema<?> schema,
+                                   final VariableDeclaration<?> field) {
+        final var allowedValue = ValidationExtensions.allowedValue(schema.extensions());
+
+        if ("past".equals(allowedValue)
                 && isFutureSupported(field.getVarType().getType())) {
-            field.addAnnotation(new AnnotationExpression(
-                    constraintsPackage + ".Past"
-            ));
+            field.annotation(new AnnotationExpression(constraintsPackage + ".Past"));
         }
     }
 
-    private void addPastOrPresentConstraint(final OpenApiProperty property,
-                                            final VariableDeclaration field) {
-        if ("pastOrPresent".equals(property.constraints().allowedValue())
+    private void addPastOrPresentConstraint(final OpenApiSchema<?> schema,
+                                            final VariableDeclaration<?> field) {
+        final var allowedValue = ValidationExtensions.allowedValue(schema.extensions());
+
+        if ("pastOrPresent".equals(allowedValue)
                 && isFutureSupported(field.getVarType().getType())) {
-            field.addAnnotation(new AnnotationExpression(constraintsPackage + ".PastOrPresent"));
+            field.annotation(new AnnotationExpression(constraintsPackage + ".PastOrPresent"));
         }
     }
 
-    private void addFutureOrPresentConstraint(final OpenApiProperty property,
-                                              final VariableDeclaration field) {
-        if ("future".equals(property.constraints().allowedValue())
+    private void addFutureOrPresentConstraint(final OpenApiSchema<?> schema,
+                                              final VariableDeclaration<?> field) {
+        final var allowedValue = ValidationExtensions.allowedValue(schema.extensions());
+
+        if ("future".equals(allowedValue)
                 && isFutureSupported(field.getVarType().getType())) {
-            field.addAnnotation(new AnnotationExpression(constraintsPackage + ".addFutureOrPresent"));
+            field.annotation(new AnnotationExpression(constraintsPackage + ".addFutureOrPresent"));
         }
     }
 
-    private void addFutureConstraint(final OpenApiProperty property,
-                                     final VariableDeclaration field) {
-        if ("future".equals(property.constraints().allowedValue())
+    private void addFutureConstraint(final OpenApiSchema<?> schema,
+                                     final VariableDeclaration<?> field) {
+        final var allowedValue = ValidationExtensions.allowedValue(schema.extensions());
+        if ("future".equals(allowedValue)
                 && isFutureSupported(field.getVarType().getType())) {
-            field.addAnnotation(new AnnotationExpression(constraintsPackage + ".Future"));
+            field.annotation(new AnnotationExpression(constraintsPackage + ".Future"));
         }
     }
 
-    private void addNullConstraint(final OpenApiProperty property,
-                                   final VariableDeclaration field) {
-        if (property.constraints().hasExtension(Constraints.X_ASSERT)
-                && property.constraints().extension(Constraints.X_ASSERT) == null) {
-            field.addAnnotation(constraintsPackage + ".Null");
+    private void addNullConstraint(final OpenApiSchema<?> schema,
+                                   final VariableDeclaration<?> field) {
+        if (schema.extensions().containsKey(Extensions.ASSERT)
+                && schema.extensions().get(Extensions.ASSERT) == null) {
+            field.annotation(constraintsPackage + ".Null");
         }
     }
 
-    private void addNotNullConstraint(final OpenApiProperty property,
-                                      final VariableDeclaration field) {
-        if (Boolean.FALSE.equals(property.type().nullable())) {
-            field.addAnnotation(constraintsPackage + ".NotNull");
+    private void addNotNullConstraint(final OpenApiSchema<?> schema,
+                                      final VariableDeclaration<?> field) {
+        if (Boolean.FALSE.equals(schema.nullable())) {
+            field.annotation(constraintsPackage + ".NotNull");
         }
     }
 
@@ -455,31 +409,31 @@ public class ValidationModelAdapter implements ModelAdapter {
         return this.futureTypes.contains(type);
     }
 
-    private void addNegativeConstraint(final OpenApiProperty property,
-                                       final VariableDeclaration field) {
-        if ("negative".equals(property.constraints().extension(Constraints.X_ASSERT))) {
-            field.addAnnotation(constraintsPackage + ".Negative");
+    private void addNegativeConstraint(final OpenApiSchema<?> schema,
+                                       final VariableDeclaration<?> field) {
+        if ("negative".equals(schema.extensions().get(Extensions.ASSERT))) {
+            field.annotation(constraintsPackage + ".Negative");
         }
     }
 
-    private void addNegativeOrZeroConstraint(final OpenApiProperty property,
-                                             final VariableDeclaration field) {
-        if ("negativeOrZero".equals(property.constraints().extension(Constraints.X_ASSERT))) {
-            field.addAnnotation(constraintsPackage + ".NegativeOrZero");
+    private void addNegativeOrZeroConstraint(final OpenApiSchema<?> schema,
+                                             final VariableDeclaration<?> field) {
+        if ("negativeOrZero".equals(schema.extensions().get(Extensions.ASSERT))) {
+            field.annotation(constraintsPackage + ".NegativeOrZero");
         }
     }
 
-    private void addPositiveConstraint(final OpenApiProperty property,
-                                       final VariableDeclaration field) {
-        if ("positive".equals(property.constraints().extension(Constraints.X_ASSERT))) {
-            field.addAnnotation(constraintsPackage + ".Positive");
+    private void addPositiveConstraint(final OpenApiSchema<?> schema,
+                                       final VariableDeclaration<?> field) {
+        if ("positive".equals(schema.extensions().get(Extensions.ASSERT))) {
+            field.annotation(constraintsPackage + ".Positive");
         }
     }
 
-    private void addPositiveOrZeroConstraint(final OpenApiProperty property,
-                                             final VariableDeclaration field) {
-        if ("positiveOrZero".equals(property.constraints().extension(Constraints.X_ASSERT))) {
-            field.addAnnotation(constraintsPackage + ".PositiveOrZero");
+    private void addPositiveOrZeroConstraint(final OpenApiSchema<?> schema,
+                                             final VariableDeclaration<?> field) {
+        if ("positiveOrZero".equals(schema.extensions().get(Extensions.ASSERT))) {
+            field.annotation(constraintsPackage + ".PositiveOrZero");
         }
     }
 }

@@ -2,117 +2,91 @@ package io.github.potjerodekool.openapi.internal.generate.api;
 
 import io.github.potjerodekool.codegen.Environment;
 import io.github.potjerodekool.codegen.Language;
-import io.github.potjerodekool.codegen.io.Filer;
 import io.github.potjerodekool.codegen.model.CompilationUnit;
 import io.github.potjerodekool.codegen.model.element.ElementKind;
 import io.github.potjerodekool.codegen.model.element.Modifier;
-import io.github.potjerodekool.codegen.model.element.Name;
+import io.github.potjerodekool.codegen.model.tree.AnnotationExpression;
 import io.github.potjerodekool.codegen.model.tree.PackageDeclaration;
 import io.github.potjerodekool.codegen.model.tree.expression.*;
-import io.github.potjerodekool.codegen.model.tree.statement.*;
-import io.github.potjerodekool.codegen.model.tree.type.AnnotatedTypeExpression;
-import io.github.potjerodekool.codegen.model.util.SymbolTable;
+import io.github.potjerodekool.codegen.model.tree.statement.BlockStatement;
+import io.github.potjerodekool.codegen.model.tree.statement.ExpressionStatement;
+import io.github.potjerodekool.codegen.model.tree.statement.IfStatement;
+import io.github.potjerodekool.codegen.model.tree.statement.ReturnStatement;
+import io.github.potjerodekool.codegen.model.tree.statement.java.JClassDeclaration;
+import io.github.potjerodekool.codegen.model.tree.statement.java.JVariableDeclaration;
+import io.github.potjerodekool.codegen.model.tree.type.ClassOrInterfaceTypeExpression;
+import io.github.potjerodekool.codegen.model.tree.type.NoTypeExpression;
+import io.github.potjerodekool.codegen.model.type.TypeKind;
 import io.github.potjerodekool.openapi.Features;
 import io.github.potjerodekool.openapi.GeneratorConfig;
 import io.github.potjerodekool.openapi.internal.ClassNames;
-import io.github.potjerodekool.openapi.internal.generate.BasicResolver;
-import io.github.potjerodekool.openapi.internal.generate.FullResolver;
-import io.github.potjerodekool.openapi.log.LogLevel;
-import io.github.potjerodekool.openapi.log.Logger;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Set;
 
 public class UtilsGenerator {
 
-    private static final Logger LOGGER = Logger.getLogger(UtilsGenerator.class.getName());
-
-    private final SymbolTable symbolTable;
-    private final Filer filer;
-
-    private final Language language;
+    private final Environment environment;
     private final String basePackageName;
     private final String httpServletClassName;
-    private final BasicResolver basicResolver;
-    private final FullResolver fullResolver;
 
     public UtilsGenerator(final GeneratorConfig generatorConfig,
                           final Environment environment) {
-        this.symbolTable = environment.getSymbolTable();
-        this.filer = environment.getFiler();
-        this.language = generatorConfig.language();
+        this.environment = environment;
         this.basePackageName = generatorConfig.basePackageName();
 
         this.httpServletClassName = generatorConfig.isFeatureEnabled(Features.FEATURE_JAKARTA)
                 ? ClassNames.JAKARTA_HTTP_SERVLET_REQUEST
                 : ClassNames.JAVA_HTTP_SERVLET_REQUEST;
-
-        this.basicResolver = new BasicResolver(
-                environment.getElementUtils(),
-                environment.getTypes(),
-                environment.getSymbolTable()
-        );
-        this.fullResolver = new FullResolver(
-                environment.getElementUtils(),
-                environment.getTypes()
-        );
     }
 
     public void generate() {
-        var packageName = this.basePackageName;
-
-        //Try to make the package name end with .api
-        if (!packageName.endsWith(".api")) {
-            packageName += ".api";
-        }
-
         final var cu = new CompilationUnit(Language.JAVA);
 
-        final var packageDeclaration = new PackageDeclaration(new NameExpression(packageName));
-        final var packageSymbol = symbolTable.findOrCreatePackageSymbol(Name.of(packageName));
-        packageDeclaration.setPackageSymbol(packageSymbol);
-        cu.setPackageElement(packageSymbol);
+        final var packageDeclaration = new PackageDeclaration(new IdentifierExpression(this.basePackageName));
+        cu.add(packageDeclaration);
 
-        final var classDeclaration = new ClassDeclaration(
-                Name.of("ApiUtils"),
-                ElementKind.CLASS,
-                Set.of(Modifier.PUBLIC, Modifier.FINAL),
-                List.of()
-        );
+        final var classDeclaration = new JClassDeclaration(
+                "ApiUtils",
+                ElementKind.CLASS
+        ).modifiers(Modifier.PUBLIC, Modifier.FINAL);
+
+        classDeclaration.annotation(new AnnotationExpression("javax.annotation.processing.Generated", LiteralExpression.createStringLiteralExpression(getClass().getName())));
+        classDeclaration.setEnclosing(packageDeclaration);
         cu.add(classDeclaration);
 
-        final var constructor = classDeclaration.addConstructor(Set.of(Modifier.PRIVATE));
+        final var constructor = classDeclaration.addConstructor();
+        constructor.setReturnType(new NoTypeExpression(TypeKind.VOID));
+        constructor.addModifiers(Modifier.PRIVATE);
+
         constructor.setBody(new BlockStatement());
 
-        final var createLocationMethod = classDeclaration.addMethod("createLocation", Set.of(Modifier.PUBLIC, Modifier.STATIC));
-
-        final var returnType = new AnnotatedTypeExpression(
-                new NameExpression("java.net.URI"),
-                List.of()
+        final var createLocationMethod = classDeclaration.addMethod(
+                new NoTypeExpression(TypeKind.VOID),
+                "createLocation",
+                Set.of(Modifier.PUBLIC,
+                        Modifier.STATIC)
         );
+
+        final var returnType = new ClassOrInterfaceTypeExpression("java.net.URI");
 
         createLocationMethod.setReturnType(returnType);
 
-        createLocationMethod.addParameter(new VariableDeclaration(
-                ElementKind.PARAMETER,
-                Set.of(Modifier.FINAL),
-                new AnnotatedTypeExpression(
-                        new NameExpression(httpServletClassName),
-                        List.of()
-                ),
-                "request",
-                null,
-                null
-        ));
+        createLocationMethod.addParameter(
+                new JVariableDeclaration(
+                        ElementKind.PARAMETER,
+                        Set.of(Modifier.FINAL),
+                        new ClassOrInterfaceTypeExpression(httpServletClassName),
+                        "request",
+                        null,
+                        null
+                )
+        );
 
-        createLocationMethod.addParameter(new VariableDeclaration(
+        createLocationMethod.addParameter(new JVariableDeclaration(
                 ElementKind.PARAMETER,
                 Set.of(Modifier.FINAL),
-                new AnnotatedTypeExpression(
-                        new NameExpression("java.lang.Object"),
-                        List.of()
-                ),
+                new ClassOrInterfaceTypeExpression("java.lang.Object"),
                 "id",
                 null,
                 null
@@ -121,13 +95,13 @@ public class UtilsGenerator {
         // final StringBuffer location = request.getRequestURL();
         final var body = new BlockStatement();
         body.add(
-                new VariableDeclaration(
+                new JVariableDeclaration(
                         ElementKind.LOCAL_VARIABLE,
                         Set.of(Modifier.FINAL),
-                        new NameExpression("java.lang.StringBuffer"),
+                        new ClassOrInterfaceTypeExpression("java.lang.StringBuffer"),
                         "locationBuffer",
                         new MethodCallExpression(
-                                new NameExpression("request"),
+                                new IdentifierExpression("request"),
                                 "getRequestURL"
                         ),
                         null
@@ -138,15 +112,15 @@ public class UtilsGenerator {
                 new IfStatement(
                         new BinaryExpression(
                                 new MethodCallExpression(
-                                        new NameExpression("locationBuffer"),
+                                        new IdentifierExpression("locationBuffer"),
                                         "charAt",
                                         List.of(
                                                 new BinaryExpression(
                                                         new MethodCallExpression(
-                                                                new NameExpression("locationBuffer"),
+                                                                new IdentifierExpression("locationBuffer"),
                                                                 "length"
                                                         ),
-                                                        LiteralExpression.createIntLiteralExpression("1"),
+                                                        LiteralExpression.createIntLiteralExpression(1),
                                                         Operator.MINUS
                                                 )
                                         )
@@ -157,7 +131,7 @@ public class UtilsGenerator {
                         new BlockStatement(
                                 new ExpressionStatement(
                                         new MethodCallExpression(
-                                                new NameExpression("locationBuffer"),
+                                                new IdentifierExpression("locationBuffer"),
                                                 "append",
                                                 List.of(LiteralExpression.createCharLiteralExpression('/'))
                                         )
@@ -170,14 +144,14 @@ public class UtilsGenerator {
         body.add(
                 new ReturnStatement(
                         new MethodCallExpression(
-                                new NameExpression("java.net.URI"),
+                                new ClassOrInterfaceTypeExpression("java.net.URI"),
                                 "create",
                                 List.of(
                                         new MethodCallExpression(
                                                 new MethodCallExpression(
-                                                        new NameExpression("locationBuffer"),
+                                                        new IdentifierExpression("locationBuffer"),
                                                         "append",
-                                                        List.of(new NameExpression("id"))
+                                                        List.of(new IdentifierExpression("id"))
                                                 ),
                                                 "toString"
                                         )
@@ -188,14 +162,6 @@ public class UtilsGenerator {
 
         createLocationMethod.setBody(body);
 
-        basicResolver.resolve(classDeclaration);
-        fullResolver.resolve(classDeclaration);
-        symbolTable.addClass(classDeclaration.getClassSymbol());
-
-        try {
-            filer.writeSource(cu, language);
-        } catch (final IOException e) {
-            LOGGER.log(LogLevel.SEVERE, "Fail to generate code for ApiUtils", e);
-        }
+        environment.getCompilationUnits().add(cu);
     }
 }

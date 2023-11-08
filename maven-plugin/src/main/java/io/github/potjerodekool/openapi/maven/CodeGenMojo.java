@@ -10,6 +10,7 @@ import org.apache.maven.project.MavenProject;
 
 import java.io.File;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,13 +35,13 @@ public class CodeGenMojo extends AbstractMojo {
     private Boolean checker;
 
     @Parameter(property = "features")
-    private Map<String, Boolean> features;
+    private Map<String, Boolean> features = new HashMap<>();
 
     @Parameter(property = "language")
     private String language;
 
     @Parameter(property = "apis")
-    private List<ApiConfiguration> apis;
+    private List<ApiConfiguration> apis = new ArrayList<>();
 
     @Override
     public void execute() {
@@ -101,6 +102,7 @@ public class CodeGenMojo extends AbstractMojo {
                 new File(apiConfiguration.getOpenApiFile()),
                 apiConfiguration.getBasePackageName(),
                 apiConfiguration.isGenerateApiDefinitions(),
+                apiConfiguration.isGenerateApiImplementations(),
                 apiConfiguration.isGenerateModels(),
                 new HashMap<>()
         );

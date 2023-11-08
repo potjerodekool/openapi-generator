@@ -1,7 +1,5 @@
 package io.github.potjerodekool.openapi.internal.generate.annotation.openapi.media;
 
-import io.github.potjerodekool.codegen.model.Attribute;
-import io.github.potjerodekool.codegen.model.tree.expression.AbstractExpression;
 import io.github.potjerodekool.codegen.model.tree.expression.ArrayInitializerExpression;
 import io.github.potjerodekool.codegen.model.tree.expression.Expression;
 import io.github.potjerodekool.openapi.internal.generate.annotation.AbstractAnnotationBuilder;

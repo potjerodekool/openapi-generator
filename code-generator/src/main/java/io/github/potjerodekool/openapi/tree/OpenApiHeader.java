@@ -1,6 +1,6 @@
 package io.github.potjerodekool.openapi.tree;
 
-import io.github.potjerodekool.openapi.type.OpenApiType;
+import io.github.potjerodekool.openapi.tree.media.OpenApiSchema;
 
 public record OpenApiHeader(String description,
                             Boolean required,
@@ -9,6 +9,6 @@ public record OpenApiHeader(String description,
                             String style,
                             Boolean explode,
                             Boolean allowReserved,
-                            OpenApiType type) {
+                            OpenApiSchema<?> schema) {
 
 }

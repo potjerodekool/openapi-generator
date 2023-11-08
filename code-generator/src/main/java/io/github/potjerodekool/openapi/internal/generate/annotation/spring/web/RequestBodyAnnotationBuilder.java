@@ -9,8 +9,8 @@ public class RequestBodyAnnotationBuilder extends AbstractAnnotationBuilder<Requ
     }
 
     public RequestBodyAnnotationBuilder required(final Boolean required) {
-        if (required != null && !required) {
-            return add("required", false);
+        if (required != null) {
+            return add("required", required);
         } else {
             return this;
         }

@@ -1,11 +1,14 @@
 package io.github.potjerodekool.openapi.tree;
 
 import java.util.List;
+import java.util.Map;
 
-public record OpenApi(OpenApiInfo info,
+public record OpenApi(String version,
+                      OpenApiInfo info,
+                      List<OpenApiServer> servers,
                       List<OpenApiPath> paths,
-                      java.util.Map<String, OpenApiSecurityScheme> securitySchemas,
+                      Map<String, OpenApiSecurityScheme> securitySchemas,
                       List<OpenApiSecurityRequirement> securityRequirements,
-                      java.util.Map<String,io.github.potjerodekool.openapi.type.OpenApiType> schemas) {
+                      OpenApiComponents components) {
 
 }

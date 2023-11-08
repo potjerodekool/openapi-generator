@@ -8,13 +8,54 @@
     <artifactId>openapi-generator-parent</artifactId>
     <packaging>pom</packaging>
     <version>1.0-SNAPSHOT</version>
+
+    <url>https://github.com/potjerodekool/openapi-generator</url>
+
+    <licenses>
+        <license>
+            <name>The Apache License, Version 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <name>Evert Tigchelaar</name>
+            <email>everttigchelaar@gmail.com</email>
+            <organizationUrl>https://github.com/potjerodekool</organizationUrl>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>https://github.com/potjerodekool/openapi-generator.git</connection>
+        <developerConnection>https://github.com/potjerodekool/openapi-generator.git</developerConnection>
+        <url>http://github.com/potjerodekool/openapi-generator/tree/master</url>
+    </scm>
+
+    <distributionManagement>
+        <snapshotRepository>
+            <id>ossrh</id>
+            <url>https://s01.oss.sonatype.org/content/repositories/snapshots</url>
+        </snapshotRepository>
+    </distributionManagement>
+
     <modules>
         <module>code-generator</module>
         <module>maven-plugin</module>
     </modules>
 
     <properties>
+        <java.version>17</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.plugin.validation>verbose</maven.plugin.validation>
+        <maven.source.plugin.version>3.3.0</maven.source.plugin.version>
+        <maven.failsafe.plugin.version>3.1.2</maven.failsafe.plugin.version>
+        <maven.surefire.plugin.version>3.1.2</maven.surefire.plugin.version>
+        <maven.gpg.plugin.version>3.1.0</maven.gpg.plugin.version>
+        <maven.compiler.plugin.version>3.11.0</maven.compiler.plugin.version>
+        <maven.plugin.plugin.version>3.9.0</maven.plugin.plugin.version>
+        <jacoco.maven.plugin.version>0.8.10</jacoco.maven.plugin.version>
+        <build-helper.maven.plugin.version>3.4.0</build-helper.maven.plugin.version>
     </properties>
 
 </project>

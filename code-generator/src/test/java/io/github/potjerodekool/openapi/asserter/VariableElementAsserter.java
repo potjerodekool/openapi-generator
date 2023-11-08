@@ -19,7 +19,7 @@ public class VariableElementAsserter {
     public void checkType(final TypeMirror type) {
         final var variableType = variableElement.asType();
         if (!types.isSameType(type, variableType)) {
-            Assertions.fail(String.format("Expected type %s but was %s", type, variableType));
+            Assertions.fail(String.format("Expected schema %s but was %s", type, variableType));
         }
     }
 }

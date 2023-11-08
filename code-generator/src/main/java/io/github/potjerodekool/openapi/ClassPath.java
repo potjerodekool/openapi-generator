@@ -1,9 +1,7 @@
 package io.github.potjerodekool.openapi;
 
 import io.github.potjerodekool.openapi.dependency.Artifact;
-import static io.github.potjerodekool.codegen.loader.asm.ClassPath.getJavaClassPath;
 
-import java.io.File;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -18,7 +16,7 @@ public final class ClassPath {
     public static URL[] getFullClassPath(final Project project) {
         final var fullClassPath = new ArrayList<URL>();
         fullClassPath.addAll(getProjectClassPath(project));
-        fullClassPath.addAll(Arrays.stream(getJavaClassPath()).toList());
+        fullClassPath.addAll(Arrays.stream(io.github.potjerodekool.codegen.loader.java.ClassPath.getJavaClassPath()).toList());
         return fullClassPath.toArray(URL[]::new);
     }
 

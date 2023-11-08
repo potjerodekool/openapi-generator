@@ -3,12 +3,12 @@ package io.github.potjerodekool.openapi.internal.generate.config;
 import io.github.potjerodekool.codegen.io.FileObject;
 import io.github.potjerodekool.codegen.io.Filer;
 import io.github.potjerodekool.codegen.io.Location;
+import io.github.potjerodekool.openapi.PropertiesUpdater;
 import org.yaml.snakeyaml.Yaml;
 
-import java.io.*;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
 
 public class SpringApplicationConfigGenerator {
 
@@ -58,19 +58,9 @@ public class SpringApplicationConfigGenerator {
 
     private void createOfUpdateApplicationProperties(final Map<String, Object> additionalApplicationProperties,
                                                      final FileObject fileObject) {
-        if (additionalApplicationProperties.size() > 0) {
-            final var properties = new Properties();
-
-            try (final var reader = fileObject.openReader(false)) {
-                properties.load(reader);
-            } catch (final IOException e) {
-                //Ignore exceptions
-            }
-
-            additionalApplicationProperties.forEach((key, value) -> properties.putIfAbsent(key, value.toString()));
-
-            try (final var writer = fileObject.openWriter()) {
-                properties.store(writer, null);
+        if (!additionalApplicationProperties.isEmpty()) {
+            try {
+                PropertiesUpdater.update(fileObject, additionalApplicationProperties);
             } catch (final IOException e) {
                 throw new RuntimeException(e);
             }
@@ -91,7 +81,7 @@ public class SpringApplicationConfigGenerator {
 
         var modified = false;
 
-        for (final Map.Entry<String, Object> entry : additionalApplicationProperties.entrySet()) {
+        for (final var entry : additionalApplicationProperties.entrySet()) {
             final var key = entry.getKey();
             final var value = entry.getValue();
             final var keyElements = key.split("\\.");
