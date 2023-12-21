@@ -6,17 +6,18 @@ import io.github.potjerodekool.codegen.model.element.Name;
 import io.github.potjerodekool.codegen.model.element.NestingKind;
 import io.github.potjerodekool.codegen.model.symbol.MethodSymbol;
 import io.github.potjerodekool.codegen.model.symbol.VariableSymbol;
-import io.github.potjerodekool.codegen.model.tree.JTreeVisitor;
+import io.github.potjerodekool.codegen.model.tree.MethodDeclaration;
 import io.github.potjerodekool.codegen.model.tree.PackageDeclaration;
-import io.github.potjerodekool.codegen.model.tree.java.JMethodDeclaration;
-import io.github.potjerodekool.codegen.model.tree.statement.java.JClassDeclaration;
-import io.github.potjerodekool.codegen.model.tree.statement.java.JVariableDeclaration;
+import io.github.potjerodekool.codegen.model.tree.TreeVisitor;
+import io.github.potjerodekool.codegen.model.tree.statement.ClassDeclaration;
+import io.github.potjerodekool.codegen.model.tree.statement.VariableDeclaration;
 import io.github.potjerodekool.codegen.model.util.SymbolTable;
+import io.github.potjerodekool.codegen.resolve.Scope;
 import io.github.potjerodekool.codegen.resolve.WritableScope;
 
 public class Enter implements
-        CompilationUnitVisitor<Object, Object>,
-        JTreeVisitor<Object, Object> {
+        CompilationUnitVisitor<Object, Scope>,
+        TreeVisitor<Object, Scope> {
 
     private final SymbolTable symbolTable;
 
@@ -26,13 +27,13 @@ public class Enter implements
 
     @Override
     public Object visitCompilationUnit(final CompilationUnit compilationUnit,
-                                       final Object param) {
+                                       final Scope param) {
         compilationUnit.getDefinitions().forEach(definition -> definition.accept(this, param));
         return null;
     }
 
     @Override
-    public Object visitPackageDeclaration(final PackageDeclaration packageDeclaration, final Object param) {
+    public Object visitPackageDeclaration(final PackageDeclaration packageDeclaration, final Scope param) {
         final var packageSymbol = symbolTable.enterPackage(null, Name.of(packageDeclaration.getName().getName()));
         packageDeclaration.setPackageSymbol(packageSymbol);
         packageSymbol.scope = new WritableScope(packageSymbol);
@@ -40,8 +41,8 @@ public class Enter implements
     }
 
     @Override
-    public Object visitClassDeclaration(final JClassDeclaration classDeclaration,
-                                        final Object param) {
+    public Object visitClassDeclaration(final ClassDeclaration<?> classDeclaration,
+                                        final Scope param) {
         final var enclosing = classDeclaration.getEnclosing();
         final var nestingKind = enclosing instanceof PackageDeclaration
                 ? NestingKind.TOP_LEVEL
@@ -59,14 +60,7 @@ public class Enter implements
     }
 
     @Override
-    public Object visitMethodDeclaration(final JMethodDeclaration methodDeclaration, final Object param) {
-        methodDeclaration.getTypeParameters().forEach(typeParam -> typeParam.accept(this, param));
-        methodDeclaration.getParameters().forEach(parameter -> parameter.accept(this, param));
-
-        final var parameters = methodDeclaration.getParameters().stream()
-                .map(parameter ->  (VariableSymbol) parameter.getSymbol())
-                .toList();
-
+    public Object visitMethodDeclaration(final MethodDeclaration<?> methodDeclaration, final Scope scope) {
         final var methodSymbol = new MethodSymbol(
                 methodDeclaration.getKind(),
                 null,
@@ -74,18 +68,33 @@ public class Enter implements
         );
 
         methodSymbol.addModifiers(methodDeclaration.getModifiers());
-        methodSymbol.addParameters(parameters);
 
         methodDeclaration.setMethodSymbol(methodSymbol);
+
+        final var methodScope = new WritableScope(methodSymbol);
+        methodSymbol.scope = methodScope;
+
+        methodDeclaration.getTypeParameters().forEach(typeParam -> typeParam.accept(this, methodScope));
+        methodDeclaration.getParameters().forEach(parameter -> parameter.accept(this, methodScope));
+
+        final var parameters = methodDeclaration.getParameters().stream()
+                .map(parameter ->  (VariableSymbol) parameter.getSymbol())
+                .toList();
+
+        methodSymbol.addParameters(parameters);
+
         return null;
     }
 
     @Override
-    public Object visitVariableDeclaration(final JVariableDeclaration variableDeclaration,
-                                           final Object param) {
+    public Object visitVariableDeclaration(final VariableDeclaration<?> variableDeclaration,
+                                           final Scope scope) {
         final var variableSymbol = new VariableSymbol(variableDeclaration.getKind(), variableDeclaration.getName());
         variableSymbol.addModifiers(variableDeclaration.getModifiers());
         variableDeclaration.setSymbol(variableSymbol);
+
+        scope.define(variableSymbol);
+
         return null;
     }
 }

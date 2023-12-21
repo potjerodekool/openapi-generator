@@ -2,17 +2,14 @@ package io.github.potjerodekool.openapi.internal;
 
 import io.github.potjerodekool.codegen.io.FileManagerImpl;
 import io.github.potjerodekool.codegen.io.Location;
-import io.github.potjerodekool.openapi.Project;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.nio.file.Path;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @ExtendWith(MockitoExtension.class)
 class FileManagerImplTest {

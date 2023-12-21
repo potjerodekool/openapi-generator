@@ -123,10 +123,11 @@
                             <language>java</language>
                             <apis>
                                 <api>
-                                    <!--
+
                                     <openApiFile>petstore/petstore.yaml</openApiFile>
-                                    -->
+                                    <!--
                                     <openApiFile>api.json</openApiFile>
+                                    -->
                                     <basePackageName>io.github.potjerodekool.demo.api</basePackageName>
                                     <generateApiDefinitions>true</generateApiDefinitions>
                                     <generateApiImplementations>true</generateApiImplementations>

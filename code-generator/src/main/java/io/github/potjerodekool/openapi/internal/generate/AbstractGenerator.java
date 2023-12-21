@@ -28,6 +28,7 @@ import java.util.stream.Collectors;
 
 import static io.github.potjerodekool.openapi.internal.generate.OpenApiUtils.findJsonMediaType;
 import static io.github.potjerodekool.openapi.internal.generate.OpenApiUtils.isMultiPart;
+import static io.github.potjerodekool.openapi.internal.util.StringUtils.toValidClassName;
 
 public abstract class AbstractGenerator {
 
@@ -131,7 +132,7 @@ public abstract class AbstractGenerator {
     private String resolveQualifiedName(final OpenApiPath openApiPath,
                                         final OpenApiOperation operation) {
         final var packageName = resolvePackageName(openApiPath);
-        final String simpleName;
+        String simpleName;
 
         final var creatingReference = openApiPath.creatingReference();
 
@@ -163,6 +164,8 @@ public abstract class AbstractGenerator {
 
             simpleName = simpleNameBuilder.toString();
         }
+
+        simpleName = toValidClassName(simpleName);
 
         final String apiName;
 

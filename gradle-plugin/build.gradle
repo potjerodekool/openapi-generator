@@ -1,6 +1,10 @@
 plugins {
     id 'java-gradle-plugin'
+    id 'maven-publish'
+    id 'signing'
+    /*
     id 'org.gradle.maven-publish'
+     */
 }
 
 group = 'io.github.potjerodekool'
@@ -49,24 +53,74 @@ tasks.withType(Test).configureEach {
     useJUnitPlatform()
 }
 
-publishing {
-    repositories {
-        mavenLocal()
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(17))
     }
+
+    withSourcesJar()
+    withJavadocJar()
 }
 
-/*
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            groupId = 'io.github.potjerodekool'
-            artifactId = 'open-api-gradle-plugin'
-            version = "0.0.1"
+            groupId = project.group.toString()
+            artifactId = project.name
             from components.java
+            versionMapping {
+                usage('java-api') {
+                    fromResolutionOf('runtimeClasspath')
+                }
+                usage('java-runtime') {
+                    fromResolutionResult()
+                }
+            }
+            pom {
+                name = project.group.toString() + project.name
+                description = 'Open api code generator for Springboot'
+                url = 'https://github.com/potjerodekool/openapi-generator'
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'Evert'
+                        name = 'Evert Tigchelaar'
+                        email = 'everttigchelaar@gmail.com'
+                    }
+                }
+                scm {
+                    connection = 'scm:git:git://github.com/potjerodekool/openapi-generator.git'
+                    developerConnection = 'scm:git:git://github.com/potjerodekool/openapi-generator.git'
+                    url = 'http://github.com/potjerodekool/openapi-generator/tree/master'
+                }
+            }
         }
     }
     repositories {
-        mavenLocal()
+        maven {
+            def releasesRepoUrl = 'https://s01.oss.sonatype.org/content/repositories/releases'
+            def snapshotsRepoUrl = 'https://s01.oss.sonatype.org/content/repositories/snapshots'
+            url = version.endsWith('SNAPSHOT') ? snapshotsRepoUrl : releasesRepoUrl
+
+            credentials {
+                username = System.getenv("OSSRH_USERNAME")
+                password = System.getenv("OSSRH_PASSWORD")
+            }
+        }
     }
 }
-*/
+
+signing {
+    useGpgCmd() // YOU NEED THIS. Without this method, gradle will not work with GnuPG keys.
+    sign publishing.publications.mavenJava
+}
+
+
+javadoc {
+    options.addBooleanOption('html5', true)
+}

@@ -14,6 +14,7 @@ public class LoginService implements LoginControllerServiceApi {
     }
     @Override
     public LoginResponse login(final LoginRequest body, final Request request) {
-        return new LoginResponse("aviapoipoaias4950");
+        return new LoginResponse()
+                .token("aviapoipoaias4950");
     }
 }

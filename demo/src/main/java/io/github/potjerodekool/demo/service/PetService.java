@@ -32,10 +32,8 @@ public class PetService implements PetsServiceApi {
         copyValues(petRequestDto, pet);
         pets.put(id, pet);
 
-        return new PetDto(
-                id,
-                petRequestDto.getName()
-        );
+        return new PetDto().id(id)
+                .name(petRequestDto.getName());
     }
 
     @Override
@@ -61,7 +59,9 @@ public class PetService implements PetsServiceApi {
 
         final var pet = petOptional.get();
 
-        return new PetDto(pet.getId(), pet.getName());
+        return new PetDto()
+                .id(petId)
+                .name(pet.getName());
     }
 
     private Optional<Pet> findPetById(final long petId) {

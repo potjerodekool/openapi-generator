@@ -79,7 +79,7 @@ public class ModelCodeGenerator {
         classDeclaration.setEnclosing(packageDeclaration);
 
         addFields(schema, classDeclaration, isPatchModel);
-        addConstructors(schema, classDeclaration, isPatchModel);
+        //addConstructors(schema, classDeclaration, isPatchModel);
         generateAccessors(schema, classDeclaration, isPatchModel);
 
         cu.accept(enter, null);
@@ -231,11 +231,6 @@ public class ModelCodeGenerator {
 
         final var modifiers = new HashSet<Modifier>();
         modifiers.add(Modifier.PRIVATE);
-
-        if (required
-                && !isPatchModel) {
-            modifiers.add(Modifier.FINAL);
-        }
 
         var field = new JVariableDeclaration(
                 ElementKind.FIELD,

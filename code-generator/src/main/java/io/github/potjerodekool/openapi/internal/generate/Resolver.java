@@ -19,8 +19,9 @@ import io.github.potjerodekool.codegen.model.util.QualifiedName;
 import io.github.potjerodekool.codegen.model.util.SymbolTable;
 import io.github.potjerodekool.codegen.model.util.type.Types;
 import io.github.potjerodekool.codegen.resolve.Scope;
+import io.github.potjerodekool.codegen.resolve.WritableScope;
 
-public class Resolver implements JTreeVisitor<Object, Scope> {
+public class Resolver implements TreeVisitor<Object, Scope> {
 
     protected final Elements elements;
     protected final Types types;
@@ -64,7 +65,7 @@ public class Resolver implements JTreeVisitor<Object, Scope> {
     }
 
     @Override
-    public Object visitClassDeclaration(final JClassDeclaration classDeclaration, final Scope scope) {
+    public Object visitClassDeclaration(final ClassDeclaration<?> classDeclaration, final Scope scope) {
         //TODO remove if. Enter should be used.
         if (classDeclaration.getClassSymbol() == null) {
             var enclosing = classDeclaration.getEnclosing();
@@ -119,18 +120,29 @@ public class Resolver implements JTreeVisitor<Object, Scope> {
         }
     }
 
-    @Override
-    public Object visitMethodDeclaration(final JMethodDeclaration methodDeclaration, final Scope scope) {
-        final var classScope = getClassScope(methodDeclaration);
+    private Scope findScope(final Tree tree) {
+        if (tree instanceof MethodDeclaration<?> methodDeclaration) {
+            return methodDeclaration.getMethodSymbol().scope;
+        } else if (tree instanceof ClassDeclaration<?> classDeclaration) {
+            return classDeclaration.getClassSymbol().scope;
+        } else {
+            throw new UnsupportedOperationException("Unsupported tree: " + tree);
+        }
+    }
 
-        methodDeclaration.getReturnType().accept(this, classScope);
+
+    @Override
+    public Object visitMethodDeclaration(final MethodDeclaration<?> methodDeclaration, final Scope scope) {
+        final var methodScope = findScope(methodDeclaration);
+
+        methodDeclaration.getReturnType().accept(this, methodScope);
         final var returnType = methodDeclaration.getReturnType().getType();
 
-        methodDeclaration.getTypeParameters().forEach(typeParam -> typeParam.accept(this, classScope));
-        methodDeclaration.getAnnotations().forEach(annotation -> annotation.accept(this, classScope));
-        methodDeclaration.getParameters().forEach(parameter -> parameter.accept(this, classScope));
+        methodDeclaration.getTypeParameters().forEach(typeParam -> typeParam.accept(this, methodScope));
+        methodDeclaration.getAnnotations().forEach(annotation -> annotation.accept(this, methodScope));
+        methodDeclaration.getParameters().forEach(parameter -> parameter.accept(this, methodScope));
 
-        methodDeclaration.getBody().ifPresent(body -> body.accept(this, classScope));
+        methodDeclaration.getBody().ifPresent(body -> body.accept(this, methodScope));
 
         final var parameters = methodDeclaration.getParameters().stream()
                 .map(parameter ->  (VariableSymbol) parameter.getSymbol())
@@ -148,7 +160,7 @@ public class Resolver implements JTreeVisitor<Object, Scope> {
     }
 
     @Override
-    public Object visitVariableDeclaration(final JVariableDeclaration variableDeclaration, final Scope scope) {
+    public Object visitVariableDeclaration(final VariableDeclaration<?> variableDeclaration, final Scope scope) {
         variableDeclaration.getVarType().accept(this, scope);
         variableDeclaration.getInitExpression().ifPresent(it -> it.accept(this, scope));
 
@@ -181,6 +193,12 @@ public class Resolver implements JTreeVisitor<Object, Scope> {
     public Object visitBinaryExpression(final BinaryExpression binaryExpression, final Scope scope) {
         binaryExpression.getLeft().accept(this, scope);
         binaryExpression.getRight().accept(this, scope);
+        return null;
+    }
+
+    @Override
+    public Object visitUnaryExpression(final UnaryExpression unaryExpression, final Scope scope) {
+        unaryExpression.getExpression().accept(this, scope);
         return null;
     }
 
@@ -218,10 +236,11 @@ public class Resolver implements JTreeVisitor<Object, Scope> {
     @Override
     public Object visitIdentifierExpression(final IdentifierExpression identifierExpression, final Scope scope) {
         final String name = identifierExpression.getName();
-        final var typeElement = elements.getTypeElement(name);
+        final var resolvedSymbol = scope.resolveSymbol(Name.of(name))
+                .orElseGet(() -> (AbstractSymbol) elements.getTypeElement(name));
 
-        if (typeElement != null) {
-            identifierExpression.setSymbol(typeElement);
+        if (resolvedSymbol != null) {
+            identifierExpression.setSymbol(resolvedSymbol);
         }
 
         return null;
@@ -381,7 +400,7 @@ public class Resolver implements JTreeVisitor<Object, Scope> {
     }
 
     @Override
-    public Object visitVarTypeExpression(final VarTypeExpression varTypeExpression, final Scope param) {
+    public Object visitVarTypeExpression(final VarTypeExpression varTypeExpression, final Scope scope) {
         return null;
     }
 

@@ -287,9 +287,6 @@ paths:
 components:
   schemas:
     PetDto:
-      required:
-        - id
-        - name
       type: object
       properties:
         id:
@@ -335,8 +332,6 @@ components:
           format: password
           writeOnly: true
     LoginResponse:
-      required:
-        - token
       type: object
       properties:
         token:

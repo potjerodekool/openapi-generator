@@ -3,7 +3,6 @@ package io.github.potjerodekool.openapi.gradle;
 import io.github.potjerodekool.codegen.Language;
 import io.github.potjerodekool.openapi.Features;
 import io.github.potjerodekool.openapi.Generator;
-import io.github.potjerodekool.openapi.internal.util.Utils;
 import io.github.potjerodekool.openapi.log.LogLevel;
 import io.github.potjerodekool.openapi.log.LoggerFactory;
 import org.gradle.api.Plugin;
@@ -53,7 +52,7 @@ public class OpenApiPlugin implements Plugin<Project> {
         final var checker = extension.getChecker().getOrNull();
         final var basePackageName = extension.getBasePackageName().getOrNull();
 
-        if (Utils.isEmpty(basePackageName)) {
+        if (basePackageName == null || basePackageName.isEmpty()) {
             logger.log(LogLevel.SEVERE, "No base basePackageName specified");
             return;
         }
@@ -117,8 +116,9 @@ public class OpenApiPlugin implements Plugin<Project> {
         return new io.github.potjerodekool.openapi.ApiConfiguration(
                 new File(apiConfiguration.getOpenApiFile()),
                 apiConfiguration.getBasePackageName(),
-                getOrDefault(apiConfiguration.generateApiDefinitions(), false),
-                getOrDefault(apiConfiguration.getGenerateModels(), true),
+                apiConfiguration.isGenerateApiDefinitions(),
+                apiConfiguration.isGenerateApiImplementations(),
+                apiConfiguration.isGenerateModels(),
                 new HashMap<>()
         );
     }

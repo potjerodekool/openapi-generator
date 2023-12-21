@@ -19,7 +19,15 @@ abstract public class OpenApiPluginExtension {
         final String basePackageName = (String) map.get("basePackageName");
         final Boolean generateModels = (Boolean) map.get("generateModels");
         final Boolean generateApiDefinitions = (Boolean) map.get("generateApiDefinitions");
-        return new ApiConfiguration(openApiFile, basePackageName, generateModels, generateApiDefinitions);
+        final Boolean generateApiImplementation = (Boolean) map.get("generateApiImplementation");
+
+        return new ApiConfiguration(
+                openApiFile,
+                basePackageName,
+                generateModels,
+                generateApiDefinitions,
+                generateApiImplementation
+        );
     }
 
 

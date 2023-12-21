@@ -2,6 +2,7 @@ package io.github.potjerodekool.openapi.internal.generate.api;
 
 import io.github.potjerodekool.codegen.Environment;
 import io.github.potjerodekool.openapi.ApiConfiguration;
+import io.github.potjerodekool.openapi.GeneratorConfig;
 import io.github.potjerodekool.openapi.generate.config.ConfigGenerator;
 import io.github.potjerodekool.openapi.internal.OpenApiEnvironment;
 import io.github.potjerodekool.openapi.internal.generate.model.ModelsCodeGenerator;
@@ -20,10 +21,18 @@ public abstract class AbstractCodeGenerator {
         final var generatorConfig = openApiEnvironment.getGeneratorConfig();
         final var environment = openApiEnvironment.getEnvironment();
 
-        new UtilsGenerator(generatorConfig, environment).generate();
+        generateApiUtils(generatorConfig, environment);
+
         new RequestGenerator(generatorConfig, environment).generate();
         new HttpServletRequestWrapperGenerator(generatorConfig, environment).generate();
     }
+
+    private void generateApiUtils(final GeneratorConfig generatorConfig,
+                                  final Environment environment) {
+        new UtilsGenerator(generatorConfig, environment).generate();
+        //new ApiUtilsGenerator(generatorConfig, environment).generate();
+    }
+
 
     protected void generateConfigs(final OpenApiEnvironment openApiEnvironment) {
         final var applicationContext = openApiEnvironment.getApplicationContext();

@@ -69,12 +69,21 @@ public class InMemoryFileManager implements FileManager {
                                final String relativeName) {
         final String fileName;
 
-        if (moduleAndPkg != null) {
-            fileName = moduleAndPkg.toString().replace(".", "/") + relativeName;
+        if (moduleAndPkg != null && !moduleAndPkg.isEmpty()) {
+            final var parentName = moduleAndPkg.toString().replace('.', '/');
+            fileName = String.format("%s/%s", parentName, relativeName);
         } else {
             fileName = relativeName;
         }
         return fileName;
+    }
+
+    public byte[] getData(final FileObject fileObject) {
+        if (fileObject instanceof InMemoryFileObject inMemoryFileObject) {
+            return inMemoryFileObject.getData();
+        } else {
+            throw new IllegalArgumentException("not a InMemoryFileObject: " + fileObject);
+        }
     }
 }
 
@@ -84,6 +93,7 @@ class InMemoryFileObject implements FileObject {
     private final Kind kind;
     private byte[] data;
     private long lastModified;
+    private ByteArrayOutputStream outputStream;
 
     InMemoryFileObject(final String name,
                        final Kind kind) {
@@ -112,6 +122,14 @@ class InMemoryFileObject implements FileObject {
         this.lastModified = lastModified(data);
     }
 
+    public byte[] getData() {
+        if (outputStream != null) {
+            return outputStream.toByteArray();
+        } else {
+            return data;
+        }
+    }
+
     @Override
     public String getName() {
         return name;
@@ -134,7 +152,8 @@ class InMemoryFileObject implements FileObject {
 
     @Override
     public OutputStream openOutputStream() throws IOException {
-        throw new UnsupportedOperationException();
+        this.outputStream = new ByteArrayOutputStream();
+        return this.outputStream;
     }
 
     @Override
