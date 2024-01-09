@@ -11,8 +11,8 @@ import io.github.potjerodekool.codegen.model.tree.PackageDeclaration;
 import io.github.potjerodekool.codegen.model.tree.expression.*;
 import io.github.potjerodekool.codegen.model.tree.statement.BlockStatement;
 import io.github.potjerodekool.codegen.model.tree.statement.ReturnStatement;
-import io.github.potjerodekool.codegen.model.tree.statement.java.JClassDeclaration;
-import io.github.potjerodekool.codegen.model.tree.statement.java.JVariableDeclaration;
+import io.github.potjerodekool.codegen.model.tree.statement.ClassDeclaration;
+import io.github.potjerodekool.codegen.model.tree.statement.VariableDeclaration;
 import io.github.potjerodekool.codegen.model.tree.type.ArrayTypeExpression;
 import io.github.potjerodekool.codegen.model.tree.type.ClassOrInterfaceTypeExpression;
 import io.github.potjerodekool.codegen.model.tree.type.PrimitiveTypeExpression;
@@ -20,9 +20,6 @@ import io.github.potjerodekool.openapi.Features;
 import io.github.potjerodekool.openapi.GeneratorConfig;
 
 import java.util.List;
-import java.util.Set;
-
-import static io.github.potjerodekool.codegen.model.tree.expression.MethodCallExpressionBuilder.invoke;
 
 public class HttpServletRequestWrapperGenerator {
 
@@ -44,12 +41,12 @@ public class HttpServletRequestWrapperGenerator {
         final var cu = new CompilationUnit(Language.JAVA);
 
         final var packageDeclaration = new PackageDeclaration(new IdentifierExpression(packageName));
-        cu.add(packageDeclaration);
+        cu.packageDeclaration(packageDeclaration);
 
-        final var classDeclaration = new JClassDeclaration(
-                "HttpServletRequestWrapper",
-                ElementKind.CLASS
-        ).modifier(Modifier.PUBLIC)
+        final var classDeclaration = new ClassDeclaration()
+                .simpleName(Name.of("HttpServletRequestWrapper"))
+                .kind(ElementKind.CLASS)
+                .modifier(Modifier.PUBLIC)
                         .annotation(new AnnotationExpression("javax.annotation.processing.Generated", LiteralExpression.createStringLiteralExpression(getClass().getName())));
 
         classDeclaration.addImplement(new ClassOrInterfaceTypeExpression(
@@ -57,7 +54,7 @@ public class HttpServletRequestWrapperGenerator {
         ));
 
         classDeclaration.setEnclosing(packageDeclaration);
-        cu.add(classDeclaration);
+        cu.classDeclaration(classDeclaration);
 
         addRequestField(classDeclaration);
         addConstructor(classDeclaration);
@@ -72,168 +69,166 @@ public class HttpServletRequestWrapperGenerator {
         environment.getCompilationUnits().add(cu);
     }
 
-    private void addRequestField(final JClassDeclaration classDeclaration) {
-        final var field = new JVariableDeclaration(
-                ElementKind.FIELD,
-                Set.of(Modifier.PRIVATE, Modifier.FINAL),
-                new ClassOrInterfaceTypeExpression(httpServletRequestClassName),
-                "request",
-                null,
-                null
-        );
+    private void addRequestField(final ClassDeclaration classDeclaration) {
+        final var field = new VariableDeclaration()
+                .kind(ElementKind.FIELD)
+                .modifiers(Modifier.PRIVATE, Modifier.FINAL)
+                .varType(new ClassOrInterfaceTypeExpression(httpServletRequestClassName))
+                .name("request");
 
         classDeclaration.addEnclosed(field);
     }
 
-    private void addConstructor(final JClassDeclaration classDeclaration) {
-        final var constructor = classDeclaration.addConstructor();
-        constructor.addModifier(Modifier.PUBLIC);
-        constructor.addParameter(
-                JVariableDeclaration.parameter()
-                        .modifier(Modifier.FINAL)
-                        .varType(new ClassOrInterfaceTypeExpression(httpServletRequestClassName))
-                        .name("request")
-        );
+    private void addConstructor(final ClassDeclaration classDeclaration) {
+        classDeclaration.constructor(constructor -> {
+            constructor.modifier(Modifier.PUBLIC);
+            constructor.parameter(
+                    VariableDeclaration.parameter()
+                            .modifier(Modifier.FINAL)
+                            .varType(new ClassOrInterfaceTypeExpression(httpServletRequestClassName))
+                            .name("request")
+            );
 
-        final var constructorBody = new BlockStatement();
+            final var constructorBody = new BlockStatement();
 
-        constructorBody.add(
-                new BinaryExpression(
-                        new FieldAccessExpression(
-                                new IdentifierExpression("this"),
-                                "request"
-                        ),
-                        new IdentifierExpression("request"),
-                        Operator.ASSIGN
-                )
-        );
+            constructorBody.add(
+                    new BinaryExpression(
+                            new FieldAccessExpression(
+                                    new IdentifierExpression("this"),
+                                    "request"
+                            ),
+                            new IdentifierExpression("request"),
+                            Operator.ASSIGN
+                    )
+            );
 
-        constructor.setBody(constructorBody);
+            constructor.body(constructorBody);
+        });
     }
 
-    private void addGetParameterMethod(final JClassDeclaration classDeclaration) {
-        final var method = classDeclaration.addMethod()
-                .annotation("java.lang.Override")
-                .modifier(Modifier.PUBLIC)
-                .setSimpleName(Name.of("getParameter"))
-                .setReturnType(new ClassOrInterfaceTypeExpression("java.lang.String"))
-                .addParameter(
-                    JVariableDeclaration.parameter()
-                            .varType(new ClassOrInterfaceTypeExpression("java.lang.String"))
-                            .name("name")
-                );
+    private void addGetParameterMethod(final ClassDeclaration classDeclaration) {
+        classDeclaration.method(method -> {
+            method.annotation("java.lang.Override")
+                    .modifier(Modifier.PUBLIC)
+                    .simpleName(Name.of("getParameter"))
+                    .returnType(new ClassOrInterfaceTypeExpression("java.lang.String"))
+                    .parameter(
+                            VariableDeclaration.parameter()
+                                    .varType(new ClassOrInterfaceTypeExpression("java.lang.String"))
+                                    .name("name")
+                    );
 
-        final var methodCall = invoke(
-                new FieldAccessExpression(
-                        new IdentifierExpression("this"),
-                        "request"
-                ),
-                "getParameter"
-        ).withArgs(new IdentifierExpression("name"))
-                .build();
+            final var methodCall = new MethodCallExpression()
+                    .target(new FieldAccessExpression(
+                            new IdentifierExpression("this"),
+                            "request"
+                    ))
+                    .methodName("getParameter")
+                    .argument(new IdentifierExpression("name"));
 
-        method.setBody(new BlockStatement(new ReturnStatement(methodCall)));
+            method.body(new BlockStatement(new ReturnStatement(methodCall)));
+        });
     }
 
-    private void addGetParameterValues(final JClassDeclaration classDeclaration) {
-        final var method = classDeclaration.addMethod()
-                .annotation("java.lang.Override")
-                .modifier(Modifier.PUBLIC)
-                .setSimpleName(Name.of("getParameterValues"))
-                .setReturnType(new ArrayTypeExpression(new ClassOrInterfaceTypeExpression("java.lang.String")))
-                .addParameter(
-                        JVariableDeclaration.parameter()
-                                .varType(new ClassOrInterfaceTypeExpression("java.lang.String"))
-                                .name("name")
-                );
+    private void addGetParameterValues(final ClassDeclaration classDeclaration) {
+        classDeclaration.method(method -> {
+            method.annotation("java.lang.Override")
+                    .modifier(Modifier.PUBLIC)
+                    .simpleName(Name.of("getParameterValues"))
+                    .returnType(new ArrayTypeExpression(new ClassOrInterfaceTypeExpression("java.lang.String")))
+                    .parameter(
+                            VariableDeclaration.parameter()
+                                    .varType(new ClassOrInterfaceTypeExpression("java.lang.String"))
+                                    .name("name")
+                    );
 
-        final var methodCall = invoke(
-                        new FieldAccessExpression(
-                                new IdentifierExpression("this"),
-                                "request"
-                        ),
-                        "getParameterValues"
-                ).withArgs(new IdentifierExpression("name"))
-                .build();
+            final var methodCall = new MethodCallExpression()
+                    .target(new FieldAccessExpression(
+                            new IdentifierExpression("this"),
+                            "request"
+                    ))
+                    .methodName("getParameterValues")
+                    .argument(new IdentifierExpression("name"));
 
-        method.setBody(new BlockStatement(new ReturnStatement(methodCall)));
+            method.body(new BlockStatement(new ReturnStatement(methodCall)));
+        });
     }
 
-    private void addGetParameterMapMethod(final JClassDeclaration classDeclaration) {
-        final var method = classDeclaration.addMethod()
-                .annotation("java.lang.Override")
-                .modifier(Modifier.PUBLIC)
-                .setSimpleName(Name.of("getParameterMap"))
-                .setReturnType(new ClassOrInterfaceTypeExpression(
-                        "java.util.Map",
-                        List.of(
-                                new ClassOrInterfaceTypeExpression("java.lang.String"),
-                                new ArrayTypeExpression(new ClassOrInterfaceTypeExpression("java.lang.String"))
-                        )
-                ));
+    private void addGetParameterMapMethod(final ClassDeclaration classDeclaration) {
+        classDeclaration.method(method -> {
+            method.annotation("java.lang.Override")
+                    .modifier(Modifier.PUBLIC)
+                    .simpleName(Name.of("getParameterMap"))
+                    .returnType(new ClassOrInterfaceTypeExpression(
+                            "java.util.Map",
+                            List.of(
+                                    new ClassOrInterfaceTypeExpression("java.lang.String"),
+                                    new ArrayTypeExpression(new ClassOrInterfaceTypeExpression("java.lang.String"))
+                            )
+                    ));
 
-        final var methodCall = invoke(
-                        new FieldAccessExpression(
-                                new IdentifierExpression("this"),
-                                "request"
-                        ),
-                        "getParameterMap"
-                ).build();
+            final var methodCall = new MethodCallExpression()
+                    .target(new FieldAccessExpression(
+                            new IdentifierExpression("this"),
+                            "request"
+                    ))
+                    .methodName("getParameterMap");
 
-        method.setBody(new BlockStatement(new ReturnStatement(methodCall)));
+            method.body(new BlockStatement(new ReturnStatement(methodCall)));
+        });
     }
 
-    private void addGetRemoteAddrMethod(final JClassDeclaration classDeclaration) {
-        final var method = classDeclaration.addMethod()
-                .annotation("java.lang.Override")
-                .modifier(Modifier.PUBLIC)
-                .setSimpleName(Name.of("getRemoteAddr"))
-                .setReturnType(new ClassOrInterfaceTypeExpression("java.lang.String"));
+    private void addGetRemoteAddrMethod(final ClassDeclaration classDeclaration) {
+        classDeclaration.method(method -> {
+            method.annotation("java.lang.Override")
+                    .modifier(Modifier.PUBLIC)
+                    .simpleName(Name.of("getRemoteAddr"))
+                    .returnType(new ClassOrInterfaceTypeExpression("java.lang.String"));
 
-        final var methodCall = invoke(
-                new FieldAccessExpression(
-                        new IdentifierExpression("this"),
-                        "request"
-                ),
-                "getRemoteAddr"
-        ).build();
+            final var methodCall = new MethodCallExpression()
+                    .target(new FieldAccessExpression(
+                            new IdentifierExpression("this"),
+                            "request"
+                    ))
+                    .methodName("getRemoteAddr");
 
-        method.setBody(new BlockStatement(new ReturnStatement(methodCall)));
+            method.body(new BlockStatement(new ReturnStatement(methodCall)));
+        });
     }
 
-    private void addGetRemoteHostMethod(final JClassDeclaration classDeclaration) {
-        final var method = classDeclaration.addMethod()
-                .annotation("java.lang.Override")
-                .modifier(Modifier.PUBLIC)
-                .setSimpleName(Name.of("getRemoteHost"))
-                .setReturnType(new ClassOrInterfaceTypeExpression("java.lang.String"));
+    private void addGetRemoteHostMethod(final ClassDeclaration classDeclaration) {
+        classDeclaration.method(method -> {
+            method.annotation("java.lang.Override")
+                    .modifier(Modifier.PUBLIC)
+                    .simpleName(Name.of("getRemoteHost"))
+                    .returnType(new ClassOrInterfaceTypeExpression("java.lang.String"));
 
-        final var methodCall = invoke(
-                new FieldAccessExpression(
-                        new IdentifierExpression("this"),
-                        "request"
-                ),
-                "getRemoteHost"
-        ).build();
+            final var methodCall = new MethodCallExpression()
+                    .target(new FieldAccessExpression(
+                            new IdentifierExpression("this"),
+                            "request"
+                    ))
+                    .methodName("getRemoteHost");
 
-        method.setBody(new BlockStatement(new ReturnStatement(methodCall)));
+            method.body(new BlockStatement(new ReturnStatement(methodCall)));
+        });
     }
 
-    private void addGetRemotePortMethod(final JClassDeclaration classDeclaration) {
-        final var method = classDeclaration.addMethod()
-                .annotation("java.lang.Override")
-                .modifier(Modifier.PUBLIC)
-                .setSimpleName(Name.of("getRemotePort"))
-                .setReturnType(PrimitiveTypeExpression.intTypeExpression());
+    private void addGetRemotePortMethod(final ClassDeclaration classDeclaration) {
+        classDeclaration.method(method -> {
+            method.annotation("java.lang.Override")
+                    .modifier(Modifier.PUBLIC)
+                    .simpleName(Name.of("getRemotePort"))
+                    .returnType(PrimitiveTypeExpression.intTypeExpression());
 
-        final var methodCall = invoke(
-                new FieldAccessExpression(
-                        new IdentifierExpression("this"),
-                        "request"
-                ),
-                "getRemotePort"
-        ).build();
+            final var methodCall = new MethodCallExpression()
+                    .target(new FieldAccessExpression(
+                            new IdentifierExpression("this"),
+                            "request"
+                    ))
+                    .methodName("getRemotePort");
 
-        method.setBody(new BlockStatement(new ReturnStatement(methodCall)));
+            method.body(new BlockStatement(new ReturnStatement(methodCall)));
+        });
     }
 }

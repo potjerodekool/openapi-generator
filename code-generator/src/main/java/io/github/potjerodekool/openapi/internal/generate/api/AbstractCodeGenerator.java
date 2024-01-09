@@ -5,10 +5,12 @@ import io.github.potjerodekool.openapi.ApiConfiguration;
 import io.github.potjerodekool.openapi.GeneratorConfig;
 import io.github.potjerodekool.openapi.generate.config.ConfigGenerator;
 import io.github.potjerodekool.openapi.internal.OpenApiEnvironment;
-import io.github.potjerodekool.openapi.internal.generate.model.ModelsCodeGenerator;
+import io.github.potjerodekool.openapi.internal.generate.model.ModelsGenerator;
+import io.github.potjerodekool.openapi.internal.generate.model.OpenApiWalker;
+import io.github.potjerodekool.openapi.internal.generate.model.adapt.ModelAdapter;
 import io.github.potjerodekool.openapi.internal.generate.service.ServiceApiGenerator;
 import io.github.potjerodekool.openapi.internal.type.OpenApiTypeUtils;
-import io.github.potjerodekool.openapi.tree.OpenApi;
+import io.swagger.v3.oas.models.OpenAPI;
 
 public abstract class AbstractCodeGenerator {
 
@@ -30,7 +32,6 @@ public abstract class AbstractCodeGenerator {
     private void generateApiUtils(final GeneratorConfig generatorConfig,
                                   final Environment environment) {
         new UtilsGenerator(generatorConfig, environment).generate();
-        //new ApiUtilsGenerator(generatorConfig, environment).generate();
     }
 
 
@@ -41,38 +42,46 @@ public abstract class AbstractCodeGenerator {
     }
 
     public void generateApi(final OpenApiEnvironment openApiEnvironment,
-                            final OpenApi api,
+                            final OpenAPI openApi,
                             final ApiConfiguration apiConfiguration,
                             final boolean generateConfigs) {
-        generateModels(openApiEnvironment, api, apiConfiguration);
-        generateApiDefinition(api, apiConfiguration, openApiEnvironment);
-        generateServiceDefinition(api, openApiEnvironment, apiConfiguration);
-        generateApiImplementation(api, apiConfiguration, openApiEnvironment);
+        generateModels(openApiEnvironment, openApi, apiConfiguration);
+        generateApiDefinition(openApi, apiConfiguration, openApiEnvironment);
+        generateServiceDefinition(openApi, openApiEnvironment, apiConfiguration);
+        generateApiImplementation(openApi, apiConfiguration, openApiEnvironment);
 
         if (generateConfigs) {
-            generateApiConfigs(api, openApiEnvironment);
+            generateApiConfigs(openApi, openApiEnvironment);
         }
     }
 
     private void generateModels(final OpenApiEnvironment openApiEnvironment,
-                                final OpenApi api,
+                                final OpenAPI openApi,
                                 final ApiConfiguration apiConfiguration) {
         final var generateModels = apiConfiguration.generateModels();
 
         if (generateModels) {
-            new ModelsCodeGenerator(openApiEnvironment).generate(api);
+            final var applicationContext = openApiEnvironment.getApplicationContext();
+            final var adapters = applicationContext.getBeansOfType(ModelAdapter.class);
+
+            final var generator = new ModelsGenerator(apiConfiguration.modelPackageName());
+            adapters.forEach(generator::registerModelAdapter);
+
+            OpenApiWalker.walk(openApi, generator);
+            final var models = generator.getModels();
+            openApiEnvironment.getEnvironment().getCompilationUnits().addAll(models);
         }
     }
 
-    protected abstract void generateApiDefinition(final OpenApi api,
+    protected abstract void generateApiDefinition(final OpenAPI openApi,
                                                   final ApiConfiguration apiConfiguration,
                                                   final OpenApiEnvironment openApiEnvironment);
 
-    protected abstract void generateApiImplementation(final OpenApi api,
+    protected abstract void generateApiImplementation(final OpenAPI openAPI,
                                                       final ApiConfiguration apiConfiguration,
                                                       final OpenApiEnvironment openApiEnvironment);
 
-    protected void generateServiceDefinition(final OpenApi api,
+    protected void generateServiceDefinition(final OpenAPI openApi,
                                              final OpenApiEnvironment openApiEnvironment,
                                              final ApiConfiguration apiConfiguration) {
         if (apiConfiguration.generateApiImplementations()) {
@@ -80,17 +89,17 @@ public abstract class AbstractCodeGenerator {
                     openApiEnvironment.getGeneratorConfig(),
                     apiConfiguration,
                     openApiEnvironment.getEnvironment(),
-                    openApiEnvironment.getOpenApiTypeUtils()
+                    getOpenApiTypeUtils(apiConfiguration)
             );
-            generator.generate(api);
+            generator.generate(openApi);
         }
     }
 
-    protected abstract void generateApiConfigs(final OpenApi api,
+    protected abstract void generateApiConfigs(final OpenAPI openApi,
                                                final OpenApiEnvironment openApiEnvironment);
 
     public void generate(final Environment environment) {
     }
 
-    public abstract OpenApiTypeUtils getOpenApiTypeUtils();
+    public abstract OpenApiTypeUtils getOpenApiTypeUtils(final ApiConfiguration apiConfiguration);
 }

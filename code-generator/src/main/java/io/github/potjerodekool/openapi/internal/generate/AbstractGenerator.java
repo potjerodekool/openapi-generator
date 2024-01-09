@@ -10,17 +10,22 @@ import io.github.potjerodekool.codegen.model.tree.PackageDeclaration;
 import io.github.potjerodekool.codegen.model.tree.expression.Expression;
 import io.github.potjerodekool.codegen.model.tree.expression.IdentifierExpression;
 import io.github.potjerodekool.codegen.model.tree.statement.ClassDeclaration;
-import io.github.potjerodekool.codegen.model.tree.statement.java.JClassDeclaration;
-import io.github.potjerodekool.codegen.model.tree.statement.java.JVariableDeclaration;
+import io.github.potjerodekool.codegen.model.tree.statement.VariableDeclaration;
 import io.github.potjerodekool.codegen.model.tree.type.ClassOrInterfaceTypeExpression;
 import io.github.potjerodekool.codegen.model.util.QualifiedName;
 import io.github.potjerodekool.codegen.model.util.StringUtils;
 import io.github.potjerodekool.openapi.ApiConfiguration;
 import io.github.potjerodekool.openapi.GeneratorConfig;
-import io.github.potjerodekool.openapi.HttpMethod;
 import io.github.potjerodekool.openapi.internal.type.OpenApiTypeUtils;
-import io.github.potjerodekool.openapi.tree.*;
-import io.github.potjerodekool.openapi.tree.media.OpenApiObjectSchema;
+import io.swagger.models.HttpMethod;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.Operation;
+import io.swagger.v3.oas.models.PathItem;
+import io.swagger.v3.oas.models.media.ObjectSchema;
+import io.swagger.v3.oas.models.media.Schema;
+import io.swagger.v3.oas.models.parameters.Parameter;
+import org.apache.commons.lang3.tuple.ImmutablePair;
+import org.apache.commons.lang3.tuple.Pair;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.*;
@@ -28,6 +33,8 @@ import java.util.stream.Collectors;
 
 import static io.github.potjerodekool.openapi.internal.generate.OpenApiUtils.findJsonMediaType;
 import static io.github.potjerodekool.openapi.internal.generate.OpenApiUtils.isMultiPart;
+import static io.github.potjerodekool.openapi.internal.util.OpenApiUtils.findComponentSchemaByName;
+import static io.github.potjerodekool.openapi.internal.util.OpenApiUtils.getSchemaName;
 import static io.github.potjerodekool.openapi.internal.util.StringUtils.toValidClassName;
 
 public abstract class AbstractGenerator {
@@ -60,8 +67,8 @@ public abstract class AbstractGenerator {
         return openApiTypeUtils;
     }
 
-    public void generate(final OpenApi api) {
-        api.paths().forEach(this::processPath);
+    public void generate(final OpenAPI openApi) {
+        openApi.getPaths().forEach((path, pathItem) -> processPath(openApi, path, pathItem));
         generateCode();
     }
 
@@ -70,22 +77,25 @@ public abstract class AbstractGenerator {
         environment.getCompilationUnits().addAll(compilationUnits);
     }
 
-    private void processPath(final OpenApiPath openApiPath) {
-        processOperation(openApiPath, HttpMethod.POST, openApiPath.path(), openApiPath.post());
-        processOperation(openApiPath, HttpMethod.GET, openApiPath.path(), openApiPath.get());
-        processOperation(openApiPath, HttpMethod.PUT, openApiPath.path(), openApiPath.put());
-        processOperation(openApiPath, HttpMethod.PATCH, openApiPath.path(), openApiPath.patch());
-        processOperation(openApiPath, HttpMethod.DELETE, openApiPath.path(), openApiPath.delete());
+    private void processPath(final OpenAPI openAPI,
+                             final String path, final PathItem openApiPath) {
+        processOperation(openAPI, openApiPath, HttpMethod.POST, path, openApiPath.getPost());
+        processOperation(openAPI, openApiPath, HttpMethod.GET, path, openApiPath.getGet());
+        processOperation(openAPI, openApiPath, HttpMethod.PUT, path, openApiPath.getPut());
+        processOperation(openAPI, openApiPath, HttpMethod.PATCH, path, openApiPath.getPatch());
+        processOperation(openAPI, openApiPath, HttpMethod.DELETE, path, openApiPath.getDelete());
     }
 
-    protected abstract void processOperation(OpenApiPath openApiPath,
+    protected abstract void processOperation(final OpenAPI openAPI,
+                                             PathItem openApiPath,
                                              HttpMethod httpMethod,
                                              String path,
-                                             @Nullable OpenApiOperation operation);
+                                             @Nullable Operation operation);
 
-    protected JClassDeclaration findOrCreateClassDeclaration(final OpenApiPath openApiPath,
-                                                             final OpenApiOperation operation) {
-        final var className = resolveClassName(openApiPath, operation);
+    protected ClassDeclaration findOrCreateClassDeclaration(final String path,
+                                                            final PathItem openApiPath,
+                                                            final Operation operation) {
+        final var className = resolveClassName(path, openApiPath, operation);
         final var qualifiedName = QualifiedName.from(className);
         final var packageName = qualifiedName.packageName();
         final var simpleName = qualifiedName.simpleName();
@@ -94,8 +104,8 @@ public abstract class AbstractGenerator {
                 createCompilationUnitWithClassDeclaration(packageName, simpleName));
 
         return cu.getDefinitions().stream()
-                .filter(it -> it instanceof JClassDeclaration)
-                .map(it -> (JClassDeclaration) it)
+                .filter(it -> it instanceof ClassDeclaration)
+                .map(it -> (ClassDeclaration) it)
                 .findFirst()
                 .orElse(null);
     }
@@ -106,37 +116,40 @@ public abstract class AbstractGenerator {
         final var pckName = packageName.toString();
 
         final var packageDeclaration = new PackageDeclaration(new IdentifierExpression(pckName));
-        newCU.add(packageDeclaration);
+        newCU.packageDeclaration(packageDeclaration);
 
         final var classDeclaration = createClass(pckName, className);
 
         classDeclaration.setEnclosing(packageDeclaration);
-        newCU.add(classDeclaration);
+        newCU.classDeclaration(classDeclaration);
 
         return newCU;
     }
 
-    protected abstract ClassDeclaration<?> createClass(String packageName,
-                                                       Name simpleName);
+    protected abstract ClassDeclaration createClass(String packageName,
+                                                    Name simpleName);
 
-    protected String resolveClassName(final OpenApiPath openApiPath,
-                                      final OpenApiOperation operation) {
-        return generateClasName(openApiPath, operation);
+    protected String resolveClassName(final String path,
+                                      final PathItem openApiPath,
+                                      final Operation operation) {
+        return generateClasName(path, openApiPath, operation);
     }
 
-    protected String generateClasName(final OpenApiPath openApiPath,
-                                      final OpenApiOperation operation) {
-        return resolveQualifiedName(openApiPath, operation);
+    protected String generateClasName(final String path,
+                                      final PathItem openApiPath,
+                                      final Operation operation) {
+        return resolveQualifiedName(path, openApiPath, operation);
     }
 
-    private String resolveQualifiedName(final OpenApiPath openApiPath,
-                                        final OpenApiOperation operation) {
-        final var packageName = resolvePackageName(openApiPath);
+    private String resolveQualifiedName(final String path,
+                                        final PathItem openApiPath,
+                                        final Operation operation) {
+        final var packageName = basePackageName;
         String simpleName;
 
-        final var creatingReference = openApiPath.creatingReference();
+        final var creatingReference = openApiPath.get$ref();
 
-        if ( creatingReference != null) {
+        if (creatingReference != null) {
             if (!packageName.isEmpty()) {
                 final var start = creatingReference.lastIndexOf('/') + 1;
                 final var end = creatingReference.indexOf('.', start);
@@ -152,7 +165,7 @@ public abstract class AbstractGenerator {
                 }
             }
         } else {
-            final var pathElements = openApiPath.path().split("/");
+            final var pathElements = path.split("/");
 
             final var simpleNameBuilder = new StringBuilder();
 
@@ -169,10 +182,10 @@ public abstract class AbstractGenerator {
 
         final String apiName;
 
-        if (operation.tags().isEmpty()) {
+        if (operation.getTags() == null || operation.getTags().isEmpty()) {
             apiName = StringUtils.firstUpper(simpleName);
         } else {
-            final var firstTag = operation.tags().get(0);
+            final var firstTag = operation.getTags().getFirst();
             apiName = Arrays.stream(firstTag.split("-"))
                     .map(StringUtils::firstUpper)
                     .collect(Collectors.joining());
@@ -181,57 +194,70 @@ public abstract class AbstractGenerator {
         return packageName + "." + apiName;
     }
 
-    private String resolvePackageName(final OpenApiPath openApiPath) {
-        return basePackageName;
-    }
+    protected List<VariableDeclaration> createParameters(final OpenAPI openAPI,
+                                                         final Operation operation,
+                                                         final HttpMethod httpMethod) {
+        final List<VariableDeclaration> parameters = new ArrayList<>();
 
-    protected List<JVariableDeclaration> createParameters(final OpenApiOperation operation,
-                                                          final HttpMethod httpMethod) {
-        final var parameters = new ArrayList<>(operation.parameters().stream()
-                .map(this::createParameter)
-                .toList());
+        if (operation.getParameters() != null) {
+            parameters.addAll(
+                    operation.getParameters().stream()
+                            .map(parameter -> createParameter(openAPI, parameter))
+                            .toList()
+            );
+        }
 
-        final OpenApiRequestBody requestBody = operation.requestBody();
+        final var requestBody = operation.getRequestBody();
 
         if (requestBody != null) {
-            final var bodyMediaType = findJsonMediaType(requestBody.contentMediaType());
+            final var bodyMediaType = findJsonMediaType(requestBody.getContent());
             final Expression bodyType;
 
             if (bodyMediaType != null) {
+                final var bodyObjectSchemaPair = asObjectSchema(openAPI, bodyMediaType);
+
                 if (httpMethod == HttpMethod.PATCH
-                        && bodyMediaType instanceof OpenApiObjectSchema os) {
-                    if (os.name().toLowerCase().contains("patch")) {
+                        && bodyObjectSchemaPair != null) {
+                    final var schemaName = bodyObjectSchemaPair.getLeft();
+                    final var bodyObjectSchema = bodyObjectSchemaPair.getRight();
+
+                    if (schemaName.toLowerCase().contains("patch")) {
                         bodyType = openApiTypeUtils.createTypeExpression(
                                 ContentTypes.JSON,
-                                os
+                                bodyObjectSchema,
+                                openAPI
                         );
                     } else {
-                        bodyType = openApiTypeUtils.createTypeExpression(
-                                ContentTypes.JSON, os.withName("Patch" + os.name())
+                        ClassOrInterfaceTypeExpression type = (ClassOrInterfaceTypeExpression) openApiTypeUtils.createTypeExpression(
+                                ContentTypes.JSON, bodyObjectSchema, openAPI
                         );
+                        final var name = type.getName().toString();
+                        final var packageNameEnd = name.lastIndexOf(".");
+                        final String packageName = name.substring(0,packageNameEnd);
+                        final var simpleName = "Patch" + schemaName;
+                        type.name(Name.of(packageName + "." + simpleName));
+                        bodyType = type;
                     }
                 } else {
                     bodyType = openApiTypeUtils.createTypeExpression(
                             ContentTypes.JSON,
-                            bodyMediaType
+                            bodyMediaType,
+                            openAPI
                     );
                 }
             } else if (
-                    isMultiPart(requestBody.contentMediaType())
-                    || OpenApiUtils.isImageOrVideo(requestBody.contentMediaType())) {
-                bodyType = openApiTypeUtils.createMultipartTypeExpression();
+                    isMultiPart(requestBody.getContent())
+                            || OpenApiUtils.isImageOrVideo(requestBody.getContent())) {
+                bodyType = openApiTypeUtils.createMultipartTypeExpression(openAPI);
             } else {
                 bodyType = new ClassOrInterfaceTypeExpression("java.lang.Object");
             }
 
-            final var bodyParameter = new JVariableDeclaration(
-                    ElementKind.PARAMETER,
-                    Set.of(Modifier.FINAL),
-                    bodyType,
-                    "body",
-                    null,
-                    null
-            );
+            final var bodyParameter = new VariableDeclaration()
+                    .kind(ElementKind.PARAMETER)
+                    .modifier(Modifier.FINAL)
+                    .varType(bodyType)
+                    .name("body");
 
             parameters.add(bodyParameter);
         }
@@ -239,20 +265,40 @@ public abstract class AbstractGenerator {
         return parameters;
     }
 
-    protected JVariableDeclaration createParameter(final OpenApiParameter openApiParameter) {
-        var type = openApiTypeUtils.createTypeExpression("", openApiParameter.type());
+    private Pair<String, ObjectSchema> asObjectSchema(final OpenAPI openAPI, final Schema<?> schema) {
+        if (schema instanceof ObjectSchema objectSchema) {
+            return new ImmutablePair<>(objectSchema.getName(), objectSchema);
+        }
 
-        if (Boolean.TRUE.equals(openApiParameter.required())) {
+        final var componentSchema = findComponentSchemaByName(
+                openAPI,
+                schema.get$ref()
+        );
+
+        if (componentSchema instanceof ObjectSchema objectSchema) {
+            final var name = getSchemaName(schema.get$ref());
+
+            return new ImmutablePair<>(
+                    name,
+                    objectSchema
+            );
+        } else {
+            return null;
+        }
+    }
+
+    protected VariableDeclaration createParameter(final OpenAPI openAPI,
+                                                  final Parameter openApiParameter) {
+        var type = openApiTypeUtils.createTypeExpression("", openApiParameter.getSchema(), openAPI);
+
+        if (Boolean.TRUE.equals(openApiParameter.getRequired())) {
             type = type.asNonNullableType();
         }
 
-        return new JVariableDeclaration(
-                ElementKind.PARAMETER,
-                Set.of(Modifier.FINAL),
-                type,
-                openApiParameter.name(),
-                null,
-                null
-        );
+        return new VariableDeclaration()
+                .kind(ElementKind.PARAMETER)
+                .modifier(Modifier.FINAL)
+                .varType(type)
+                .name(openApiParameter.getName());
     }
 }

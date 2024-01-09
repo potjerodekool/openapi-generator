@@ -1,8 +1,8 @@
 package io.github.potjerodekool.openapi.generate.config;
 
-import io.github.potjerodekool.openapi.tree.OpenApi;
+import io.swagger.v3.oas.models.OpenAPI;
 
 public interface ApiConfigGenerator {
 
-    void generate(final OpenApi api);
+    void generate(final OpenAPI openAPI);
 }

@@ -28,6 +28,10 @@ public class ClassPathScanner {
     }
 
     public static List<BeanDefinition> scan() {
+        return scan(AllClassFilter.FILTER);
+    }
+
+    public static List<BeanDefinition> scan(final ClassFilter classFilter) {
         final var codeSource =  ClassPathScanner.class.getProtectionDomain().getCodeSource();
 
         if (codeSource == null) {
@@ -39,17 +43,16 @@ public class ClassPathScanner {
 
         if ("file".equals(location.getProtocol())) {
             final var file = location.getFile();
-
-            if (file.endsWith(".jar")) {
-                beanDefinitions.addAll(scanArchive(location));
-            } else {
-                beanDefinitions.addAll(scanDirectory(location));
-            }
+            beanDefinitions.addAll(file.endsWith(".jar")
+                    ? scanArchive(location, classFilter)
+                    : scanDirectory(location, classFilter)
+            );
         }
         return beanDefinitions;
     }
 
-    private static List<BeanDefinition> scanArchive(final URL location) {
+    private static List<BeanDefinition> scanArchive(final URL location,
+                                                    final ClassFilter classFilter) {
         final var beanDefinitions = new ArrayList<BeanDefinition>();
 
         try(final ZipFile zipFile = new ZipFile(new File(location.toURI()))) {
@@ -59,7 +62,7 @@ public class ClassPathScanner {
                         final var inputStream = zipFile.getInputStream(entry);
                         final var beanDefinition = read(inputStream.readAllBytes());
 
-                        if (beanDefinition != null) {
+                        if (beanDefinition != null && classFilter.filter(beanDefinition)) {
                             beanDefinitions.add(beanDefinition);
                         }
                     }));
@@ -70,7 +73,8 @@ public class ClassPathScanner {
         return beanDefinitions;
     }
 
-    private static List<BeanDefinition> scanDirectory(final URL location) {
+    private static List<BeanDefinition> scanDirectory(final URL location,
+                                                      final ClassFilter classFilter) {
         final var beanDefinitions = new ArrayList<BeanDefinition>();
 
         try(final var stream = Files.walk(Paths.get(location.toURI()))) {
@@ -81,7 +85,7 @@ public class ClassPathScanner {
                             final var bytes = Files.readAllBytes(classFile);
                             final var beanDefinition = read(bytes);
 
-                            if (beanDefinition != null) {
+                            if (beanDefinition != null && classFilter.filter(beanDefinition)) {
                                 beanDefinitions.add(beanDefinition);
                             }
                         } catch (final IOException e) {

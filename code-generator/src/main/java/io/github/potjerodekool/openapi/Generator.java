@@ -11,10 +11,10 @@ import io.github.potjerodekool.codegen.resolve.Resolver;
 import io.github.potjerodekool.openapi.dependency.DependencyChecker;
 import io.github.potjerodekool.openapi.internal.*;
 import io.github.potjerodekool.openapi.internal.di.ApplicationContext;
+import io.github.potjerodekool.openapi.internal.di.DefaultApplicationContext;
 import io.github.potjerodekool.openapi.internal.di.ClassPathScanner;
 import io.github.potjerodekool.openapi.internal.generate.api.AbstractCodeGenerator;
 import io.github.potjerodekool.openapi.internal.generate.springmvc.SpringMvcGenerator;
-import io.github.potjerodekool.openapi.internal.type.OpenApiTypeUtils;
 import io.github.potjerodekool.openapi.log.LogLevel;
 import io.github.potjerodekool.openapi.log.Logger;
 import io.swagger.parser.OpenAPIParser;
@@ -38,9 +38,6 @@ public class Generator {
         final var environment = new Environment(ClassPath.getFullClassPath(project));
         configureFileManager(project, environment);
 
-        final var springGenerator = new SpringMvcGenerator();
-        final var openApiTypeUtils = springGenerator.getOpenApiTypeUtils();
-
         final var generatorConfig = createGeneratorConfig(
                 language,
                 basePackageName,
@@ -50,18 +47,17 @@ public class Generator {
         final var applicationContext = createApplicationContext(
                 project.dependencyChecker(),
                 generatorConfig,
-                environment,
-                openApiTypeUtils
+                environment
         );
 
         final var openApiEnvironment = new OpenApiEnvironment(
                 project,
-                openApiTypeUtils,
                 environment,
                 generatorConfig,
                 applicationContext
         );
 
+        final var springGenerator = new SpringMvcGenerator();
         springGenerator.generateCommon(openApiEnvironment);
 
         final var standardApiConfiguration = apiConfigurations.stream()
@@ -89,8 +85,8 @@ public class Generator {
 
         final var enter = new Enter(environment.getSymbolTable());
         final var resolver = new Resolver(
-                environment.getElementUtils(),
-                environment.getTypes(),
+                environment.getJavaElements(),
+                environment.getJavaTypes(),
                 environment.getSymbolTable());
 
         environment.getCompilationUnits().forEach(compilationUnit -> {
@@ -149,7 +145,7 @@ public class Generator {
         final var rootDir = apiFile.getParentFile();
         final var apiFileName = apiFile.getName();
         final var separatorIndex = apiFileName.lastIndexOf('.');
-        final var file = new File(rootDir,apiFileName.substring(0, separatorIndex) + "-config.json");
+        final var file = new File(rootDir, apiFileName.substring(0, separatorIndex) + "-config.json");
 
         if (file.exists()) {
             final var objectMapper = new ObjectMapper();
@@ -169,12 +165,12 @@ public class Generator {
                                final File apiFile,
                                final ApiConfiguration apiConfiguration,
                                final boolean generateConfigs) {
-        final var builder = new OpenApiTreeBuilder(apiConfiguration);
-        final var api = builder.build(parse(apiFile));
+        final var parseResult = parse(apiFile);
+        final var openApi = parseResult.getOpenAPI();
 
         codeGenerator.generateApi(
                 openApiEnvironment,
-                api,
+                openApi,
                 apiConfiguration,
                 generateConfigs);
     }
@@ -212,15 +208,12 @@ public class Generator {
 
     private ApplicationContext createApplicationContext(final DependencyChecker dependencyChecker,
                                                         final GeneratorConfig generatorConfig,
-                                                        final Environment environment,
-                                                        final OpenApiTypeUtils openApiTypeUtils) {
-        final ApplicationContext context = new ApplicationContext(dependencyChecker);
+                                                        final Environment environment) {
+        final var context = new DefaultApplicationContext(dependencyChecker);
         context.registerBean(GeneratorConfig.class, generatorConfig);
         context.registerBean(DependencyChecker.class, dependencyChecker);
-        context.registerBean(Types.class, environment.getTypes());
+        context.registerBean(Types.class, environment.getJavaTypes());
         context.registerBean(Environment.class, environment);
-        context.registerBean(OpenApiTypeUtils.class, openApiTypeUtils);
-
         final var beanDefinitions = ClassPathScanner.scan();
         context.registerBeans(beanDefinitions);
         return context;

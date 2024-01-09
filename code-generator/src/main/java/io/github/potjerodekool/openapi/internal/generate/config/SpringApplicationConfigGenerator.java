@@ -7,8 +7,7 @@ import io.github.potjerodekool.openapi.PropertiesUpdater;
 import org.yaml.snakeyaml.Yaml;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 public class SpringApplicationConfigGenerator {
 
@@ -19,58 +18,47 @@ public class SpringApplicationConfigGenerator {
     }
 
     public void generate(final Map<String, Object> additionalApplicationProperties) {
-        final var file = resolveFile();
-
-        if (file.getKind() == FileObject.Kind.PROPERTIES) {
-            createOfUpdateApplicationProperties(
-                    additionalApplicationProperties,
-                    file
-            );
-        } else if (file.getKind() == FileObject.Kind.YAML) {
-            createOfUpdateApplicationPropertiesYaml(
-                    additionalApplicationProperties,
-                    file
-            );
-        }
+        final var fileOptional = resolveFile();
+        fileOptional.ifPresent(file -> {
+            if (file.getKind() == FileObject.Kind.PROPERTIES) {
+                createOfUpdateApplicationProperties(
+                        additionalApplicationProperties,
+                        file
+                );
+            } else if (file.getKind() == FileObject.Kind.YAML) {
+                createOfUpdateApplicationPropertiesYaml(
+                        additionalApplicationProperties,
+                        file
+                );
+            }
+        });
     }
 
-    private FileObject resolveFile() {
-        var fileObject = filer.getResource(Location.RESOURCE_PATH, null, "application.properties");
+    private Optional<FileObject> resolveFile() {
+        final var fileNames = List.of(
+                "application.properties",
+                "application.yml",
+                "application.yaml",
+                "application.properties"
+        );
 
-        if (fileObject != null) {
-            return fileObject;
-        }
-
-        fileObject = filer.getResource(Location.RESOURCE_PATH, null, "application.yml");
-
-        if (fileObject != null) {
-            return fileObject;
-        }
-
-        fileObject = filer.getResource(Location.RESOURCE_PATH, null, "application.yaml");
-
-        if (fileObject != null) {
-            return fileObject;
-        }
-
-        return filer.createResource(Location.RESOURCE_PATH, null, "application.properties");
+        return fileNames.stream()
+                .map(fileName -> filer.getResource(Location.RESOURCE_PATH, null, fileName))
+                .filter(Objects::nonNull)
+                .findFirst();
     }
 
     private void createOfUpdateApplicationProperties(final Map<String, Object> additionalApplicationProperties,
                                                      final FileObject fileObject) {
         if (!additionalApplicationProperties.isEmpty()) {
-            try {
-                PropertiesUpdater.update(fileObject, additionalApplicationProperties);
-            } catch (final IOException e) {
-                throw new RuntimeException(e);
-            }
+            PropertiesUpdater.update(fileObject, additionalApplicationProperties);
         }
     }
 
     private void createOfUpdateApplicationPropertiesYaml(final Map<String, Object> additionalApplicationProperties,
                                                          final FileObject fileObject) {
         final var yaml = new Yaml();
-        final Map<String, Object> yamlMap = new HashMap<>();
+        final var yamlMap = new HashMap<String, Object>();
 
         try (final var reader = fileObject.openReader(false)) {
             final Map<String, Object> map = yaml.load(reader);
@@ -95,7 +83,7 @@ public class SpringApplicationConfigGenerator {
                 final var code = yaml.dumpAsMap(yamlMap);
                 fileWriter.write(code);
             } catch (final IOException e) {
-                throw new RuntimeException(e);
+                //Ignore
             }
         }
     }

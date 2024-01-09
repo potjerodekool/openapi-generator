@@ -9,10 +9,7 @@ import io.github.potjerodekool.codegen.model.tree.MethodDeclaration;
 import io.github.potjerodekool.codegen.model.tree.PackageDeclaration;
 import io.github.potjerodekool.codegen.model.tree.TreeVisitor;
 import io.github.potjerodekool.codegen.model.tree.expression.*;
-import io.github.potjerodekool.codegen.model.tree.java.JMethodDeclaration;
 import io.github.potjerodekool.codegen.model.tree.statement.*;
-import io.github.potjerodekool.codegen.model.tree.statement.java.JClassDeclaration;
-import io.github.potjerodekool.codegen.model.tree.statement.java.JVariableDeclaration;
 import io.github.potjerodekool.codegen.model.tree.type.ClassOrInterfaceTypeExpression;
 import io.github.potjerodekool.codegen.model.tree.type.NoTypeExpression;
 import io.github.potjerodekool.codegen.model.tree.type.PrimitiveTypeExpression;
@@ -57,7 +54,7 @@ public class AstPrinter implements CompilationUnitVisitor<Object, Object>,
     }
 
     @Override
-    public Object visitClassDeclaration(final ClassDeclaration<?> classDeclaration, final Object param) {
+    public Object visitClassDeclaration(final ClassDeclaration classDeclaration, final Object param) {
         final var kind = switch (classDeclaration.getKind()) {
             case CLASS -> "class";
             default -> "kind";
@@ -82,7 +79,7 @@ public class AstPrinter implements CompilationUnitVisitor<Object, Object>,
     }
 
     @Override
-    public Object visitMethodDeclaration(final MethodDeclaration<?> methodDeclaration, final Object param) {
+    public Object visitMethodDeclaration(final MethodDeclaration methodDeclaration, final Object param) {
         printIndent();
 
         if (!methodDeclaration.getModifiers().isEmpty()) {
@@ -121,7 +118,7 @@ public class AstPrinter implements CompilationUnitVisitor<Object, Object>,
     }
 
     @Override
-    public Object visitVariableDeclaration(final VariableDeclaration<?> variableDeclaration, final Object param) {
+    public Object visitVariableDeclaration(final VariableDeclaration variableDeclaration, final Object param) {
         if (variableDeclaration.getKind() != ElementKind.PARAMETER) {
             printIndent();
         }

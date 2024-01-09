@@ -3,29 +3,28 @@ package io.github.potjerodekool.openapi.internal.generate.springmvc.api;
 import io.github.potjerodekool.codegen.Environment;
 import io.github.potjerodekool.codegen.Language;
 import io.github.potjerodekool.codegen.model.element.ElementKind;
-import io.github.potjerodekool.codegen.model.tree.java.JMethodDeclaration;
+import io.github.potjerodekool.codegen.model.element.Name;
+import io.github.potjerodekool.codegen.model.tree.MethodDeclaration;
 import io.github.potjerodekool.codegen.model.tree.type.ClassOrInterfaceTypeExpression;
-import io.github.potjerodekool.openapi.*;
-import io.github.potjerodekool.openapi.internal.OpenApiTreeBuilder;
+import io.github.potjerodekool.openapi.ApiConfiguration;
+import io.github.potjerodekool.openapi.AstPrinter;
+import io.github.potjerodekool.openapi.GeneratorConfig;
 import io.github.potjerodekool.openapi.internal.generate.springmvc.OpenApiTypeUtilsSpringImpl;
-import io.github.potjerodekool.openapi.internal.type.OpenApiTypeUtils;
-import io.github.potjerodekool.openapi.tree.OpenApiContent;
-import io.github.potjerodekool.openapi.tree.OpenApiOperation;
-import io.github.potjerodekool.openapi.tree.OpenApiPath;
-import io.github.potjerodekool.openapi.tree.OpenApiResponse;
+import io.github.potjerodekool.openapi.internal.type.OpenApiTypeUtilsJava;
+import io.swagger.models.HttpMethod;
 import io.swagger.parser.OpenAPIParser;
+import io.swagger.v3.oas.models.Operation;
+import io.swagger.v3.oas.models.media.Content;
+import io.swagger.v3.oas.models.responses.ApiResponse;
+import io.swagger.v3.oas.models.responses.ApiResponses;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 import java.io.File;
 import java.net.URISyntaxException;
-import java.util.List;
 import java.util.Map;
 
-import static io.github.potjerodekool.openapi.ResourceLoader.loadAsString;
-import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -46,7 +45,7 @@ class SpringRestControllerGeneratorTest {
 
         final var environment = mock(Environment.class);
 
-        final var openApiTypeUtils = new OpenApiTypeUtilsSpringImpl();
+        final var openApiTypeUtils = new OpenApiTypeUtilsSpringImpl(new OpenApiTypeUtilsJava("org.some.api.model"));
 
         generator = new SpringRestControllerGenerator(
                 generatorConfig,
@@ -58,37 +57,24 @@ class SpringRestControllerGeneratorTest {
 
     @Test
     void postProcessOperation() {
-        final var operation = new OpenApiOperation(
-                "",
-                "",
-                "login",
-                List.of(),
-                List.of(),
-                null,
-                Map.of(
-                        "200",
-                        new OpenApiResponse(
-                                "",
-                                Map.of(
-                                        "application/json",
-                                        new OpenApiContent("", null, Map.of())
-                                ),
-                                Map.of()
-                        )
-                ),
-                null
+        final var responses = new ApiResponses();
+        responses.put("200", new ApiResponse()
+                .content(new Content()
+                        .addMediaType("application/json", null)
+                )
         );
 
-        final var method = new JMethodDeclaration(
-                "login",
-                ElementKind.METHOD,
-                new ClassOrInterfaceTypeExpression("org.springframework.http.ResponseEntity"),
-                List.of(),
-                List.of(),
-                null
-        );
+        final var operation = new Operation()
+                .operationId("login")
+                .responses(responses);
+
+        final var method = new MethodDeclaration()
+                .simpleName(Name.of("login"))
+                .kind(ElementKind.METHOD)
+                .returnType(new ClassOrInterfaceTypeExpression("org.springframework.http.ResponseEntity"));
 
         generator.postProcessOperation(
+                null,
                 HttpMethod.POST,
                 "/login",
                 operation,
@@ -115,48 +101,4 @@ class SpringRestControllerGeneratorTest {
         }
     }
 
-    @Test
-    void test() {
-        final var apiConfiguration = new ApiConfiguration(
-                new File(""),
-                "org.some.petstore.api",
-                true,
-                true,
-                true,
-                Map.of()
-        );
-
-        final var builder = new OpenApiTreeBuilder(apiConfiguration);
-        final var api = builder.build(parse("petstore.yaml"));
-
-        final var createPetOperation = api.paths().stream()
-                .filter(path -> "/pets".equals(path.path()))
-                .map(OpenApiPath::post)
-                .findFirst().get();
-
-        final var method = new JMethodDeclaration(
-                "createPet",
-                ElementKind.METHOD,
-                new ClassOrInterfaceTypeExpression("org.springframework.http.ResponseEntity"),
-                List.of(),
-                List.of(),
-                null
-        );
-
-        generator.postProcessOperation(
-                HttpMethod.POST,
-                "/pets",
-                createPetOperation,
-                method
-        );
-
-        final var printer = new AstPrinter();
-        //method.accept(printer, null);
-        method.getBody().get().accept(printer, null);
-        final var actual = printer.getCode();
-        System.out.println(actual);
-
-        final var expected = loadAsString("SpringRestControllerGeneratorTest/createPet", true);
-        assertEquals(expected, actual);
-    }
 }

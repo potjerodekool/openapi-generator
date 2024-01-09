@@ -26,17 +26,11 @@
             <optional>true</optional>
         </dependency>
 
-        <!--
-        C:\Program Files\Eclipse Adoptium\jdk-17.0.1.12-hotspot\jmods\jdk.compiler.jmod\classes\com\sun\tools\javac\api\
-        -->
         <dependency>
             <groupId>jdk</groupId>
             <artifactId>compiler</artifactId>
             <scope>system</scope>
-            <version>17</version>
-            <!--
-            <systemPath>C:\Program Files\Eclipse Adoptium\jdk-17.0.1.12-hotspot\jmods\jdk.compiler.jmod</systemPath>
-            -->
+            <version>21</version>
             <systemPath>${java.home}/jmods/jdk.compiler.jmod</systemPath>
         </dependency>
 

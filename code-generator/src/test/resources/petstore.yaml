@@ -328,3 +328,6 @@ components:
       bearerFormat: JWT
 security:
   - bearerAuth: []
+  - petstore_auth:
+      - write:pets
+      - read:pets

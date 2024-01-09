@@ -5,20 +5,16 @@ import io.github.potjerodekool.codegen.model.element.ElementKind;
 import io.github.potjerodekool.codegen.model.element.Modifier;
 import io.github.potjerodekool.codegen.model.element.Name;
 import io.github.potjerodekool.codegen.model.tree.AnnotationExpression;
-import io.github.potjerodekool.codegen.model.tree.expression.ArrayInitializerExpression;
-import io.github.potjerodekool.codegen.model.tree.expression.Expression;
-import io.github.potjerodekool.codegen.model.tree.expression.FieldAccessExpression;
-import io.github.potjerodekool.codegen.model.tree.expression.LiteralExpression;
-import io.github.potjerodekool.codegen.model.tree.java.JMethodDeclaration;
+import io.github.potjerodekool.codegen.model.tree.MethodDeclaration;
+import io.github.potjerodekool.codegen.model.tree.expression.*;
 import io.github.potjerodekool.codegen.model.tree.statement.BlockStatement;
+import io.github.potjerodekool.codegen.model.tree.statement.ClassDeclaration;
 import io.github.potjerodekool.codegen.model.tree.statement.ReturnStatement;
-import io.github.potjerodekool.codegen.model.tree.statement.java.JClassDeclaration;
 import io.github.potjerodekool.codegen.model.tree.type.ArrayTypeExpression;
 import io.github.potjerodekool.codegen.model.tree.type.ClassOrInterfaceTypeExpression;
 import io.github.potjerodekool.codegen.model.tree.type.TypeExpression;
 import io.github.potjerodekool.openapi.ApiConfiguration;
 import io.github.potjerodekool.openapi.GeneratorConfig;
-import io.github.potjerodekool.openapi.HttpMethod;
 import io.github.potjerodekool.openapi.internal.generate.annotation.openapi.OperationAnnotationBuilder;
 import io.github.potjerodekool.openapi.internal.generate.annotation.openapi.header.HeaderAnnotationBuilder;
 import io.github.potjerodekool.openapi.internal.generate.annotation.openapi.media.*;
@@ -31,19 +27,26 @@ import io.github.potjerodekool.openapi.internal.generate.annotation.spring.web.R
 import io.github.potjerodekool.openapi.internal.generate.api.AbstractApiGenerator;
 import io.github.potjerodekool.openapi.internal.type.OpenApiTypeUtils;
 import io.github.potjerodekool.openapi.internal.util.CollectionBuilder;
-import io.github.potjerodekool.openapi.tree.*;
-import io.github.potjerodekool.openapi.tree.media.OpenApiArraySchema;
-import io.github.potjerodekool.openapi.tree.media.OpenApiMapSchema;
-import io.github.potjerodekool.openapi.tree.media.OpenApiSchema;
-import org.jdom.output.EscapeStrategy;
+import io.github.potjerodekool.openapi.internal.util.CollectionUtils;
+import io.swagger.models.HttpMethod;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.Operation;
+import io.swagger.v3.oas.models.PathItem;
+import io.swagger.v3.oas.models.examples.Example;
+import io.swagger.v3.oas.models.headers.Header;
+import io.swagger.v3.oas.models.media.ArraySchema;
+import io.swagger.v3.oas.models.media.MapSchema;
+import io.swagger.v3.oas.models.media.MediaType;
+import io.swagger.v3.oas.models.media.Schema;
+import io.swagger.v3.oas.models.parameters.RequestBody;
+import io.swagger.v3.oas.models.responses.ApiResponse;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
-import static io.github.potjerodekool.codegen.model.tree.expression.ExpressionBuilder.expression;
-import static io.github.potjerodekool.codegen.model.tree.expression.MethodCallExpressionBuilder.invoke;
+import static io.github.potjerodekool.openapi.internal.util.CollectionUtils.nonNull;
 
 public class SpringApiGenerator extends AbstractApiGenerator {
 
@@ -58,20 +61,25 @@ public class SpringApiGenerator extends AbstractApiGenerator {
     }
 
     @Override
-    protected String generateClasName(final OpenApiPath openApiPath, final OpenApiOperation operation) {
-        return super.generateClasName(openApiPath, operation) + "Api";
+    protected String generateClasName(final String path,
+                                      final PathItem openApiPath,
+                                      final Operation operation) {
+        return super.generateClasName(path, openApiPath, operation) + "Api";
     }
 
     @Override
-    protected JClassDeclaration createClass(final String packageName, final Name simpleName) {
-        return new JClassDeclaration(simpleName, ElementKind.INTERFACE)
+    protected ClassDeclaration createClass(final String packageName, final Name simpleName) {
+        return new ClassDeclaration()
+                .simpleName(simpleName)
+                .kind(ElementKind.INTERFACE)
                 .modifier(Modifier.PUBLIC)
                 .annotation(new AnnotationExpression("javax.annotation.processing.Generated", LiteralExpression.createStringLiteralExpression(getClass().getName())));
     }
 
-    private AnnotationExpression createApiResponsesAnnotation(final OpenApiOperation operation) {
-        final var responses = operation.responses().entrySet().stream()
-                .map(this::createApiResponse)
+    private AnnotationExpression createApiResponsesAnnotation(final OpenAPI openAPI,
+                                                              final Operation operation) {
+        final var responses = operation.getResponses().entrySet().stream()
+                .map(response -> createApiResponse(openAPI, response))
                 .toList();
 
         return new ApiResponsesAnnotationBuilder()
@@ -79,49 +87,57 @@ public class SpringApiGenerator extends AbstractApiGenerator {
                 .build();
     }
 
-    private AnnotationExpression createApiResponse(final Map.Entry<String, OpenApiResponse> entry) {
+    private AnnotationExpression createApiResponse(final OpenAPI openAPI,
+                                                   final Map.Entry<String, ApiResponse> entry) {
         final var response = entry.getValue();
-        final var description = response.description();
+        final var description = response.getDescription();
 
-        final List<Expression> contentList = new ArrayList<>(response.contentMediaType().entrySet().stream()
-                .map(contentMediaType -> (Expression) createContentAnnotation(contentMediaType.getKey(), contentMediaType.getValue()))
-                .toList());
+        final List<Expression> contentList = response.getContent() != null
+                ? new ArrayList<>(response.getContent().entrySet().stream()
+                .map(contentMediaType -> (Expression) createContentAnnotation(openAPI, contentMediaType.getKey(), contentMediaType.getValue()))
+                .toList())
+                : new ArrayList<>();
 
         if (contentList.isEmpty()) {
-            contentList.add(createContentAnnotation("", null));
+            contentList.add(createContentAnnotation(openAPI, "", null));
         }
 
         return new ApiResponseAnnotationBuilder()
                 .responseCode(entry.getKey())
                 .description(description)
-                .headers(headers(response.headers()))
-                .content(contentList)
-                .build();
+                .headers(headers(openAPI, response.getHeaders()))
+                        .content(contentList)
+                        .build();
     }
 
-    private AnnotationExpression createContentAnnotation(final String mediaType,
-                                                         final OpenApiContent content) {
+    private AnnotationExpression createContentAnnotation(final OpenAPI openAPI,
+                                                         final String mediaType,
+                                                         final MediaType content) {
         final var contentAnnotationBuilder = new ContentAnnotationBuilder();
 
         if (content != null) {
-            final var schema = content.schema();
+            final var schema = content.getSchema();
 
-            final var schemaType = openApiTypeUtils.createTypeExpression(mediaType, schema);
+            final var schemaType = openApiTypeUtils.createTypeExpression(mediaType, schema, openAPI);
 
-            final var examples = content.examples().entrySet().stream()
-                    .map(exampleEntry -> createExampleObject(exampleEntry.getKey(), exampleEntry.getValue()))
-                    .toList();
+            final List<Expression> examples = new ArrayList<>();
+
+            if (content.getExamples() != null) {
+                examples.addAll(content.getExamples().entrySet().stream()
+                        .map(exampleEntry -> createExampleObject(exampleEntry.getKey(), exampleEntry.getValue()))
+                        .toList());
+            }
 
             contentAnnotationBuilder.mediaType(mediaType);
             contentAnnotationBuilder.examples(examples);
 
-            if (schema instanceof OpenApiArraySchema) {
+            if (schema instanceof ArraySchema) {
                 TypeExpression elementType;
 
                 if (schemaType instanceof ArrayTypeExpression arrayTypeExpression) {
                     elementType = (TypeExpression) arrayTypeExpression.getComponentTypeExpression();
                 } else if (schemaType instanceof ClassOrInterfaceTypeExpression classOrInterfaceTypeExpression) {
-                    elementType = classOrInterfaceTypeExpression.getTypeArguments().get(0);
+                    elementType = classOrInterfaceTypeExpression.getTypeArguments().getFirst();
                 } else {
                     throw new UnsupportedOperationException();
                 }
@@ -129,33 +145,37 @@ public class SpringApiGenerator extends AbstractApiGenerator {
                 contentAnnotationBuilder.array(new ArraySchemaAnnotationBuilder()
                         .schema(
                                 createSchemaAnnotation(schema)
-                                        .implementation(openApiTypeUtils.resolveImplementationType(elementType))
+                                        .implementation(openApiTypeUtils.resolveImplementationType(elementType, openAPI))
                                         .requiredMode(false)
                                         .build()
                         )
                         .build());
-            } else if (schema instanceof OpenApiMapSchema openApiMapSchema) {
+            } else if (schema instanceof MapSchema openApiMapSchema) {
                 final var schemaPropertyAnnotation = new SchemaPropertyAnnotationBuilder()
                         .name("additionalProp1")
                         .build();
 
-                final var additionalProperties = openApiMapSchema.additionalProperties();
+                final var additionalProperties = openApiMapSchema.getAdditionalProperties();
 
                 if (additionalProperties == null) {
                     throw new IllegalStateException("Missing additionalProperties");
                 }
 
-                final var typeName = additionalProperties.name();
-                final var format = additionalProperties.format();
-
-                contentAnnotationBuilder.schemaProperties(schemaPropertyAnnotation);
-                contentAnnotationBuilder.additionalPropertiesSchema(new SchemaAnnotationBuilder()
-                        .type(typeName)
-                        .format(format)
-                        .build());
+                if (additionalProperties instanceof Schema<?> additionalPropertiesSchema) {
+                    final var typeName = additionalPropertiesSchema.getName();
+                    final var format = additionalPropertiesSchema.getFormat();
+                    contentAnnotationBuilder.schemaProperties(schemaPropertyAnnotation);
+                    contentAnnotationBuilder.additionalPropertiesSchema(new SchemaAnnotationBuilder()
+                            .type(typeName)
+                            .format(format)
+                            .build());
+                } else {
+                    //TODO handle Boolean
+                    throw new UnsupportedOperationException();
+                }
             } else {
                 contentAnnotationBuilder.schema(createSchemaAnnotation(schema)
-                        .implementation(openApiTypeUtils.resolveImplementationType(schemaType))
+                        .implementation(openApiTypeUtils.resolveImplementationType(schemaType, openAPI))
                         .requiredMode(false)
                         .build());
             }
@@ -170,18 +190,18 @@ public class SpringApiGenerator extends AbstractApiGenerator {
         return contentAnnotationBuilder.build();
     }
 
-    private SchemaAnnotationBuilder createSchemaAnnotation(final OpenApiSchema<?> schema) {
+    private SchemaAnnotationBuilder createSchemaAnnotation(final Schema<?> schema) {
         final var builder = new SchemaAnnotationBuilder();
 
         if (schema != null) {
-            final var requiredProperties = schema.required().stream()
+            final var requiredProperties = nonNull(schema.getRequired()).stream()
                     .map(LiteralExpression::createStringLiteralExpression)
                     .toList();
 
-            builder.description(schema.description())
-                    .format(schema.format())
-                    .nullable(schema.nullable())
-                    .accessMode(schema.readOnly(), schema.writeOnly())
+            builder.description(schema.getDescription())
+                    .format(schema.getFormat())
+                    .nullable(schema.getNullable())
+                    .accessMode(schema.getReadOnly(), schema.getWriteOnly())
                     .requiredProperties(requiredProperties);
         }
 
@@ -189,11 +209,11 @@ public class SpringApiGenerator extends AbstractApiGenerator {
     }
 
     private Expression createExampleObject(final String name,
-                                           final OpenApiExample openApiExample) {
+                                           final Example openApiExample) {
         return new ExampleObjectAnnotationBuilder()
                 .name(name)
-                .summary(openApiExample.summary())
-                .value(escapeJson(openApiExample.value().toString()))
+                .summary(openApiExample.getSummary())
+                .value(escapeJson(openApiExample.getValue().toString()))
                 .build();
     }
 
@@ -212,31 +232,32 @@ public class SpringApiGenerator extends AbstractApiGenerator {
         return sb.toString();
     }
 
-    private ArrayInitializerExpression headers(final Map<String, OpenApiHeader> headersMap) {
-        final List<Expression> headers =  headersMap.entrySet().stream()
-                        .map(entry -> {
-                            final var header = entry.getValue();
-                            final String description = header.description();
-                            final var required = header.required();
-                            final var deprecated = header.deprecated();
-                            final var headerSchema = header.schema();
+    private ArrayInitializerExpression headers(final OpenAPI openAPI,
+                                               final Map<String, Header> headersMap) {
+        final List<Expression> headers = nonNull(headersMap).entrySet().stream()
+                .map(entry -> {
+                    final var header = entry.getValue();
+                    final String description = header.getDescription();
+                    final var required = header.getRequired();
+                    final var deprecated = header.getDeprecated();
+                    final var headerSchema = header.getSchema();
 
-                            final var headerType = headerSchema != null
-                                    ? openApiTypeUtils.createTypeExpression(headerSchema)
-                                    : null;
+                    final var headerType = headerSchema != null
+                            ? openApiTypeUtils.createTypeExpression(headerSchema, openAPI)
+                            : null;
 
-                            return (Expression) new HeaderAnnotationBuilder()
-                                    .name(entry.getKey())
-                                    .description(description)
-                                    .required(required)
-                                    .deprecated(deprecated)
-                                    .schema(
-                                            new SchemaAnnotationBuilder()
-                                                    .implementation(headerType)
-                                                    .build()
-                                    )
-                                    .build();
-                        }).toList();
+                    return (Expression) new HeaderAnnotationBuilder()
+                            .name(entry.getKey())
+                            .description(description)
+                            .required(required)
+                            .deprecated(deprecated)
+                            .schema(
+                                    new SchemaAnnotationBuilder()
+                                            .implementation(headerType)
+                                            .build()
+                            )
+                            .build();
+                }).toList();
 
         return new ArrayInitializerExpression(headers);
     }
@@ -244,27 +265,30 @@ public class SpringApiGenerator extends AbstractApiGenerator {
 
     private AnnotationExpression createMappingAnnotation(final HttpMethod httpMethod,
                                                          final String path,
-                                                         final OpenApiOperation operation) {
+                                                         final Operation operation) {
         final var requestMappingAnnotationBuilder = switch (httpMethod) {
             case POST -> RequestMappingAnnotationBuilder.post();
             case GET -> RequestMappingAnnotationBuilder.get();
             case PUT -> RequestMappingAnnotationBuilder.put();
             case PATCH -> RequestMappingAnnotationBuilder.patch();
             case DELETE -> RequestMappingAnnotationBuilder.delete();
+            default -> throw new UnsupportedOperationException();
         };
 
-        final var produces = operation.responses().values().stream()
-                .flatMap(it -> it.contentMediaType().keySet().stream())
+        final var produces = operation.getResponses().values().stream()
+                .flatMap(it -> CollectionUtils.nonNull(it.getContent()).keySet().stream())
                 .toList();
 
-        final var requestBody = operation.requestBody();
+        final var requestBody = operation.getRequestBody();
 
         requestMappingAnnotationBuilder.value(path);
 
-        if (requestBody != null && !requestBody.contentMediaType().isEmpty()) {
+        if (requestBody != null
+                && requestBody.getContent() != null
+                && !requestBody.getContent().isEmpty()) {
             final var consumes = new CollectionBuilder<String>()
-                    .addAll(requestBody.contentMediaType().keySet())
-                    .addAll(requestBody.contentMediaType().keySet().stream()
+                    .addAll(requestBody.getContent().keySet())
+                    .addAll(requestBody.getContent().keySet().stream()
                             .filter(it -> it.startsWith("image/"))
                             .map(contentMediaType -> contentMediaType + ";charset=UTF-8")
                             .toList())
@@ -277,22 +301,23 @@ public class SpringApiGenerator extends AbstractApiGenerator {
     }
 
     @Override
-    protected void postProcessOperation(final HttpMethod httpMethod,
+    protected void postProcessOperation(final OpenAPI openAPI,
+                                        final HttpMethod httpMethod,
                                         final String path,
-                                        final OpenApiOperation operation,
-                                        final JMethodDeclaration method) {
-        method.addModifier(Modifier.DEFAULT);
+                                        final Operation operation,
+                                        final MethodDeclaration method) {
+        method.modifier(Modifier.DEFAULT);
 
         method.annotation(
                 new OperationAnnotationBuilder()
-                        .summary(operation.summary())
-                        .operationId(operation.operationId())
-                        .tags(operation.tags())
-                        .requestBody(createRequestBody(operation.requestBody()))
+                        .summary(operation.getSummary())
+                        .operationId(operation.getOperationId())
+                        .tags(operation.getTags())
+                        .requestBody(createRequestBody(openAPI, operation.getRequestBody()))
                         .build()
         );
 
-        final var securityRequirements = operation.securityRequirements();
+        final var securityRequirements = operation.getSecurity();
 
         if (securityRequirements != null) {
             final var securityRequirementsAnnotation = createSecurityRequirementsAnnotation(securityRequirements);
@@ -301,7 +326,7 @@ public class SpringApiGenerator extends AbstractApiGenerator {
             }
         }
 
-        final var apiResponsesAnnotation = createApiResponsesAnnotation(operation);
+        final var apiResponsesAnnotation = createApiResponsesAnnotation(openAPI, operation);
 
         method.annotation(apiResponsesAnnotation);
         method.annotation(createMappingAnnotation(httpMethod, path, operation));
@@ -309,55 +334,46 @@ public class SpringApiGenerator extends AbstractApiGenerator {
         final var body = new BlockStatement();
 
         body.add(new ReturnStatement(
-                expression(
-                        invoke("org.springframework.http.ResponseEntity", "status")
-                                .withArgs(new FieldAccessExpression("org.springframework.http.HttpStatus", "NOT_IMPLEMENTED"))
-                                .invoke("build")
-                )
+                new MethodCallExpression()
+                        .target(new ClassOrInterfaceTypeExpression("org.springframework.http.ResponseEntity"))
+                        .methodName("status")
+                        .argument(new FieldAccessExpression("org.springframework.http.HttpStatus", "NOT_IMPLEMENTED"))
+                        .invoke("build")
         ));
 
-        method.setBody(body);
+        method.body(body);
     }
 
-    private AnnotationExpression createRequestBody(final OpenApiRequestBody openApiRequestBody) {
+    private AnnotationExpression createRequestBody(final OpenAPI openAPI,
+                                                   final RequestBody openApiRequestBody) {
         if (openApiRequestBody == null) {
             return null;
         }
 
         final var requestBodyBuilder = new RequestBodyAnnotationBuilder();
 
-        final var contentList = openApiRequestBody.contentMediaType().entrySet().stream()
-                .map(entry -> createContentAnnotation(entry.getKey(), entry.getValue()))
+        final var contentList = openApiRequestBody.getContent().entrySet().stream()
+                .map(entry -> createContentAnnotation(openAPI, entry.getKey(), entry.getValue()))
                 .toList();
 
         requestBodyBuilder.content(contentList);
         return requestBodyBuilder.build();
     }
 
-    private AnnotationExpression createSecurityRequirementsAnnotation(final List<OpenApiSecurityRequirement> securityRequirements) {
-        final var annotations = securityRequirements.stream()
-                .map(OpenApiSecurityRequirement::requirements)
-                .map(securityParameterMap -> {
-                    final String name;
-                    final List<String> parameters;
+    private AnnotationExpression createSecurityRequirementsAnnotation(final List<SecurityRequirement> securityRequirements) {
+        final var annotations = new ArrayList<Expression>();
 
-                    if (securityParameterMap.isEmpty()) {
-                        name = "";
-                        parameters = List.of();
-                    } else {
-                        name = securityParameterMap.keySet().iterator().next();
-                        parameters = Objects.requireNonNullElseGet(
-                                securityParameterMap.get(name),
-                                List::of
-                        );
-                    }
+        for (final SecurityRequirement securityRequirement : securityRequirements) {
+            for (final Map.Entry<String, List<String>> entry : securityRequirement.entrySet()) {
+                final String name = entry.getKey();
+                final var values = entry.getValue();
 
-                    return (Expression) new SecurityRequirementAnnotationBuilder()
-                            .name(name)
-                            .scopes(parameters)
-                            .build();
-                })
-                .toList();
+                annotations.add(new SecurityRequirementAnnotationBuilder()
+                        .name(name)
+                        .scopes(values)
+                        .build());
+            }
+        }
 
         return !annotations.isEmpty()
                 ? new SecurityRequirementsBuilder().value(annotations).build()

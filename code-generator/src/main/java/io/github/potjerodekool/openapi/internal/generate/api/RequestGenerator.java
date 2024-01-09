@@ -10,8 +10,8 @@ import io.github.potjerodekool.codegen.model.tree.AnnotationExpression;
 import io.github.potjerodekool.codegen.model.tree.PackageDeclaration;
 import io.github.potjerodekool.codegen.model.tree.expression.IdentifierExpression;
 import io.github.potjerodekool.codegen.model.tree.expression.LiteralExpression;
-import io.github.potjerodekool.codegen.model.tree.statement.java.JClassDeclaration;
-import io.github.potjerodekool.codegen.model.tree.statement.java.JVariableDeclaration;
+import io.github.potjerodekool.codegen.model.tree.statement.ClassDeclaration;
+import io.github.potjerodekool.codegen.model.tree.statement.VariableDeclaration;
 import io.github.potjerodekool.codegen.model.tree.type.ArrayTypeExpression;
 import io.github.potjerodekool.codegen.model.tree.type.ClassOrInterfaceTypeExpression;
 import io.github.potjerodekool.codegen.model.tree.type.PrimitiveTypeExpression;
@@ -34,14 +34,16 @@ public class RequestGenerator {
         final var cu = new CompilationUnit(Language.JAVA);
 
         final var packageDeclaration = new PackageDeclaration(new IdentifierExpression(this.basePackageName));
-        cu.add(packageDeclaration);
+        cu.packageDeclaration(packageDeclaration);
 
-        final var classDeclaration = new JClassDeclaration("Request", ElementKind.INTERFACE)
+        final var classDeclaration = new ClassDeclaration()
+                .simpleName(Name.of("Request"))
+                .kind(ElementKind.INTERFACE)
                 .modifiers(Modifier.PUBLIC)
                         .annotation(new AnnotationExpression("javax.annotation.processing.Generated", LiteralExpression.createStringLiteralExpression(getClass().getName())));
 
         classDeclaration.setEnclosing(packageDeclaration);
-        cu.add(classDeclaration);
+        cu.classDeclaration(classDeclaration);
 
         addGetParameterMethod(classDeclaration);
         addGetParameterValuesMethod(classDeclaration);
@@ -53,32 +55,32 @@ public class RequestGenerator {
         environment.getCompilationUnits().add(cu);
     }
 
-    private void addGetParameterMethod(final JClassDeclaration classDeclaration) {
-        classDeclaration.addMethod()
-                .setSimpleName(Name.of("getParameter"))
-                .setReturnType(new ClassOrInterfaceTypeExpression("java.lang.String"))
-                .addParameter(
-                        JVariableDeclaration.parameter()
+    private void addGetParameterMethod(final ClassDeclaration classDeclaration) {
+        classDeclaration.createMethod()
+                .simpleName(Name.of("getParameter"))
+                .returnType(new ClassOrInterfaceTypeExpression("java.lang.String"))
+                .parameter(
+                        VariableDeclaration.parameter()
                                 .varType(new ClassOrInterfaceTypeExpression("java.lang.String"))
                                 .name("name")
                 );
     }
 
-    private void addGetParameterValuesMethod(final JClassDeclaration classDeclaration) {
-        classDeclaration.addMethod()
-                .setSimpleName(Name.of("getParameterValues"))
-                .setReturnType(new ArrayTypeExpression(new ClassOrInterfaceTypeExpression("java.lang.String")))
-                .addParameter(
-                        JVariableDeclaration.parameter()
+    private void addGetParameterValuesMethod(final ClassDeclaration classDeclaration) {
+        classDeclaration.createMethod()
+                .simpleName(Name.of("getParameterValues"))
+                .returnType(new ArrayTypeExpression(new ClassOrInterfaceTypeExpression("java.lang.String")))
+                .parameter(
+                        VariableDeclaration.parameter()
                                 .varType(new ClassOrInterfaceTypeExpression("java.lang.String"))
                                 .name("name")
                 );
     }
 
-    private void addGetParameterMapMethod(final JClassDeclaration classDeclaration) {
-        classDeclaration.addMethod()
-                .setSimpleName(Name.of("getParameterMap"))
-                .setReturnType(new ClassOrInterfaceTypeExpression(
+    private void addGetParameterMapMethod(final ClassDeclaration classDeclaration) {
+        classDeclaration.createMethod()
+                .simpleName(Name.of("getParameterMap"))
+                .returnType(new ClassOrInterfaceTypeExpression(
                         "java.util.Map",
                         List.of(
                                 new ClassOrInterfaceTypeExpression("java.lang.String"),
@@ -87,21 +89,21 @@ public class RequestGenerator {
                 ));
     }
 
-    private void addGetRemoteAddrMethod(final JClassDeclaration classDeclaration) {
-        classDeclaration.addMethod()
-                .setSimpleName(Name.of("getRemoteAddr"))
-                .setReturnType(new ClassOrInterfaceTypeExpression("java.lang.String"));
+    private void addGetRemoteAddrMethod(final ClassDeclaration classDeclaration) {
+        classDeclaration.createMethod()
+                .simpleName(Name.of("getRemoteAddr"))
+                .returnType(new ClassOrInterfaceTypeExpression("java.lang.String"));
     }
 
-    private void addGetRemoteHostMethod(final JClassDeclaration classDeclaration) {
-        classDeclaration.addMethod()
-                .setSimpleName(Name.of("getRemoteHost"))
-                .setReturnType(new ClassOrInterfaceTypeExpression("java.lang.String"));
+    private void addGetRemoteHostMethod(final ClassDeclaration classDeclaration) {
+        classDeclaration.createMethod()
+                .simpleName(Name.of("getRemoteHost"))
+                .returnType(new ClassOrInterfaceTypeExpression("java.lang.String"));
     }
 
-    private void addGetRemotePortMethod(final JClassDeclaration classDeclaration) {
-        classDeclaration.addMethod()
-                .setSimpleName(Name.of("getRemotePort"))
-                .setReturnType(PrimitiveTypeExpression.intTypeExpression());
+    private void addGetRemotePortMethod(final ClassDeclaration classDeclaration) {
+        classDeclaration.createMethod()
+                .simpleName(Name.of("getRemotePort"))
+                .returnType(PrimitiveTypeExpression.intTypeExpression());
     }
 }

@@ -1,7 +1,5 @@
 package io.github.potjerodekool.openapi.internal.generate.model;
 
-import io.github.potjerodekool.openapi.tree.Digits;
-
 import java.util.Map;
 import java.util.Optional;
 
@@ -10,6 +8,10 @@ public final class ValidationExtensions {
     }
 
     public static Optional<Digits> digits(final Map<String, Object> extensions) {
+        if (extensions == null) {
+            return Optional.empty();
+        }
+
         final var validation = getValidation(extensions);
         final var digits = validation.get("digits");
 

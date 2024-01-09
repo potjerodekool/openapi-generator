@@ -19,7 +19,7 @@ plugins {
     id 'io.github.potjerodekool.openapi.gradle.openapi' version '0.0.1'
 }
 
-sourceCompatibility = '17'
+sourceCompatibility = '21'
 
 repositories {
     mavenLocal()

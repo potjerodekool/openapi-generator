@@ -9,16 +9,16 @@ import io.github.potjerodekool.codegen.model.CompilationUnit;
 import io.github.potjerodekool.codegen.model.element.ElementKind;
 import io.github.potjerodekool.codegen.model.element.Modifier;
 import io.github.potjerodekool.codegen.model.element.Name;
+import io.github.potjerodekool.codegen.model.tree.MethodDeclaration;
 import io.github.potjerodekool.codegen.model.tree.PackageDeclaration;
 import io.github.potjerodekool.codegen.model.tree.expression.BinaryExpression;
 import io.github.potjerodekool.codegen.model.tree.expression.FieldAccessExpression;
 import io.github.potjerodekool.codegen.model.tree.expression.IdentifierExpression;
 import io.github.potjerodekool.codegen.model.tree.expression.Operator;
-import io.github.potjerodekool.codegen.model.tree.java.JMethodDeclaration;
 import io.github.potjerodekool.codegen.model.tree.statement.BlockStatement;
+import io.github.potjerodekool.codegen.model.tree.statement.ClassDeclaration;
 import io.github.potjerodekool.codegen.model.tree.statement.ReturnStatement;
-import io.github.potjerodekool.codegen.model.tree.statement.java.JClassDeclaration;
-import io.github.potjerodekool.codegen.model.tree.statement.java.JVariableDeclaration;
+import io.github.potjerodekool.codegen.model.tree.statement.VariableDeclaration;
 import io.github.potjerodekool.codegen.model.tree.type.ClassOrInterfaceTypeExpression;
 import io.github.potjerodekool.codegen.model.tree.type.NoTypeExpression;
 import io.github.potjerodekool.codegen.model.type.TypeKind;
@@ -37,21 +37,18 @@ import java.util.Set;
 class AstPrinterTest {
 
     private CompilationUnit createPersonModel(final SymbolTable symbolTable) {
-        final var clazz = new JClassDeclaration(
-                Name.of("Person"),
-                ElementKind.CLASS
-        ).modifier(Modifier.PUBLIC);
+        final var clazz = new ClassDeclaration()
+                .simpleName(Name.of("Person"))
+                        .kind(ElementKind.CLASS)
+                                .modifier(Modifier.PUBLIC);
 
         final var stringType = new ClassOrInterfaceTypeExpression("java.lang.String");
 
-        final var field = new JVariableDeclaration(
-                ElementKind.FIELD,
-                Set.of(Modifier.PRIVATE, Modifier.FINAL),
-                stringType,
-                "name",
-                null,
-                null
-        );
+        final var field = new VariableDeclaration()
+                .kind(ElementKind.FIELD)
+                .modifiers(Modifier.PRIVATE, Modifier.FINAL)
+                .varType(stringType)
+                .name("name");
 
         final var schemaAnnotation = new SchemaAnnotationBuilder()
                 .requiredMode(true)
@@ -61,23 +58,16 @@ class AstPrinterTest {
 
         clazz.addEnclosed(field);
 
-        final var constructor = new JMethodDeclaration(
-                clazz.getSimpleName(),
-                ElementKind.CONSTRUCTOR,
-                new NoTypeExpression(TypeKind.VOID),
-                List.of(),
-                List.of(),
-                null
-        );
+        final var constructor = new MethodDeclaration()
+                .simpleName(clazz.getSimpleName())
+                        .kind(ElementKind.CONSTRUCTOR)
+                                .returnType(new NoTypeExpression(TypeKind.VOID));
 
-        constructor.addParameter(new JVariableDeclaration(
-                ElementKind.PARAMETER,
-                Set.of(Modifier.FINAL),
-                stringType,
-                "name",
-                null,
-                null
-        ));
+        constructor.parameter(VariableDeclaration
+                        .parameter()
+                        .modifier(Modifier.FINAL)
+                        .varType(stringType)
+                        .name("name"));
 
         clazz.addEnclosed(constructor);
 
@@ -87,20 +77,16 @@ class AstPrinterTest {
                 new IdentifierExpression("name"),
                 Operator.ASSIGN
         ));
-        constructor.setBody(body);
+        constructor.body(body);
 
-        final var getter = new JMethodDeclaration(
-                Name.of("getName"),
-                ElementKind.METHOD,
-                stringType,
-                List.of(),
-                List.of(),
-                null
-        );
+        final var getter = new MethodDeclaration()
+                .simpleName(Name.of("getName"))
+                        .kind(ElementKind.METHOD)
+                                .returnType(stringType);
 
-        getter.addModifiers(Modifier.PUBLIC);
+        getter.modifier(Modifier.PUBLIC);
 
-        getter.setBody(new BlockStatement(
+        getter.body(new BlockStatement(
                 new ReturnStatement(
                         new FieldAccessExpression(
                                 new IdentifierExpression("this"),
@@ -115,8 +101,8 @@ class AstPrinterTest {
         final var packageSymbol = symbolTable.enterPackage(null, Name.of("org.some.models"));
         final var packageDeclaration = new PackageDeclaration(new IdentifierExpression("org.some.models"));
         packageDeclaration.setPackageSymbol(packageSymbol);
-        cu.add(packageDeclaration);
-        cu.add(clazz);
+        cu.packageDeclaration(packageDeclaration);
+        cu.classDeclaration(clazz);
 
         return cu;
     }
@@ -144,8 +130,8 @@ class AstPrinterTest {
         var cu = createPersonModel(environment.getSymbolTable());
 
         cu = new JavaToKotlinConverter(
-                environment.getElementUtils(),
-                environment.getTypes()).convert(cu);
+                environment.getJavaElements(),
+                environment.getJavaTypes()).convert(cu);
 
         //final var irCu = new ImportOrganiser().organiseImports(cu);
 

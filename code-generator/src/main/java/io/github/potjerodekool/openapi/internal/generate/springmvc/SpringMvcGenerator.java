@@ -11,21 +11,19 @@ import io.github.potjerodekool.openapi.internal.generate.config.SpringApplicatio
 import io.github.potjerodekool.openapi.internal.generate.config.SpringJacksonConfigGenerator;
 import io.github.potjerodekool.openapi.internal.generate.config.SpringOpenApiConfigGenerator;
 import io.github.potjerodekool.openapi.internal.type.OpenApiTypeUtils;
-import io.github.potjerodekool.openapi.tree.OpenApi;
+import io.github.potjerodekool.openapi.internal.type.OpenApiTypeUtilsJava;
+import io.swagger.v3.oas.models.OpenAPI;
 
 import java.util.HashMap;
 import java.util.Map;
 
 public class SpringMvcGenerator extends AbstractCodeGenerator {
 
-    private final OpenApiTypeUtils openApiTypeUtils = new OpenApiTypeUtilsSpringImpl();
-
     private final Map<String, Object> additionalApplicationProperties = new HashMap<>();
 
     @Override
     protected void generateConfigs(final OpenApiEnvironment openApiEnvironment) {
         super.generateConfigs(openApiEnvironment);
-
         final var generatorConfig = openApiEnvironment.getGeneratorConfig();
         final var environment = openApiEnvironment.getEnvironment();
         final var dependencyChecker = openApiEnvironment.getProject().dependencyChecker();
@@ -39,37 +37,36 @@ public class SpringMvcGenerator extends AbstractCodeGenerator {
     }
 
     @Override
-    protected void generateApiConfigs(final OpenApi api,
+    protected void generateApiConfigs(final OpenAPI openApi,
                                       final OpenApiEnvironment openApiEnvironment) {
         final var generatorConfig = openApiEnvironment.getGeneratorConfig();
         final var environment = openApiEnvironment.getEnvironment();
         final var applicationContext = openApiEnvironment.getApplicationContext();
 
-        new SpringOpenApiConfigGenerator(generatorConfig, environment).generate(api);
+        new SpringOpenApiConfigGenerator(generatorConfig, environment).generate(openApi);
 
         final var configGenerators = applicationContext.getBeansOfType(ApiConfigGenerator.class);
-        configGenerators.forEach(configGenerator -> configGenerator.generate(api));
+        configGenerators.forEach(configGenerator -> configGenerator.generate(openApi));
     }
 
     @Override
-    protected void generateApiDefinition(final OpenApi api,
+    protected void generateApiDefinition(final OpenAPI openApi,
                                          final ApiConfiguration apiConfiguration,
                                          final OpenApiEnvironment openApiEnvironment) {
         final var generatorConfig = openApiEnvironment.getGeneratorConfig();
-        final var openApiTypeUtils = openApiEnvironment.getOpenApiTypeUtils();
         final var environment = openApiEnvironment.getEnvironment();
-
-        new SpringApiGenerator(generatorConfig, apiConfiguration, openApiTypeUtils, environment).generate(api);
+        final var openApiTypeUtils = getOpenApiTypeUtils(apiConfiguration);
+        new SpringApiGenerator(generatorConfig, apiConfiguration, openApiTypeUtils, environment).generate(openApi);
     }
 
     @Override
-    protected void generateApiImplementation(final OpenApi api,
+    protected void generateApiImplementation(final OpenAPI openApi,
                                              final ApiConfiguration apiConfiguration,
                                              final OpenApiEnvironment openApiEnvironment) {
         if (apiConfiguration.generateApiImplementations()) {
             final var generatorConfig = openApiEnvironment.getGeneratorConfig();
-            final var openApiTypeUtils = openApiEnvironment.getOpenApiTypeUtils();
             final var environment = openApiEnvironment.getEnvironment();
+            final var openApiTypeUtils = getOpenApiTypeUtils(apiConfiguration);
 
             final var generator = new SpringRestControllerGenerator(
                     generatorConfig,
@@ -78,7 +75,7 @@ public class SpringMvcGenerator extends AbstractCodeGenerator {
                     openApiTypeUtils
             );
 
-            generator.generate(api);
+            generator.generate(openApi);
         }
     }
 
@@ -88,7 +85,7 @@ public class SpringMvcGenerator extends AbstractCodeGenerator {
     }
 
     @Override
-    public OpenApiTypeUtils getOpenApiTypeUtils() {
-        return openApiTypeUtils;
+    public OpenApiTypeUtils getOpenApiTypeUtils(final ApiConfiguration apiConfiguration) {
+        return new OpenApiTypeUtilsSpringImpl(new OpenApiTypeUtilsJava(apiConfiguration.modelPackageName()));
     }
 }

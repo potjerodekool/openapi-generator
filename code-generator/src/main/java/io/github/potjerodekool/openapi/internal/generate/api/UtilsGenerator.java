@@ -5,6 +5,7 @@ import io.github.potjerodekool.codegen.Language;
 import io.github.potjerodekool.codegen.model.CompilationUnit;
 import io.github.potjerodekool.codegen.model.element.ElementKind;
 import io.github.potjerodekool.codegen.model.element.Modifier;
+import io.github.potjerodekool.codegen.model.element.Name;
 import io.github.potjerodekool.codegen.model.tree.AnnotationExpression;
 import io.github.potjerodekool.codegen.model.tree.PackageDeclaration;
 import io.github.potjerodekool.codegen.model.tree.expression.*;
@@ -12,8 +13,8 @@ import io.github.potjerodekool.codegen.model.tree.statement.BlockStatement;
 import io.github.potjerodekool.codegen.model.tree.statement.ExpressionStatement;
 import io.github.potjerodekool.codegen.model.tree.statement.IfStatement;
 import io.github.potjerodekool.codegen.model.tree.statement.ReturnStatement;
-import io.github.potjerodekool.codegen.model.tree.statement.java.JClassDeclaration;
-import io.github.potjerodekool.codegen.model.tree.statement.java.JVariableDeclaration;
+import io.github.potjerodekool.codegen.model.tree.statement.ClassDeclaration;
+import io.github.potjerodekool.codegen.model.tree.statement.VariableDeclaration;
 import io.github.potjerodekool.codegen.model.tree.type.ClassOrInterfaceTypeExpression;
 import io.github.potjerodekool.codegen.model.tree.type.NoTypeExpression;
 import io.github.potjerodekool.codegen.model.type.TypeKind;
@@ -22,7 +23,6 @@ import io.github.potjerodekool.openapi.GeneratorConfig;
 import io.github.potjerodekool.openapi.internal.ClassNames;
 
 import java.util.List;
-import java.util.Set;
 
 public class UtilsGenerator {
 
@@ -44,123 +44,113 @@ public class UtilsGenerator {
         final var cu = new CompilationUnit(Language.JAVA);
 
         final var packageDeclaration = new PackageDeclaration(new IdentifierExpression(this.basePackageName));
-        cu.add(packageDeclaration);
+        cu.packageDeclaration(packageDeclaration);
 
-        final var classDeclaration = new JClassDeclaration(
-                "ApiUtils",
-                ElementKind.CLASS
-        ).modifiers(Modifier.PUBLIC, Modifier.FINAL);
+        final var classDeclaration = new ClassDeclaration()
+                .simpleName(Name.of("ApiUtils"))
+                .kind(ElementKind.CLASS)
+                .   modifiers(Modifier.PUBLIC, Modifier.FINAL);
 
         classDeclaration.annotation(new AnnotationExpression("javax.annotation.processing.Generated", LiteralExpression.createStringLiteralExpression(getClass().getName())));
         classDeclaration.setEnclosing(packageDeclaration);
-        cu.add(classDeclaration);
+        cu.classDeclaration(classDeclaration);
 
-        final var constructor = classDeclaration.addConstructor();
-        constructor.setReturnType(new NoTypeExpression(TypeKind.VOID));
-        constructor.addModifiers(Modifier.PRIVATE);
+        classDeclaration.constructor(constructor -> {
+            constructor.modifier(Modifier.PRIVATE);
+            constructor.body(new BlockStatement());
+        });
 
-        constructor.setBody(new BlockStatement());
+        classDeclaration.method(method -> {
+           method.returnType(new NoTypeExpression(TypeKind.VOID))
+                   .simpleName(Name.of("createLocation"))
+                   .modifiers(Modifier.PUBLIC, Modifier.STATIC);
 
-        final var createLocationMethod = classDeclaration.addMethod(
-                new NoTypeExpression(TypeKind.VOID),
-                "createLocation",
-                Set.of(Modifier.PUBLIC,
-                        Modifier.STATIC)
-        );
+            final var returnType = new ClassOrInterfaceTypeExpression("java.net.URI");
 
-        final var returnType = new ClassOrInterfaceTypeExpression("java.net.URI");
+            method.returnType(returnType);
 
-        createLocationMethod.setReturnType(returnType);
+            method.parameter(new VariableDeclaration()
+                    .kind(ElementKind.PARAMETER)
+                    .modifier(Modifier.FINAL)
+                    .varType(new ClassOrInterfaceTypeExpression(httpServletClassName))
+                    .name("request")
+            );
 
-        createLocationMethod.addParameter(
-                new JVariableDeclaration(
-                        ElementKind.PARAMETER,
-                        Set.of(Modifier.FINAL),
-                        new ClassOrInterfaceTypeExpression(httpServletClassName),
-                        "request",
-                        null,
-                        null
-                )
-        );
+            method.parameter(new VariableDeclaration()
+                   .kind(ElementKind.PARAMETER).
+                    modifier(Modifier.FINAL)
+                    .varType(new ClassOrInterfaceTypeExpression("java.lang.Object"))
+                    .name("id")
+            );
 
-        createLocationMethod.addParameter(new JVariableDeclaration(
-                ElementKind.PARAMETER,
-                Set.of(Modifier.FINAL),
-                new ClassOrInterfaceTypeExpression("java.lang.Object"),
-                "id",
-                null,
-                null
-        ));
+            // final StringBuffer location = request.getRequestURL();
+            final var body = new BlockStatement();
+            body.add(
+                    new VariableDeclaration()
+                            .kind(ElementKind.LOCAL_VARIABLE)
+                            .modifier(Modifier.FINAL)
+                            .varType(new ClassOrInterfaceTypeExpression("java.lang.StringBuffer"))
+                            .name("locationBuffer")
+                            .initExpression(new MethodCallExpression(
+                                    new IdentifierExpression("request"),
+                                    "getRequestURL"
+                            ))
+            );
 
-        // final StringBuffer location = request.getRequestURL();
-        final var body = new BlockStatement();
-        body.add(
-                new JVariableDeclaration(
-                        ElementKind.LOCAL_VARIABLE,
-                        Set.of(Modifier.FINAL),
-                        new ClassOrInterfaceTypeExpression("java.lang.StringBuffer"),
-                        "locationBuffer",
-                        new MethodCallExpression(
-                                new IdentifierExpression("request"),
-                                "getRequestURL"
-                        ),
-                        null
-                )
-        );
+            body.add(
+                    new IfStatement(
+                            new BinaryExpression(
+                                    new MethodCallExpression(
+                                            new IdentifierExpression("locationBuffer"),
+                                            "charAt",
+                                            List.of(
+                                                    new BinaryExpression(
+                                                            new MethodCallExpression(
+                                                                    new IdentifierExpression("locationBuffer"),
+                                                                    "length"
+                                                            ),
+                                                            LiteralExpression.createIntLiteralExpression(1),
+                                                            Operator.MINUS
+                                                    )
+                                            )
+                                    ),
+                                    LiteralExpression.createCharLiteralExpression('/'),
+                                    Operator.NOT_EQUALS
+                            ),
+                            new BlockStatement(
+                                    new ExpressionStatement(
+                                            new MethodCallExpression(
+                                                    new IdentifierExpression("locationBuffer"),
+                                                    "append",
+                                                    List.of(LiteralExpression.createCharLiteralExpression('/'))
+                                            )
+                                    )
+                            )
+                    )
+            );
 
-        body.add(
-                new IfStatement(
-                        new BinaryExpression(
-                                new MethodCallExpression(
-                                        new IdentifierExpression("locationBuffer"),
-                                        "charAt",
-                                        List.of(
-                                                new BinaryExpression(
-                                                        new MethodCallExpression(
-                                                                new IdentifierExpression("locationBuffer"),
-                                                                "length"
-                                                        ),
-                                                        LiteralExpression.createIntLiteralExpression(1),
-                                                        Operator.MINUS
-                                                )
-                                        )
-                                ),
-                                LiteralExpression.createCharLiteralExpression('/'),
-                                Operator.NOT_EQUALS
-                        ),
-                        new BlockStatement(
-                                new ExpressionStatement(
-                                        new MethodCallExpression(
-                                                new IdentifierExpression("locationBuffer"),
-                                                "append",
-                                                List.of(LiteralExpression.createCharLiteralExpression('/'))
-                                        )
-                                )
-                        )
-                )
-        );
+            // return Uri.create(location.append(id).toString())
+            body.add(
+                    new ReturnStatement(
+                            new MethodCallExpression(
+                                    new ClassOrInterfaceTypeExpression("java.net.URI"),
+                                    "create",
+                                    List.of(
+                                            new MethodCallExpression(
+                                                    new MethodCallExpression(
+                                                            new IdentifierExpression("locationBuffer"),
+                                                            "append",
+                                                            List.of(new IdentifierExpression("id"))
+                                                    ),
+                                                    "toString"
+                                            )
+                                    )
+                            )
+                    )
+            );
 
-        // return Uri.create(location.append(id).toString())
-        body.add(
-                new ReturnStatement(
-                        new MethodCallExpression(
-                                new ClassOrInterfaceTypeExpression("java.net.URI"),
-                                "create",
-                                List.of(
-                                        new MethodCallExpression(
-                                                new MethodCallExpression(
-                                                        new IdentifierExpression("locationBuffer"),
-                                                        "append",
-                                                        List.of(new IdentifierExpression("id"))
-                                                ),
-                                                "toString"
-                                        )
-                                )
-                        )
-                )
-        );
-
-        createLocationMethod.setBody(body);
+            method.body(body);
+        });
 
         environment.getCompilationUnits().add(cu);
     }

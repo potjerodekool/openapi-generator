@@ -14,57 +14,21 @@ import io.github.potjerodekool.openapi.*;
 import io.github.potjerodekool.openapi.dependency.Artifact;
 import io.github.potjerodekool.openapi.dependency.DependencyChecker;
 import io.github.potjerodekool.openapi.internal.generate.api.ApiUtilsGenerator;
+import io.github.potjerodekool.openapi.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 
 import java.io.File;
 import java.util.Arrays;
 
+import static io.github.potjerodekool.openapi.test.TestUtils.createEnvironment;
+import static io.github.potjerodekool.openapi.test.TestUtils.createProject;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class ApiUtilsGeneratorTest {
 
-    private Project createProject() {
-        final var dependencyChecker = mock(DependencyChecker.class);
-
-        String classpath = System.getProperty("java.class.path");
-        String[] classpathEntries = classpath.split(File.pathSeparator);
-
-        final var artifacts = Arrays.stream(classpathEntries)
-                .filter(it -> it.endsWith(".jar"))
-                .map(entry -> new Artifact("", "", new File(entry), "", ""))
-                .toList();
-
-        when(dependencyChecker.getProjectArtifacts())
-                .thenAnswer(answer -> artifacts.stream());
-
-        final var project = mock(Project.class);
-        when(project.dependencyChecker())
-                .thenReturn(dependencyChecker);
-
-        return project;
-    }
-
-    private Environment createEnvironment(final Project project,
-                                          final FileManager fileManager) {
-        final var classPath = ClassPath.getFullClassPath(project);
-        final var symbolTable = new SymbolTable();
-        final var javaTypes = new JavaTypes(symbolTable);
-        final var types = new KotlinTypes(javaTypes);
-        final var javaElements = new JavaElements(symbolTable, classPath, javaTypes);
-        final var elements = new KotlinElements(symbolTable, classPath, javaElements);
-        final var filer = new FilerImpl(elements, types, fileManager);
-
-        final var environmentMock = mock(Environment.class);
-        when(environmentMock.getSymbolTable()).thenReturn(symbolTable);
-        when(environmentMock.getElementUtils()).thenReturn(elements);
-        when(environmentMock.getTypes()).thenReturn(types);
-        when(environmentMock.getFiler()).thenReturn(filer);
-
-        return environmentMock;
-    }
 
     @Test
     void generateJava() {

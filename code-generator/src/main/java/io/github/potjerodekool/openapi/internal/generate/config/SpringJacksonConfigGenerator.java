@@ -1,19 +1,26 @@
 package io.github.potjerodekool.openapi.internal.generate.config;
 
 import io.github.potjerodekool.codegen.Environment;
+import io.github.potjerodekool.codegen.Language;
+import io.github.potjerodekool.codegen.model.CompilationUnit;
+import io.github.potjerodekool.codegen.model.element.ElementKind;
 import io.github.potjerodekool.codegen.model.element.Modifier;
+import io.github.potjerodekool.codegen.model.element.Name;
 import io.github.potjerodekool.codegen.model.tree.AnnotationExpression;
+import io.github.potjerodekool.codegen.model.tree.PackageDeclaration;
 import io.github.potjerodekool.codegen.model.tree.expression.*;
 import io.github.potjerodekool.codegen.model.tree.statement.BlockStatement;
 import io.github.potjerodekool.codegen.model.tree.statement.ReturnStatement;
-import io.github.potjerodekool.codegen.model.tree.statement.java.JClassDeclaration;
+import io.github.potjerodekool.codegen.model.tree.statement.ClassDeclaration;
 import io.github.potjerodekool.codegen.model.tree.type.ClassOrInterfaceTypeExpression;
 import io.github.potjerodekool.codegen.model.tree.type.NoTypeExpression;
 import io.github.potjerodekool.codegen.model.type.TypeKind;
 import io.github.potjerodekool.codegen.model.util.StringUtils;
+import io.github.potjerodekool.codegen.template.model.TCompilationUnit;
 import io.github.potjerodekool.openapi.GeneratorConfig;
 import io.github.potjerodekool.openapi.dependency.Artifact;
 import io.github.potjerodekool.openapi.dependency.DependencyChecker;
+import io.github.potjerodekool.openapi.generate.config.ConfigGenerator;
 import io.github.potjerodekool.openapi.log.Logger;
 
 import java.io.IOException;
@@ -24,17 +31,47 @@ import java.util.Set;
 import java.util.jar.JarFile;
 import java.util.stream.Collectors;
 
-public class SpringJacksonConfigGenerator extends AbstractSpringConfigGenerator {
+public class SpringJacksonConfigGenerator implements ConfigGenerator {
 
     private static final Logger LOGGER = Logger.getLogger(SpringJacksonConfigGenerator.class.getName());
 
+    private final GeneratorConfig generatorConfig;
+    private final Environment environment;
     private final Set<String> resolvedJaxsonModuleClasses;
 
     public SpringJacksonConfigGenerator(final GeneratorConfig generatorConfig,
                                         final Environment environment,
                                         final DependencyChecker dependencyChecker) {
-        super(generatorConfig, environment);
+        this.generatorConfig = generatorConfig;
+        this.environment = environment;
         this.resolvedJaxsonModuleClasses = resolveDependencies(dependencyChecker);
+    }
+
+    @Override
+    public void generate() {
+        if (skipGeneration()) {
+            return;
+        }
+
+        final var cu = new CompilationUnit(Language.JAVA);
+
+        final var configPackageName = generatorConfig.configPackageName();
+        final var packageDeclaration = new PackageDeclaration(new IdentifierExpression(configPackageName));
+        cu.packageDeclaration(packageDeclaration);
+
+        final var classDeclaration = new ClassDeclaration()
+                .simpleName(Name.of(getConfigClassName()))
+                .kind(ElementKind.CLASS)
+                .modifier(Modifier.PUBLIC)
+                .annotation(new AnnotationExpression("org.springframework.context.annotation.Configuration"))
+                .annotation(new AnnotationExpression("javax.annotation.processing.Generated", LiteralExpression.createStringLiteralExpression(getClass().getName())));
+        classDeclaration.setEnclosing(packageDeclaration);
+
+        cu.classDeclaration(classDeclaration);
+
+        fillClass(classDeclaration);
+
+        environment.getCompilationUnits().add(cu);
     }
 
     private static Set<String> resolveDependencies(final DependencyChecker dependencyChecker) {
@@ -65,13 +102,11 @@ public class SpringJacksonConfigGenerator extends AbstractSpringConfigGenerator 
         return modules;
     }
 
-    @Override
-    protected String getConfigClassName() {
+    private String getConfigClassName() {
         return "JacksonConfiguration";
     }
 
-    @Override
-    protected void fillClass(final JClassDeclaration classDeclaration) {
+    private void fillClass(final ClassDeclaration classDeclaration) {
         this.resolvedJaxsonModuleClasses.forEach(jaxsonModuleClassName -> {
             if ("com.fasterxml.jackson.module.kotlin.KotlinModule".equals(jaxsonModuleClassName)) {
                 addKotlinModuleBeanMethod(classDeclaration, jaxsonModuleClassName);
@@ -81,34 +116,40 @@ public class SpringJacksonConfigGenerator extends AbstractSpringConfigGenerator 
         });
     }
 
-    @Override
-    protected boolean skipGeneration() {
+    private boolean skipGeneration() {
         return this.resolvedJaxsonModuleClasses.isEmpty();
     }
 
-    private void addBeanMethod(final JClassDeclaration classDeclaration,
+    private void addBeanMethod(final ClassDeclaration classDeclaration,
                                final String moduleClassName) {
         final var sepIndex = moduleClassName.lastIndexOf(".");
         final String simpleName = sepIndex < 0 ? moduleClassName : moduleClassName.substring(sepIndex + 1);
         final var methodName = StringUtils.firstLower(simpleName);
-        final var method = classDeclaration.addMethod(new NoTypeExpression(TypeKind.VOID), methodName, Set.of(Modifier.PUBLIC));
 
-        method.annotation(new AnnotationExpression("org.springframework.context.annotation.Bean"))
-                .annotation(new AnnotationExpression(
-                "org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean",
-                new ArrayInitializerExpression(
-                        LiteralExpression.createClassLiteralExpression(new ClassOrInterfaceTypeExpression(moduleClassName))
-                )
-        ));
+        classDeclaration.method(
+                method -> {
+                    method.simpleName(Name.of(methodName));
+                    method.returnType(new NoTypeExpression(TypeKind.VOID));
+                    method.modifier(Modifier.PUBLIC);
 
-        method.setBody(new BlockStatement(new ReturnStatement(
-                new NewClassExpression(new ClassOrInterfaceTypeExpression(moduleClassName))
-            ))
+                    method.annotation(new AnnotationExpression("org.springframework.context.annotation.Bean"))
+                            .annotation(new AnnotationExpression(
+                                    "org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean",
+                                    new ArrayInitializerExpression(
+                                            LiteralExpression.createClassLiteralExpression(new ClassOrInterfaceTypeExpression(moduleClassName))
+                                    )
+                            ));
+
+                    method.body(new BlockStatement(new ReturnStatement(
+                                    new NewClassExpression(new ClassOrInterfaceTypeExpression(moduleClassName))
+                            ))
+                    );
+                    method.returnType(new ClassOrInterfaceTypeExpression(moduleClassName));
+                }
         );
-        method.setReturnType(new ClassOrInterfaceTypeExpression(moduleClassName));
     }
 
-    private void addKotlinModuleBeanMethod(final JClassDeclaration classDeclaration,
+    private void addKotlinModuleBeanMethod(final ClassDeclaration classDeclaration,
                                            final String moduleClassName) {
         final var parameterNamesModuleType = new ClassOrInterfaceTypeExpression(moduleClassName);
 
@@ -116,31 +157,36 @@ public class SpringJacksonConfigGenerator extends AbstractSpringConfigGenerator 
         final String simpleName = sepIndex < 0 ? moduleClassName : moduleClassName.substring(sepIndex + 1);
         final var methodName = StringUtils.firstLower(simpleName);
 
-        final var method = classDeclaration.addMethod(parameterNamesModuleType, methodName, Set.of(Modifier.PUBLIC));
-        method.annotation(new AnnotationExpression("org.springframework.context.annotation.Bean"))
-                .annotation(
-                        new AnnotationExpression("org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean",
-                                new ArrayInitializerExpression(
-                                        LiteralExpression.createClassLiteralExpression(new ClassOrInterfaceTypeExpression(moduleClassName)
-                                        )
-                                ))
-        );
+        classDeclaration.method(method -> {
+            method.simpleName(Name.of(methodName));
+            method.returnType(parameterNamesModuleType);
+            method.modifier(Modifier.PUBLIC);
+            method.annotation(new AnnotationExpression("org.springframework.context.annotation.Bean"))
+                    .annotation(
+                            new AnnotationExpression("org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean",
+                                    new ArrayInitializerExpression(
+                                            LiteralExpression.createClassLiteralExpression(new ClassOrInterfaceTypeExpression(moduleClassName)
+                                            )
+                                    ))
+                    );
 
-        final var buildCall = new MethodCallExpression(
-                new MethodCallExpression(
-                        new NewClassExpression(new ClassOrInterfaceTypeExpression(moduleClassName + ".Builder")),
-                        "configure",
-                        List.of(
-                                new FieldAccessExpression(
-                                        new ClassOrInterfaceTypeExpression("com.fasterxml.jackson.module.kotlin.KotlinFeature"),
-                                        "StrictNullChecks"
-                                ),
-                                LiteralExpression.createBooleanLiteralExpression(true)
-                        )
-                ),
-                "build"
-        );
 
-        method.setBody(new BlockStatement(new ReturnStatement(buildCall)));
+            final var buildCall = new MethodCallExpression(
+                    new MethodCallExpression(
+                            new NewClassExpression(new ClassOrInterfaceTypeExpression(moduleClassName + ".Builder")),
+                            "configure",
+                            List.of(
+                                    new FieldAccessExpression(
+                                            new ClassOrInterfaceTypeExpression("com.fasterxml.jackson.module.kotlin.KotlinFeature"),
+                                            "StrictNullChecks"
+                                    ),
+                                    LiteralExpression.createBooleanLiteralExpression(true)
+                            )
+                    ),
+                    "build"
+            );
+
+            method.body(new BlockStatement(new ReturnStatement(buildCall)));
+        });
     }
 }

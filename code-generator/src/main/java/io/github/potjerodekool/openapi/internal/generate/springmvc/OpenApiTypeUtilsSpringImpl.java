@@ -4,37 +4,28 @@ import io.github.potjerodekool.codegen.model.tree.type.BoundKind;
 import io.github.potjerodekool.codegen.model.tree.type.ClassOrInterfaceTypeExpression;
 import io.github.potjerodekool.codegen.model.tree.type.TypeExpression;
 import io.github.potjerodekool.codegen.model.tree.type.WildCardTypeExpression;
+import io.github.potjerodekool.openapi.internal.type.AbstractOpenApiTypeUtils;
 import io.github.potjerodekool.openapi.internal.type.OpenApiTypeUtils;
-import io.github.potjerodekool.openapi.tree.media.OpenApiBinarySchema;
-import io.github.potjerodekool.openapi.tree.media.OpenApiSchema;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.media.BinarySchema;
 
-public class OpenApiTypeUtilsSpringImpl extends OpenApiTypeUtils {
-
-    protected TypeExpression createStringTypeExpression(final OpenApiSchema<?> schema) {
-        final var isNullable = Boolean.TRUE.equals(schema.nullable());
-        final var format = schema.format();
-
-        if ("binary".equals(format)) {
-            return new WildCardTypeExpression(
-                    BoundKind.EXTENDS,
-                    createClassOrInterfaceTypeExpression("org.springframework.core.io.Resource", isNullable)
-            );
-        }
-
-        return super.createStringTypeExpression(schema);
+public class OpenApiTypeUtilsSpringImpl extends AbstractOpenApiTypeUtils {
+    public OpenApiTypeUtilsSpringImpl(final OpenApiTypeUtils delegate) {
+        super(delegate);
     }
 
     @Override
-    protected TypeExpression createBinaryTypeExpression(final OpenApiBinarySchema schema) {
-        final var isNullable = Boolean.TRUE.equals(schema.nullable());
+    public TypeExpression createBinaryTypeExpression(final BinarySchema schema,
+                                                     final OpenAPI openAPI) {
+        final var isNullable = Boolean.TRUE.equals(schema.getNullable());
         return new WildCardTypeExpression(
                 BoundKind.EXTENDS,
-                createClassOrInterfaceTypeExpression("org.springframework.core.io.Resource", isNullable)
+                createClassOrInterfaceTypeExpression("org.springframework.core.io.Resource", isNullable, openAPI)
         );
     }
 
     @Override
-    public ClassOrInterfaceTypeExpression createMultipartTypeExpression() {
+    public ClassOrInterfaceTypeExpression createMultipartTypeExpression(final OpenAPI openAPI) {
         return new ClassOrInterfaceTypeExpression("org.springframework.web.multipart.MultipartFile");
     }
 }

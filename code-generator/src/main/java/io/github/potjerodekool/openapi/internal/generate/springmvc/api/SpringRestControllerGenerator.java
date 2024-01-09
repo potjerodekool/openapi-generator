@@ -6,24 +6,25 @@ import io.github.potjerodekool.codegen.model.element.Modifier;
 import io.github.potjerodekool.codegen.model.element.Name;
 import io.github.potjerodekool.codegen.model.tree.AnnotationExpression;
 import io.github.potjerodekool.codegen.model.tree.expression.*;
-import io.github.potjerodekool.codegen.model.tree.java.JMethodDeclaration;
+import io.github.potjerodekool.codegen.model.tree.MethodDeclaration;
 import io.github.potjerodekool.codegen.model.tree.statement.BlockStatement;
 import io.github.potjerodekool.codegen.model.tree.statement.ReturnStatement;
-import io.github.potjerodekool.codegen.model.tree.statement.java.JClassDeclaration;
-import io.github.potjerodekool.codegen.model.tree.statement.java.JVariableDeclaration;
+import io.github.potjerodekool.codegen.model.tree.statement.ClassDeclaration;
+import io.github.potjerodekool.codegen.model.tree.statement.VariableDeclaration;
 import io.github.potjerodekool.codegen.model.tree.type.ClassOrInterfaceTypeExpression;
 import io.github.potjerodekool.codegen.model.tree.type.TypeExpression;
 import io.github.potjerodekool.codegen.model.tree.type.VarTypeExpression;
 import io.github.potjerodekool.openapi.ApiConfiguration;
 import io.github.potjerodekool.openapi.GeneratorConfig;
-import io.github.potjerodekool.openapi.HttpMethod;
 import io.github.potjerodekool.openapi.internal.StatusCodes;
 import io.github.potjerodekool.openapi.internal.generate.ContentTypes;
 import io.github.potjerodekool.openapi.internal.generate.api.AbstractApiGenerator;
 import io.github.potjerodekool.openapi.internal.type.OpenApiTypeUtils;
-import io.github.potjerodekool.openapi.tree.OpenApiOperation;
-import io.github.potjerodekool.openapi.tree.OpenApiPath;
-import io.github.potjerodekool.openapi.tree.OpenApiResponse;
+import io.swagger.models.HttpMethod;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.Operation;
+import io.swagger.v3.oas.models.PathItem;
+import io.swagger.v3.oas.models.responses.ApiResponse;
 
 import java.util.*;
 
@@ -39,15 +40,18 @@ public class SpringRestControllerGenerator extends AbstractApiGenerator {
     }
 
     @Override
-    protected String generateClasName(final OpenApiPath openApiPath,
-                                      final OpenApiOperation operation) {
-        return super.generateClasName(openApiPath, operation) + "Controller";
+    protected String generateClasName(final String path,
+                                      final PathItem openApiPath,
+                                      final Operation operation) {
+        return super.generateClasName(path, openApiPath, operation) + "Controller";
     }
 
     @Override
-    protected JClassDeclaration createClass(final String packageName,
+    protected ClassDeclaration createClass(final String packageName,
                                             final Name simpleName) {
-        final var classDeclaration = new JClassDeclaration(simpleName, ElementKind.CLASS)
+        final var classDeclaration = new ClassDeclaration()
+                .simpleName(Name.of(simpleName))
+                .kind(ElementKind.CLASS)
                 .modifier(Modifier.PUBLIC);
 
         classDeclaration.annotation(new AnnotationExpression("javax.annotation.processing.Generated", LiteralExpression.createStringLiteralExpression(getClass().getName())));
@@ -59,30 +63,24 @@ public class SpringRestControllerGenerator extends AbstractApiGenerator {
         final var apiName = name.substring(0, separatorIndex) + "Api";
         classDeclaration.addImplement(new ClassOrInterfaceTypeExpression(packageName + "." +apiName));
 
-        final var serviceName = name.substring(0, separatorIndex) + "ServiceApi";
+        final var serviceName = packageName + "." + name.substring(0, separatorIndex) + "ServiceApi";
 
-        final var serviceField = new JVariableDeclaration(
-                ElementKind.FIELD,
-                Set.of(Modifier.PRIVATE, Modifier.FINAL),
-                new ClassOrInterfaceTypeExpression(serviceName),
-                "service",
-                null,
-                null
-        );
+        final var serviceField = new VariableDeclaration()
+                .kind(ElementKind.FIELD)
+                .modifiers(Modifier.PRIVATE, Modifier.FINAL)
+                .varType(new ClassOrInterfaceTypeExpression(serviceName))
+                .name("service");
 
         classDeclaration.addEnclosed(serviceField);
 
-        final var constructor = classDeclaration.addConstructor();
-        constructor.addModifier(Modifier.PUBLIC);
+        final var constructor = classDeclaration.createConstructor();
+        constructor.modifier(Modifier.PUBLIC);
 
-        constructor.addParameter(new JVariableDeclaration(
-                ElementKind.PARAMETER,
-                Set.of(Modifier.FINAL),
-                new ClassOrInterfaceTypeExpression(serviceName),
-                "service",
-                null,
-                null
-        ));
+        constructor.parameter(new VariableDeclaration()
+                        .kind(ElementKind.PARAMETER)
+                        .modifier(Modifier.FINAL)
+                        .varType(new ClassOrInterfaceTypeExpression(serviceName))
+                        .name("service"));
 
         final var constructorBody = new BlockStatement(new BinaryExpression(
                 new FieldAccessExpression(
@@ -92,26 +90,30 @@ public class SpringRestControllerGenerator extends AbstractApiGenerator {
                 new IdentifierExpression("service"),
                 Operator.ASSIGN)
         );
-        constructor.setBody(constructorBody);
+        constructor.body(constructorBody);
 
         return classDeclaration;
     }
 
     @Override
-    protected void postProcessOperation(final HttpMethod httpMethod,
+    protected void postProcessOperation(final OpenAPI openAPI,
+                                        final HttpMethod httpMethod,
                                         final String path,
-                                        final OpenApiOperation operation,
-                                        final JMethodDeclaration method) {
+                                        final Operation operation,
+                                        final MethodDeclaration method) {
         method.annotation("java.lang.Override");
-        method.addModifier(Modifier.PUBLIC);
+        method.modifier(Modifier.PUBLIC);
 
-        final var okResponseOptional = findOkResponse(operation.responses());
+        final var okResponseOptional = findOkResponse(operation.getResponses());
+        final List<Expression> arguments = new ArrayList<>();
 
-        final List<Expression> arguments = new ArrayList<>(operation.parameters().stream()
-                .map(parameter -> new IdentifierExpression(parameter.name()))
-                .toList());
+        if (operation.getParameters() != null) {
+            arguments.addAll(operation.getParameters().stream()
+                    .map(parameter -> new IdentifierExpression(parameter.getName()))
+                    .toList());
+        }
 
-        if (operation.requestBody() != null) {
+        if (operation.getRequestBody() != null) {
             arguments.add(new IdentifierExpression("body"));
         }
 
@@ -124,31 +126,33 @@ public class SpringRestControllerGenerator extends AbstractApiGenerator {
 
         final BlockStatement body = okResponseOptional
                 .map(okResponse -> generateOkResponse(
+                        openAPI,
                         httpMethod,
                         operation,
                         okResponse,
                         arguments))
                 .orElseGet(this::generateNotImplemented);
 
-        method.setBody(body);
+        method.body(body);
     }
 
-    private BlockStatement generateOkResponse(final HttpMethod httpMethod,
-                                              final OpenApiOperation operation,
-                                              final Map.Entry<String, OpenApiResponse> okResponse,
+    private BlockStatement generateOkResponse(final OpenAPI openAPI, final HttpMethod httpMethod,
+                                              final Operation operation,
+                                              final Map.Entry<String, ApiResponse> okResponse,
                                               final List<Expression> arguments) {
         final BlockStatement body = new BlockStatement();
 
         final var statusCode = okResponse.getKey();
         final var response = okResponse.getValue();
-        final var hasContent = !response.contentMediaType().isEmpty();
-        final var requestBody = operation.requestBody();
+        final var hasContent = response.getContent() != null
+                && !response.getContent().isEmpty();
+        final var requestBody = operation.getRequestBody();
         final TypeExpression requestBodyType;
 
         if (requestBody != null) {
-            final var jsonContent = requestBody.contentMediaType().get(ContentTypes.JSON);
+            final var jsonContent = requestBody.getContent().get(ContentTypes.JSON);
             requestBodyType = jsonContent != null
-                    ? getOpenApiTypeUtils().createTypeExpression(jsonContent.schema())
+                    ? getOpenApiTypeUtils().createTypeExpression(jsonContent.getSchema(), openAPI)
                     : null;
         } else {
             requestBodyType = null;
@@ -156,7 +160,7 @@ public class SpringRestControllerGenerator extends AbstractApiGenerator {
 
         final var serviceMethodCall = new MethodCallExpression(
                 new IdentifierExpression("service"),
-                operation.operationId(),
+                operation.getOperationId(),
                 arguments
         );
 
@@ -164,14 +168,12 @@ public class SpringRestControllerGenerator extends AbstractApiGenerator {
                 && StatusCodes.CREATED.equals(okResponse.getKey());
 
         if (hasContent || isCreateRequest) {
-            final var variable = new JVariableDeclaration(
-                    ElementKind.LOCAL_VARIABLE,
-                    Set.of(Modifier.FINAL),
-                    new VarTypeExpression(),
-                    "result",
-                    serviceMethodCall,
-                    null
-            );
+            final var variable = new VariableDeclaration()
+                    .kind(ElementKind.LOCAL_VARIABLE)
+                    .modifier(Modifier.FINAL)
+                    .varType(new VarTypeExpression())
+                    .name("result")
+                    .initExpression(serviceMethodCall);
 
             body.add(variable);
         } else {
@@ -185,12 +187,12 @@ public class SpringRestControllerGenerator extends AbstractApiGenerator {
                 ? new MethodCallExpression(new IdentifierExpression("result"), "getId")
                 : LiteralExpression.createNullLiteralExpression();
 
-            final var locationVar = new JVariableDeclaration(
-                    ElementKind.LOCAL_VARIABLE,
-                    Set.of(Modifier.FINAL),
-                    new VarTypeExpression(),
-                    "location",
-                    new MethodCallExpression(
+            final var locationVar = new VariableDeclaration()
+                    .kind(ElementKind.LOCAL_VARIABLE)
+                    .modifier(Modifier.FINAL)
+                    .varType(new VarTypeExpression())
+                    .name("location")
+                    .initExpression(new MethodCallExpression(
                             new ClassOrInterfaceTypeExpression(
                                     getBasePackageName() + ".ApiUtils"
                             ),
@@ -199,9 +201,7 @@ public class SpringRestControllerGenerator extends AbstractApiGenerator {
                                     new IdentifierExpression("request"),
                                     idExpression
                             )
-                    ),
-                    null
-            );
+                    ));
 
             body.add(locationVar);
 

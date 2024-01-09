@@ -17,7 +17,7 @@ public final class PropertiesUpdater {
     }
 
     public static void update(final FileObject fileObject,
-                              final Map<String, Object> updates) throws IOException {
+                              final Map<String, Object> updates) {
         try (final var inputStream = fileObject.openInputStream()) {
             final var reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.ISO_8859_1));
 
@@ -29,6 +29,8 @@ public final class PropertiesUpdater {
             } finally {
                 Files.delete(tempFile);
             }
+        } catch (final IOException ignored) {
+            //Ignore
         }
     }
 

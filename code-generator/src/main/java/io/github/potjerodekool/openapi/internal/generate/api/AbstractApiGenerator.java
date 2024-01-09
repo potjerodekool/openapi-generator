@@ -1,12 +1,14 @@
 package io.github.potjerodekool.openapi.internal.generate.api;
 
 import io.github.potjerodekool.codegen.Environment;
+import io.github.potjerodekool.codegen.model.element.ElementKind;
 import io.github.potjerodekool.codegen.model.element.Modifier;
+import io.github.potjerodekool.codegen.model.element.Name;
 import io.github.potjerodekool.codegen.model.tree.AnnotationExpression;
+import io.github.potjerodekool.codegen.model.tree.MethodDeclaration;
 import io.github.potjerodekool.codegen.model.tree.expression.Expression;
 import io.github.potjerodekool.codegen.model.tree.expression.FieldAccessExpression;
-import io.github.potjerodekool.codegen.model.tree.java.JMethodDeclaration;
-import io.github.potjerodekool.codegen.model.tree.statement.java.JVariableDeclaration;
+import io.github.potjerodekool.codegen.model.tree.statement.VariableDeclaration;
 import io.github.potjerodekool.codegen.model.tree.type.ClassOrInterfaceTypeExpression;
 import io.github.potjerodekool.codegen.model.tree.type.NoTypeExpression;
 import io.github.potjerodekool.codegen.model.tree.type.TypeExpression;
@@ -18,14 +20,15 @@ import io.github.potjerodekool.openapi.internal.generate.annotation.openapi.Para
 import io.github.potjerodekool.openapi.internal.generate.annotation.openapi.media.SchemaAnnotationBuilder;
 import io.github.potjerodekool.openapi.internal.generate.annotation.spring.web.*;
 import io.github.potjerodekool.openapi.internal.type.OpenApiTypeUtils;
-import io.github.potjerodekool.openapi.tree.OpenApiOperation;
-import io.github.potjerodekool.openapi.tree.OpenApiParameter;
-import io.github.potjerodekool.openapi.tree.OpenApiPath;
+import io.swagger.models.HttpMethod;
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.Operation;
+import io.swagger.v3.oas.models.PathItem;
+import io.swagger.v3.oas.models.parameters.Parameter;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import static io.github.potjerodekool.openapi.internal.generate.OpenApiUtils.resolveResponseTypes;
 
@@ -58,15 +61,16 @@ public abstract class AbstractApiGenerator extends AbstractGenerator {
     }
 
     @Override
-    protected void processOperation(final OpenApiPath openApiPath,
+    protected void processOperation(final OpenAPI openAPI,
+                                    final PathItem openApiPath,
                                     final HttpMethod httpMethod,
                                     final String path,
-                                    final @Nullable OpenApiOperation operation) {
+                                    final @Nullable Operation operation) {
         if (operation == null) {
             return;
         }
 
-        final var operationId = operation.operationId();
+        final var operationId = operation.getOperationId();
 
         if (operationId == null || operationId.isEmpty()) {
             throw new MissingOperationIdException(path, httpMethod);
@@ -78,18 +82,21 @@ public abstract class AbstractApiGenerator extends AbstractGenerator {
         if (responseTypes.isEmpty()) {
             responseType = new ClassOrInterfaceTypeExpression("java.lang.Void");
         } else if (responseTypes.size() == 1) {
-            responseType = openApiTypeUtils.createTypeExpression(responseTypes.get(0));
+            responseType = openApiTypeUtils.createTypeExpression(responseTypes.getFirst(), openAPI);
         } else {
             responseType = new ClassOrInterfaceTypeExpression("java.lang.Object");
         }
 
-        final var classDeclaration = findOrCreateClassDeclaration(openApiPath, operation);
+        final var classDeclaration = findOrCreateClassDeclaration(path, openApiPath, operation);
 
-        final var method = classDeclaration.addMethod(responseType, operationId, Set.of());
-        createParameters(operation, httpMethod)
-                .forEach(method::addParameter);
+        final var method = classDeclaration.createMethod()
+                .returnType(responseType)
+                .simpleName(Name.of(operationId));
+        createParameters(openAPI, operation, httpMethod)
+                .forEach(method::parameter);
         afterProcessOperation(method);
         postProcessOperation(
+                openAPI,
                 httpMethod,
                 path,
                 operation,
@@ -101,46 +108,55 @@ public abstract class AbstractApiGenerator extends AbstractGenerator {
     private void addParametersDocumentation() {
     }
 
-    protected void afterProcessOperation(final JMethodDeclaration method) {
+    protected void afterProcessOperation(final MethodDeclaration method) {
         final var responseType = method.getReturnType();
 
         final TypeExpression returnTypeArg;
 
         if (responseType instanceof NoTypeExpression noTypeExpression
-            && noTypeExpression.getKind() == TypeKind.VOID) {
+                && noTypeExpression.getKind() == TypeKind.VOID) {
             returnTypeArg = new ClassOrInterfaceTypeExpression("java.lang.Void");
         } else {
             returnTypeArg = (TypeExpression) responseType;
         }
 
         final var returnType = new ClassOrInterfaceTypeExpression("org.springframework.http.ResponseEntity");
-        returnType.addTypeArgument(returnTypeArg);
-        method.setReturnType(returnType);
+        returnType.typeArgument(returnTypeArg);
+        method.returnType(returnType);
     }
 
-    protected abstract void postProcessOperation(final HttpMethod httpMethod,
+    protected abstract void postProcessOperation(final OpenAPI openAPI,
+                                                 final HttpMethod httpMethod,
                                                  final String path,
-                                                 final OpenApiOperation operation,
-                                                 final JMethodDeclaration method);
+                                                 final Operation operation,
+                                                 final MethodDeclaration method);
 
     @Override
-    protected String resolveClassName(final OpenApiPath openApiPath,
-                                      final OpenApiOperation operation) {
-        for (final var tag : operation.tags()) {
-            final var className = this.controllers.get(tag);
-            if (className != null) {
-                return className;
+    protected String resolveClassName(final String path,
+                                      final PathItem openApiPath,
+                                      final Operation operation) {
+        final var tags = operation.getTags();
+
+        if (tags != null) {
+            for (final var tag : tags) {
+                final var className = this.controllers.get(tag);
+                if (className != null) {
+                    return className;
+                }
             }
         }
 
-        return super.resolveClassName(openApiPath, operation);
+        return super.resolveClassName(path, openApiPath, operation);
     }
 
-    protected List<JVariableDeclaration> createParameters(final OpenApiOperation operation,
-                                                          final HttpMethod httpMethod) {
-        final var parameters = super.createParameters(operation, httpMethod);
+    @Override
+    protected List<VariableDeclaration> createParameters(final OpenAPI openAPI,
+                                                         final Operation operation,
+                                                         final HttpMethod httpMethod) {
+        final var parameters = super.createParameters(openAPI, operation, httpMethod);
 
-        parameters.add(JVariableDeclaration.parameter()
+        parameters.add(new VariableDeclaration()
+                .kind(ElementKind.PARAMETER)
                 .modifier(Modifier.FINAL)
                 .varType(new ClassOrInterfaceTypeExpression(servletClassName))
                 .name("request")
@@ -150,14 +166,14 @@ public abstract class AbstractApiGenerator extends AbstractGenerator {
         return parameters;
     }
 
-    private void addRequestBodyAnnotation(final OpenApiOperation operation,
-                                          final List<JVariableDeclaration> parameters) {
+    private void addRequestBodyAnnotation(final Operation operation,
+                                          final List<VariableDeclaration> parameters) {
         final var bodyParameterOptional = parameters.stream()
                 .filter(parameter -> "body".equals(parameter.getName()))
                 .findFirst();
 
         bodyParameterOptional.ifPresent(bodyParameter -> {
-            final var requestBody = operation.requestBody();
+            final var requestBody = operation.getRequestBody();
 
             if (requestBody != null) {
                 bodyParameter.annotation(new AnnotationExpression(validAnnotationClassName));
@@ -166,8 +182,8 @@ public abstract class AbstractApiGenerator extends AbstractGenerator {
             if (requestBody != null) {
                 var bodyRequired = false;
 
-                if (requestBody.required() != null) {
-                    bodyRequired = requestBody.required();
+                if (requestBody.getRequired() != null) {
+                    bodyRequired = requestBody.getRequired();
                 }
 
                 bodyParameter.annotation(new RequestBodyAnnotationBuilder()
@@ -177,10 +193,13 @@ public abstract class AbstractApiGenerator extends AbstractGenerator {
         });
     }
 
-    protected JVariableDeclaration createParameter(final OpenApiParameter openApiParameter) {
-        final var parameter = super.createParameter(openApiParameter);
+    @Override
+    protected VariableDeclaration createParameter(final OpenAPI openAPI,
+                                                  final Parameter openApiParameter) {
+        final var parameter = super.createParameter(openAPI, openApiParameter);
+        final var in = ParameterLocation.parseIn(openApiParameter.getIn());
 
-        switch (openApiParameter.in()) {
+        switch (in) {
             case PATH -> {
                 parameter.annotation(createSpringPathVariableAnnotation(openApiParameter));
                 parameter.annotation(createApiParamAnnotation(openApiParameter));
@@ -196,11 +215,11 @@ public abstract class AbstractApiGenerator extends AbstractGenerator {
         return parameter;
     }
 
-    private AnnotationExpression createSpringPathVariableAnnotation(final OpenApiParameter openApiParameter) {
-        final var required = openApiParameter.required();
+    private AnnotationExpression createSpringPathVariableAnnotation(final Parameter openApiParameter) {
+        final var required = openApiParameter.getRequired();
 
         final var pathVariableAnnotationBuilder = new PathVariableAnnotationBuilder()
-                .name(openApiParameter.name());
+                .name(openApiParameter.getName());
 
         if (Boolean.FALSE.equals(required)) {
             pathVariableAnnotationBuilder.required(false);
@@ -209,11 +228,11 @@ public abstract class AbstractApiGenerator extends AbstractGenerator {
         return pathVariableAnnotationBuilder.build();
     }
 
-    private AnnotationExpression createSpringRequestParamAnnotation(final OpenApiParameter openApiParameter) {
-        final var required = openApiParameter.required();
+    private AnnotationExpression createSpringRequestParamAnnotation(final Parameter openApiParameter) {
+        final var required = openApiParameter.getRequired();
 
         final var requestParamAnnotationBuilder = new RequestParamAnnotationBuilder()
-                .name(openApiParameter.name());
+                .name(openApiParameter.getName());
 
         if (Boolean.FALSE.equals((required))) {
             requestParamAnnotationBuilder.required(false);
@@ -222,19 +241,19 @@ public abstract class AbstractApiGenerator extends AbstractGenerator {
         return requestParamAnnotationBuilder.build();
     }
 
-    private AnnotationExpression createApiParamAnnotation(final OpenApiParameter openApiParameter) {
-        final var required = openApiParameter.required();
-        final var explode = openApiParameter.explode();
-        final var allowEmptyValue = openApiParameter.allowEmptyValue();
-        final var example = openApiParameter.example();
-        final var description = openApiParameter.description();
-        final var nullable = openApiParameter.nullable();
+    private AnnotationExpression createApiParamAnnotation(final Parameter openApiParameter) {
+        final var required = openApiParameter.getRequired();
+        final var explode = openApiParameter.getExplode();
+        final var allowEmptyValue = openApiParameter.getAllowEmptyValue();
+        final var example = (String) openApiParameter.getExample();
+        final var description = openApiParameter.getDescription();
+        final var nullable = openApiParameter.getSchema().getNullable();
 
         final var parameterAnnotationBuilder = new ParameterAnnotationBuilder()
-                .name(openApiParameter.name())
+                .name(openApiParameter.getName())
                 .in(new FieldAccessExpression(
                                 new ClassOrInterfaceTypeExpression("io.swagger.v3.oas.annotations.enums.ParameterIn"),
-                                openApiParameter.in().name()
+                                openApiParameter.getIn()
                         )
                 )
                 .description(description)
@@ -258,19 +277,19 @@ public abstract class AbstractApiGenerator extends AbstractGenerator {
         return parameterAnnotationBuilder.build();
     }
 
-    private AnnotationExpression createSpringRequestHeaderAnnotation(final OpenApiParameter openApiParameter) {
-        final var required = openApiParameter.required();
+    private AnnotationExpression createSpringRequestHeaderAnnotation(final Parameter openApiParameter) {
+        final var required = openApiParameter.getRequired();
 
         return new RequestHeaderAnnotationBuilder()
-                .name(openApiParameter.name())
+                .name(openApiParameter.getName())
                 .required(required)
                 .build();
     }
 
-    private AnnotationExpression createSpringCookieValueAnnotation(final OpenApiParameter openApiParameter) {
+    private AnnotationExpression createSpringCookieValueAnnotation(final Parameter openApiParameter) {
         return new CookieValueAnnotationBuilder()
-                .name(openApiParameter.name())
-                .required(openApiParameter.required())
+                .name(openApiParameter.getName())
+                .required(openApiParameter.getRequired())
                 .build();
     }
 }
