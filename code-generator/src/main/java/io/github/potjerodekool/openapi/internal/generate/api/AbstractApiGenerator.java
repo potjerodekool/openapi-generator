@@ -52,12 +52,8 @@ public abstract class AbstractApiGenerator extends AbstractGenerator {
         this.openApiTypeUtils = openApiTypeUtils;
         this.controllers = apiConfiguration.controllers();
 
-        this.servletClassName = generatorConfig.isFeatureEnabled(Features.FEATURE_JAKARTA)
-                ? ClassNames.JAKARTA_HTTP_SERVLET_REQUEST
-                : ClassNames.JAVA_HTTP_SERVLET_REQUEST;
-
-        final var validationBasePackage = generatorConfig.isFeatureEnabled(Features.FEATURE_JAKARTA) ? "jakarta" : "javax";
-        this.validAnnotationClassName = validationBasePackage + ".validation.Valid";
+        this.servletClassName = ClassNames.JAKARTA_HTTP_SERVLET_REQUEST;
+        this.validAnnotationClassName = "jakarta.validation.Valid";
     }
 
     @Override
@@ -253,7 +249,7 @@ public abstract class AbstractApiGenerator extends AbstractGenerator {
                 .name(openApiParameter.getName())
                 .in(new FieldAccessExpression(
                                 new ClassOrInterfaceTypeExpression("io.swagger.v3.oas.annotations.enums.ParameterIn"),
-                                openApiParameter.getIn()
+                                openApiParameter.getIn().toUpperCase()
                         )
                 )
                 .description(description)

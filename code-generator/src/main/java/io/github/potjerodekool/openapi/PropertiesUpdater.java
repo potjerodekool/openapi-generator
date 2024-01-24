@@ -77,10 +77,9 @@ public final class PropertiesUpdater {
 
     private static void updateProperties(final Path tempFile,
                                          final FileObject fileObject) throws IOException {
-        try (final var inputStream = Files.newInputStream(tempFile);
-             final var outputStream = fileObject.openOutputStream()) {
+        try (final var inputStream = Files.newInputStream(tempFile)) {
             final var bytes = inputStream.readAllBytes();
-            outputStream.write(bytes);
+            fileObject.writeToOutputStream(bytes);
         }
     }
 

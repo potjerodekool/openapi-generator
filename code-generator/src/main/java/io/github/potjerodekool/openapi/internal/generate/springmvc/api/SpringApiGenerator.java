@@ -34,10 +34,7 @@ import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.examples.Example;
 import io.swagger.v3.oas.models.headers.Header;
-import io.swagger.v3.oas.models.media.ArraySchema;
-import io.swagger.v3.oas.models.media.MapSchema;
-import io.swagger.v3.oas.models.media.MediaType;
-import io.swagger.v3.oas.models.media.Schema;
+import io.swagger.v3.oas.models.media.*;
 import io.swagger.v3.oas.models.parameters.RequestBody;
 import io.swagger.v3.oas.models.responses.ApiResponse;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
@@ -162,7 +159,12 @@ public class SpringApiGenerator extends AbstractApiGenerator {
                 }
 
                 if (additionalProperties instanceof Schema<?> additionalPropertiesSchema) {
-                    final var typeName = additionalPropertiesSchema.getName();
+                    var typeName = additionalPropertiesSchema.getName();
+
+                    if (typeName == null && additionalPropertiesSchema instanceof ObjectSchema) {
+                        typeName = "object";
+                    }
+
                     final var format = additionalPropertiesSchema.getFormat();
                     contentAnnotationBuilder.schemaProperties(schemaPropertyAnnotation);
                     contentAnnotationBuilder.additionalPropertiesSchema(new SchemaAnnotationBuilder()

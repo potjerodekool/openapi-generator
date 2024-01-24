@@ -22,6 +22,9 @@ import io.swagger.v3.parser.core.models.SwaggerParseResult;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +32,46 @@ import java.util.Map;
 public class Generator {
 
     private static final Logger LOGGER = Logger.getLogger(Generator.class.getName());
+
+    private final Path configPath;
+
+    private final Map<String, Long> lastModifiedMap = new HashMap<>();
+
+    public Generator() {
+        this.configPath = getConfigPath();
+        readLastModified();
+    }
+
+    private void readLastModified() {
+        try {
+            Files.readAllLines(configPath).stream()
+                    .map(line -> line.split("="))
+                    .forEach(line -> lastModifiedMap.put(line[0], Long.parseLong(line[1])));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static Path getConfigPath() {
+        try {
+            final var dir = Paths.get(".codegen");
+
+            if (Files.notExists(dir)) {
+                Files.createDirectory(dir);
+            }
+
+            final var path = dir.resolve("apis.config");
+
+            if (Files.notExists(path)) {
+                Files.createFile(path);
+            }
+
+            return path;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
 
     public void generate(final Project project,
                          final List<ApiConfiguration> apiConfigurations,
@@ -65,18 +108,51 @@ public class Generator {
                 .findFirst()
                 .orElse(null);
 
-        apiConfigurations.forEach(apiConfiguration -> {
-            final var generateConfig = apiConfiguration == standardApiConfiguration;
-            generateApi(
-                    openApiEnvironment,
-                    springGenerator,
-                    apiConfiguration,
-                    generateConfig
-            );
-        });
+        apiConfigurations.stream()
+                .filter(this::shouldProcess)
+                .forEach(apiConfiguration -> {
+                    final var generateConfig = apiConfiguration == standardApiConfiguration;
+                    generateApi(
+                            openApiEnvironment,
+                            springGenerator,
+                            apiConfiguration,
+                            generateConfig
+                    );
+                    updateLastModified(apiConfiguration);
+                });
 
         generateCompilationUnits(environment, language);
         springGenerator.generate(environment);
+        storeLastModified();
+    }
+
+    private void storeLastModified() {
+        try (var outputStream = Files.newOutputStream(configPath)) {
+            this.lastModifiedMap.forEach((fileName, lastModified) -> {
+                try {
+                    outputStream.write((fileName + "=" + lastModified + "\n").getBytes());
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void updateLastModified(final ApiConfiguration apiConfiguration) {
+        final var apiFile = apiConfiguration.apiFile();
+        final var fileName = apiFile.getAbsolutePath();
+        final var lastModified = apiFile.lastModified();
+        this.lastModifiedMap.put(fileName, lastModified);
+    }
+
+    private boolean shouldProcess(final ApiConfiguration apiConfiguration) {
+        final var apiFile = apiConfiguration.apiFile();
+        final var fileName = apiFile.getAbsolutePath();
+        final var lastModified = apiFile.lastModified();
+        final var lastKnownLastModified = lastModifiedMap.get(fileName);
+        return lastKnownLastModified == null || lastModified > lastKnownLastModified;
     }
 
     private void generateCompilationUnits(final Environment environment,
@@ -190,12 +266,6 @@ public class Generator {
     private Map<String, Boolean> checkFeatures(final Map<String, Boolean> configuredFeatures,
                                                final DependencyChecker dependencyChecker) {
         final var features = new HashMap<>(configuredFeatures);
-
-        if (configuredFeatures.get(Features.FEATURE_JAKARTA) == null) {
-            if (dependencyChecker.isClassPresent(ClassNames.JAKARTA_HTTP_SERVLET_REQUEST)) {
-                features.put(Features.FEATURE_JAKARTA, true);
-            }
-        }
 
         if (features.get(Features.FEATURE_CHECKER) == null) {
             if (dependencyChecker.isDependencyPresent("org.checkerframework", "checker-qual")) {

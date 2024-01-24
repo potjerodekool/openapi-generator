@@ -35,13 +35,13 @@ public class CodeGenMojo extends AbstractMojo {
     private Boolean checker;
 
     @Parameter(property = "features")
-    private Map<String, Boolean> features = new HashMap<>();
+    private final Map<String, Boolean> features = new HashMap<>();
 
     @Parameter(property = "language")
     private String language;
 
     @Parameter(property = "apis")
-    private List<ApiConfiguration> apis = new ArrayList<>();
+    private final List<ApiConfiguration> apis = new ArrayList<>();
 
     @Override
     public void execute() {
@@ -77,10 +77,6 @@ public class CodeGenMojo extends AbstractMojo {
                 .toList();
 
         final var features = new HashMap<String, Boolean>();
-
-        if (jakarta != null) {
-            features.put(Features.FEATURE_JAKARTA, jakarta);
-        }
 
         if (checker != null) {
             features.put(Features.FEATURE_CHECKER, checker);

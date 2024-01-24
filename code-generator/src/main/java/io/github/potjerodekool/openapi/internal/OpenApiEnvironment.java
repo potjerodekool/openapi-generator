@@ -4,7 +4,6 @@ import io.github.potjerodekool.codegen.Environment;
 import io.github.potjerodekool.openapi.GeneratorConfig;
 import io.github.potjerodekool.openapi.Project;
 import io.github.potjerodekool.openapi.internal.di.ApplicationContext;
-import io.github.potjerodekool.openapi.internal.type.OpenApiTypeUtils;
 
 public class OpenApiEnvironment {
 

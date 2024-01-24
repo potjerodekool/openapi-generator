@@ -62,7 +62,7 @@ public interface OpenApiTypeUtils {
     TypeExpression createMapTypeExpression(MapSchema schema,
                                            OpenAPI openAPI);
 
-    public abstract ClassOrInterfaceTypeExpression createMultipartTypeExpression(OpenAPI openAPI);
+    ClassOrInterfaceTypeExpression createMultipartTypeExpression(OpenAPI openAPI);
 
     TypeExpression resolveImplementationType(TypeExpression type,
                                              OpenAPI openAPI);

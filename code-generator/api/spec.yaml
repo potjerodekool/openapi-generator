@@ -1,8 +1,0 @@
-openapi: 3.0.0
-info:
-  title: Sample API
-  description: User API
-  version: 0.1.9
-servers:
-  - url: http://api.example.com/v1
-    description: Production

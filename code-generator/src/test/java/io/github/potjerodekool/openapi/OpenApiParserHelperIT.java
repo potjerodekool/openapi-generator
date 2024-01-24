@@ -66,9 +66,7 @@ class OpenApiParserHelperIT {
         new Generator().generate(
                 project,
                 List.of(apiConfiguration),
-                Map.of(
-                        Features.FEATURE_JAKARTA, true
-                ),
+                Map.of(),
                 "org.some",
                 Language.JAVA
         );

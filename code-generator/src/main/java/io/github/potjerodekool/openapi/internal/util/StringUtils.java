@@ -17,8 +17,8 @@ public final class StringUtils {
     private static String upperFirst(final String[] parts) {
         final var sb = new StringBuilder();
 
-        for (int i = 0; i < parts.length; i++) {
-            sb.append(firstUpper(parts[i]));
+        for (final String part : parts) {
+            sb.append(firstUpper(part));
         }
 
         return sb.toString();

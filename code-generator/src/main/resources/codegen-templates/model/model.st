@@ -1,0 +1,14 @@
+model(model) ::= <<
+<if(model.packageName)>
+package <model.packageName>;
+<endif>
+
+<model.annotations:{annotation | <annotation(annotation)>};separator="\n">
+public class <model.simpleName> {
+
+    <model.properties:{property | <field(property)>};separator="\n">
+    <model.properties:{property | <getter(property)>};separator="\n">
+    <model.properties:{property | <setter(property)>};separator="\n">
+    <model.properties:{property | <setterBuilder(property, model)>};separator="\n">
+}
+>>

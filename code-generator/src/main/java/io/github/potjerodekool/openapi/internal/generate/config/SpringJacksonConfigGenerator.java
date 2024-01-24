@@ -16,7 +16,6 @@ import io.github.potjerodekool.codegen.model.tree.type.ClassOrInterfaceTypeExpre
 import io.github.potjerodekool.codegen.model.tree.type.NoTypeExpression;
 import io.github.potjerodekool.codegen.model.type.TypeKind;
 import io.github.potjerodekool.codegen.model.util.StringUtils;
-import io.github.potjerodekool.codegen.template.model.TCompilationUnit;
 import io.github.potjerodekool.openapi.GeneratorConfig;
 import io.github.potjerodekool.openapi.dependency.Artifact;
 import io.github.potjerodekool.openapi.dependency.DependencyChecker;

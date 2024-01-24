@@ -32,6 +32,8 @@ public final class ValidationExtensions {
     }
 
     public static Map<String, Object> getValidation(final Map<String, Object> extensions) {
-        return (Map<String, Object>) extensions.getOrDefault("x-validation", Map.of());
+        return extensions != null
+                ? (Map<String, Object>) extensions.getOrDefault("x-validation", Map.of())
+                : Map.of();
     }
 }

@@ -1,0 +1,3 @@
+literalExpression(literal):: <%
+<literal>
+%>
