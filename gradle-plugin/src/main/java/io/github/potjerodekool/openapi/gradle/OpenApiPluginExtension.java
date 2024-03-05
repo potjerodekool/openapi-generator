@@ -8,7 +8,6 @@ import java.util.Map;
 abstract public class OpenApiPluginExtension {
 
     abstract public Property<String> getBasePackageName();
-    abstract public Property<Boolean> getJakarta();
     abstract public Property<Boolean> getChecker();
     abstract public Property<String> getLanguage();
 

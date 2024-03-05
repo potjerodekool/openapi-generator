@@ -1,7 +1,7 @@
 package io.github.potjerodekool.openapi.gradle;
 
-import io.github.potjerodekool.openapi.log.LogLevel;
-import io.github.potjerodekool.openapi.log.Logger;
+import io.github.potjerodekool.openapi.common.log.LogLevel;
+import io.github.potjerodekool.openapi.common.log.Logger;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.gradle.api.Project;
 

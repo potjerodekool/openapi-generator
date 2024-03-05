@@ -1,0 +1,4 @@
+generatorName=spring-mvc
+generatorLang=Java
+generatorClass=io.github.potjerodekool.openapi.spring.web.generate.SpringMvcGenerator
+

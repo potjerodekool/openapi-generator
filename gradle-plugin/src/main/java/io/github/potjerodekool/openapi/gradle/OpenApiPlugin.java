@@ -3,8 +3,8 @@ package io.github.potjerodekool.openapi.gradle;
 import io.github.potjerodekool.codegen.Language;
 import io.github.potjerodekool.openapi.Features;
 import io.github.potjerodekool.openapi.Generator;
-import io.github.potjerodekool.openapi.log.LogLevel;
-import io.github.potjerodekool.openapi.log.LoggerFactory;
+import io.github.potjerodekool.openapi.common.log.LogLevel;
+import io.github.potjerodekool.openapi.common.log.LoggerFactory;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.UnknownTaskException;
@@ -48,7 +48,6 @@ public class OpenApiPlugin implements Plugin<Project> {
 
         final var language = extension.getLanguage().map(Language::fromString)
                 .getOrElse(Language.JAVA);
-        final var jakarta = extension.getJakarta().getOrNull();
         final var checker = extension.getChecker().getOrNull();
         final var basePackageName = extension.getBasePackageName().getOrNull();
 
@@ -66,12 +65,6 @@ public class OpenApiPlugin implements Plugin<Project> {
 
         final var features = new HashMap<String, Boolean>();
 
-
-
-        if (jakarta != null) {
-            features.put(Features.FEATURE_JAKARTA, jakarta);
-        }
-
         if (checker != null) {
             features.put(Features.FEATURE_CHECKER, checker);
         }
@@ -85,7 +78,7 @@ public class OpenApiPlugin implements Plugin<Project> {
         );
     }
 
-    private io.github.potjerodekool.openapi.Project createOpenApiProject(final Project project) {
+    private io.github.potjerodekool.openapi.common.Project createOpenApiProject(final Project project) {
         final var dependencyChecker = new GradleDependencyChecker(project);
 
         final var javaPluginExtension = project.getExtensions().getByType(JavaPluginExtension.class);
@@ -103,7 +96,7 @@ public class OpenApiPlugin implements Plugin<Project> {
         final var rootDir = project.getProjectDir().toPath();
         final var generatedSourcesDir = rootDir.resolve("build/generated/sources");
 
-        return new io.github.potjerodekool.openapi.Project(
+        return new io.github.potjerodekool.openapi.common.Project(
                 rootDir,
                 sourceDirectories,
                 resourceDirectories,
@@ -112,8 +105,8 @@ public class OpenApiPlugin implements Plugin<Project> {
         );
     }
 
-    private io.github.potjerodekool.openapi.ApiConfiguration toApiConfiguration(final ApiConfiguration apiConfiguration) {
-        return new io.github.potjerodekool.openapi.ApiConfiguration(
+    private io.github.potjerodekool.openapi.common.ApiConfiguration toApiConfiguration(final ApiConfiguration apiConfiguration) {
+        return new io.github.potjerodekool.openapi.common.ApiConfiguration(
                 new File(apiConfiguration.getOpenApiFile()),
                 apiConfiguration.getBasePackageName(),
                 apiConfiguration.isGenerateApiDefinitions(),

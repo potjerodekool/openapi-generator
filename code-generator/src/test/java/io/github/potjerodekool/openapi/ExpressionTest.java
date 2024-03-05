@@ -1,10 +1,10 @@
 package io.github.potjerodekool.openapi;
 
-import io.github.potjerodekool.openapi.internal.generate.Templates;
-import io.github.potjerodekool.openapi.internal.generate.model.model.expresion.ClassOrInterfaceTypeExpression;
-import io.github.potjerodekool.openapi.internal.generate.model.model.expresion.FieldAccessExpression;
-import io.github.potjerodekool.openapi.internal.generate.model.model.expresion.IdentifierExpression;
-import io.github.potjerodekool.openapi.internal.generate.model.model.expresion.LiteralExpression;
+import io.github.potjerodekool.openapi.common.generate.Templates;
+import io.github.potjerodekool.openapi.common.generate.model.expresion.ClassOrInterfaceTypeExpression;
+import io.github.potjerodekool.openapi.common.generate.model.expresion.FieldAccessExpression;
+import io.github.potjerodekool.openapi.common.generate.model.expresion.IdentifierExpression;
+import io.github.potjerodekool.openapi.common.generate.model.expresion.LiteralExpression;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 

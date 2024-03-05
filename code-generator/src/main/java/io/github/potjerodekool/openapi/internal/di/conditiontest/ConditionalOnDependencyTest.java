@@ -1,8 +1,8 @@
 package io.github.potjerodekool.openapi.internal.di.conditiontest;
 
-import io.github.potjerodekool.openapi.dependency.DependencyChecker;
-import io.github.potjerodekool.openapi.internal.di.BeanDefinition;
-import io.github.potjerodekool.openapi.internal.di.ConditionalOnDependency;
+import io.github.potjerodekool.openapi.common.dependency.DependencyChecker;
+import io.github.potjerodekool.openapi.internal.di.bean.BeanDefinition;
+import io.github.potjerodekool.openapi.common.dependency.ConditionalOnDependency;
 
 public class ConditionalOnDependencyTest implements ConditionalTest<ConditionalOnDependency> {
 

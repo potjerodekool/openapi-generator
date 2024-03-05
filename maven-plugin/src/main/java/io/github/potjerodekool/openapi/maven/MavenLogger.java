@@ -1,7 +1,7 @@
 package io.github.potjerodekool.openapi.maven;
 
-import io.github.potjerodekool.openapi.log.LogLevel;
-import io.github.potjerodekool.openapi.log.Logger;
+import io.github.potjerodekool.openapi.common.log.LogLevel;
+import io.github.potjerodekool.openapi.common.log.Logger;
 import org.apache.maven.plugin.Mojo;
 
 public class MavenLogger implements Logger {

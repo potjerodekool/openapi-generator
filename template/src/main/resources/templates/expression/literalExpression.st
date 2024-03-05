@@ -1,3 +1,0 @@
-literalExpression(literal):: <%
-<literal>
-%>

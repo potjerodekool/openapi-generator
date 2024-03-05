@@ -2,8 +2,9 @@ package io.github.potjerodekool.openapi.maven;
 
 import io.github.potjerodekool.codegen.Language;
 import io.github.potjerodekool.openapi.*;
-import io.github.potjerodekool.openapi.log.Logger;
-import io.github.potjerodekool.openapi.log.LoggerFactory;
+import io.github.potjerodekool.openapi.common.Project;
+import io.github.potjerodekool.openapi.common.log.Logger;
+import io.github.potjerodekool.openapi.common.log.LoggerFactory;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugins.annotations.*;
 import org.apache.maven.project.MavenProject;
@@ -93,8 +94,8 @@ public class CodeGenMojo extends AbstractMojo {
         );
     }
 
-    private io.github.potjerodekool.openapi.ApiConfiguration toApiConfiguration(final ApiConfiguration apiConfiguration) {
-        return new io.github.potjerodekool.openapi.ApiConfiguration(
+    private io.github.potjerodekool.openapi.common.ApiConfiguration toApiConfiguration(final ApiConfiguration apiConfiguration) {
+        return new io.github.potjerodekool.openapi.common.ApiConfiguration(
                 new File(apiConfiguration.getOpenApiFile()),
                 apiConfiguration.getBasePackageName(),
                 apiConfiguration.isGenerateApiDefinitions(),

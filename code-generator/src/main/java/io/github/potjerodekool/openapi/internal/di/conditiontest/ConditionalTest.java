@@ -1,6 +1,6 @@
 package io.github.potjerodekool.openapi.internal.di.conditiontest;
 
-import io.github.potjerodekool.openapi.internal.di.BeanDefinition;
+import io.github.potjerodekool.openapi.internal.di.bean.BeanDefinition;
 
 import java.lang.annotation.Annotation;
 

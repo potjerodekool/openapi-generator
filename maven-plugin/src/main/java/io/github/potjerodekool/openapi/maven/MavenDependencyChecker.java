@@ -1,8 +1,8 @@
 package io.github.potjerodekool.openapi.maven;
 
-import io.github.potjerodekool.openapi.dependency.Artifact;
-import io.github.potjerodekool.openapi.dependency.DependencyChecker;
-import io.github.potjerodekool.openapi.log.Logger;
+import io.github.potjerodekool.openapi.common.dependency.Artifact;
+import io.github.potjerodekool.openapi.common.dependency.DependencyChecker;
+import io.github.potjerodekool.openapi.common.log.Logger;
 import org.apache.maven.project.MavenProject;
 
 import java.io.File;

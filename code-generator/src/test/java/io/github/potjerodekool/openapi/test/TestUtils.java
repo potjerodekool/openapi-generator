@@ -8,10 +8,10 @@ import io.github.potjerodekool.codegen.loader.kotlin.KotlinElements;
 import io.github.potjerodekool.codegen.model.util.SymbolTable;
 import io.github.potjerodekool.codegen.model.util.type.JavaTypes;
 import io.github.potjerodekool.codegen.model.util.type.KotlinTypes;
-import io.github.potjerodekool.openapi.ClassPath;
-import io.github.potjerodekool.openapi.Project;
-import io.github.potjerodekool.openapi.dependency.Artifact;
-import io.github.potjerodekool.openapi.dependency.DependencyChecker;
+import io.github.potjerodekool.openapi.internal.ClassPath;
+import io.github.potjerodekool.openapi.common.Project;
+import io.github.potjerodekool.openapi.common.dependency.Artifact;
+import io.github.potjerodekool.openapi.common.dependency.DependencyChecker;
 
 import java.io.File;
 import java.util.Arrays;

@@ -1,8 +1,8 @@
 package io.github.potjerodekool.openapi;
 
-import io.github.potjerodekool.openapi.internal.generate.Templates;
-import io.github.potjerodekool.openapi.internal.generate.model.model.element.Annotation;
-import io.github.potjerodekool.openapi.internal.generate.model.model.type.ReferenceType;
+import io.github.potjerodekool.openapi.common.generate.Templates;
+import io.github.potjerodekool.openapi.common.generate.model.element.Annotation;
+import io.github.potjerodekool.openapi.common.generate.model.type.ReferenceType;
 import org.junit.jupiter.api.Test;
 
 public class FieldTest {

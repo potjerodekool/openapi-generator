@@ -40,6 +40,8 @@
     </distributionManagement>
 
     <modules>
+        <module>generator-common</module>
+        <module>generator-spring-web</module>
         <module>code-generator</module>
         <module>maven-plugin</module>
     </modules>
@@ -56,6 +58,7 @@
         <maven.plugin.plugin.version>3.9.0</maven.plugin.plugin.version>
         <jacoco.maven.plugin.version>0.8.10</jacoco.maven.plugin.version>
         <build-helper.maven.plugin.version>3.4.0</build-helper.maven.plugin.version>
+        <generator.version>${project.version}</generator.version>
     </properties>
 
 </project>

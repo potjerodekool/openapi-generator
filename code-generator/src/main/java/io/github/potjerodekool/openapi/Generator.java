@@ -7,16 +7,20 @@ import io.github.potjerodekool.codegen.Language;
 import io.github.potjerodekool.codegen.io.Location;
 import io.github.potjerodekool.codegen.model.util.type.Types;
 import io.github.potjerodekool.codegen.resolve.Enter;
+import io.github.potjerodekool.codegen.resolve.ImportOrganiser;
 import io.github.potjerodekool.codegen.resolve.Resolver;
-import io.github.potjerodekool.openapi.dependency.DependencyChecker;
+import io.github.potjerodekool.openapi.common.ApiConfiguration;
+import io.github.potjerodekool.openapi.common.GeneratorConfig;
+import io.github.potjerodekool.openapi.common.OpenApiEnvironment;
+import io.github.potjerodekool.openapi.common.Project;
+import io.github.potjerodekool.openapi.common.dependency.DependencyChecker;
+import io.github.potjerodekool.openapi.common.generate.api.CodeGenerator;
 import io.github.potjerodekool.openapi.internal.*;
-import io.github.potjerodekool.openapi.internal.di.ApplicationContext;
-import io.github.potjerodekool.openapi.internal.di.DefaultApplicationContext;
+import io.github.potjerodekool.openapi.common.dependency.ApplicationContext;
+import io.github.potjerodekool.openapi.internal.di.bean.DefaultApplicationContext;
 import io.github.potjerodekool.openapi.internal.di.ClassPathScanner;
-import io.github.potjerodekool.openapi.internal.generate.api.AbstractCodeGenerator;
-import io.github.potjerodekool.openapi.internal.generate.springmvc.SpringMvcGenerator;
-import io.github.potjerodekool.openapi.log.LogLevel;
-import io.github.potjerodekool.openapi.log.Logger;
+import io.github.potjerodekool.openapi.common.log.LogLevel;
+import io.github.potjerodekool.openapi.common.log.Logger;
 import io.swagger.parser.OpenAPIParser;
 import io.swagger.v3.parser.core.models.SwaggerParseResult;
 
@@ -100,8 +104,10 @@ public class Generator {
                 applicationContext
         );
 
-        final var springGenerator = new SpringMvcGenerator();
-        springGenerator.generateCommon(openApiEnvironment);
+        final CodeGenerator codeGenerator = new GeneratorRegistry()
+                .loadCodeGenerator("spring-mvc", "Java");
+
+        codeGenerator.generateCommon(openApiEnvironment);
 
         final var standardApiConfiguration = apiConfigurations.stream()
                 .filter(ApiConfiguration::generateApiDefinitions)
@@ -114,7 +120,7 @@ public class Generator {
                     final var generateConfig = apiConfiguration == standardApiConfiguration;
                     generateApi(
                             openApiEnvironment,
-                            springGenerator,
+                            codeGenerator,
                             apiConfiguration,
                             generateConfig
                     );
@@ -122,7 +128,6 @@ public class Generator {
                 });
 
         generateCompilationUnits(environment, language);
-        springGenerator.generate(environment);
         storeLastModified();
     }
 
@@ -148,11 +153,14 @@ public class Generator {
     }
 
     private boolean shouldProcess(final ApiConfiguration apiConfiguration) {
+        return true;
+        /* TODO tempory disabled so that api is always generated
         final var apiFile = apiConfiguration.apiFile();
         final var fileName = apiFile.getAbsolutePath();
         final var lastModified = apiFile.lastModified();
         final var lastKnownLastModified = lastModifiedMap.get(fileName);
         return lastKnownLastModified == null || lastModified > lastKnownLastModified;
+        */
     }
 
     private void generateCompilationUnits(final Environment environment,
@@ -165,9 +173,12 @@ public class Generator {
                 environment.getJavaTypes(),
                 environment.getSymbolTable());
 
+        final var importOrganiser = new ImportOrganiser();
+
         environment.getCompilationUnits().forEach(compilationUnit -> {
             compilationUnit.accept(enter, null);
             resolver.resolve(compilationUnit);
+            importOrganiser.organiseImports(compilationUnit);
 
             try {
                 filer.writeSource(compilationUnit, language);
@@ -179,7 +190,7 @@ public class Generator {
 
 
     private void generateApi(final OpenApiEnvironment openApiEnvironment,
-                             final AbstractCodeGenerator codeGenerator,
+                             final CodeGenerator codeGenerator,
                              final ApiConfiguration apiConfiguration,
                              final boolean generateConfigs) {
         final var apiFile = apiConfiguration.apiFile().getAbsoluteFile();
@@ -237,7 +248,7 @@ public class Generator {
     }
 
     private void doGenerateApi(final OpenApiEnvironment openApiEnvironment,
-                               final AbstractCodeGenerator codeGenerator,
+                               final CodeGenerator codeGenerator,
                                final File apiFile,
                                final ApiConfiguration apiConfiguration,
                                final boolean generateConfigs) {
@@ -248,7 +259,8 @@ public class Generator {
                 openApiEnvironment,
                 openApi,
                 apiConfiguration,
-                generateConfigs);
+                generateConfigs
+        );
     }
 
     private SwaggerParseResult parse(final File file) {

@@ -120,28 +120,25 @@
                 <groupId>io.github.potjerodekool</groupId>
                 <artifactId>open-api-maven-plugin</artifactId>
                 <version>1.0-SNAPSHOT</version>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>generate</goal>
-                        </goals>
-                        <configuration>
+                <configuration>
+                    <basePackageName>io.github.potjerodekool.demo.api</basePackageName>
+                    <language>java</language>
+                    <features>
+                        <experimental.modelcodegen>true</experimental.modelcodegen>
+                    </features>
+                    <apis>
+                        <api>
+                            <!--
+                            <openApiFile>api.json</openApiFile>
+                            <openApiFile>petstore/petstore.yaml</openApiFile>
+                            -->
+                            <openApiFile>liftbook.json</openApiFile>
                             <basePackageName>io.github.potjerodekool.demo.api</basePackageName>
-                            <language>java</language>
-                            <features>
-                                <experimental.modelcodegen>true</experimental.modelcodegen>
-                            </features>
-                            <apis>
-                                <api>
-                                    <openApiFile>petstore/petstore.yaml</openApiFile>
-                                    <basePackageName>io.github.potjerodekool.demo.api</basePackageName>
-                                    <generateApiDefinitions>true</generateApiDefinitions>
-                                    <generateApiImplementations>true</generateApiImplementations>
-                                </api>
-                            </apis>
-                        </configuration>
-                    </execution>
-                </executions>
+                            <generateApiDefinitions>true</generateApiDefinitions>
+                            <generateApiImplementations>true</generateApiImplementations>
+                        </api>
+                    </apis>
+                </configuration>
             </plugin>
             <!-- Disabled
             <plugin>

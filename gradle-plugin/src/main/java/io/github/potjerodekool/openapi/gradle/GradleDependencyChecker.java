@@ -1,7 +1,6 @@
 package io.github.potjerodekool.openapi.gradle;
 
-import io.github.potjerodekool.openapi.dependency.Artifact;
-import io.github.potjerodekool.openapi.dependency.DependencyChecker;
+import io.github.potjerodekool.openapi.common.dependency.Artifact;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.ResolvedArtifact;
@@ -12,7 +11,7 @@ import java.util.Objects;
 import java.util.stream.Stream;
 import java.util.zip.ZipFile;
 
-public class GradleDependencyChecker implements DependencyChecker {
+public class GradleDependencyChecker implements io.github.potjerodekool.openapi.common.dependency.DependencyChecker {
 
     private final Project project;
 

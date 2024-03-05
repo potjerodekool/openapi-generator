@@ -4,15 +4,14 @@ import io.github.potjerodekool.codegen.Environment;
 import io.github.potjerodekool.codegen.Language;
 import io.github.potjerodekool.codegen.io.Filer;
 import io.github.potjerodekool.codegen.io.Location;
-import io.github.potjerodekool.openapi.GeneratorConfig;
+import io.github.potjerodekool.openapi.common.GeneratorConfig;
 import io.github.potjerodekool.openapi.InMemoryFileManager;
-import io.github.potjerodekool.openapi.internal.generate.Templates;
+import io.github.potjerodekool.openapi.common.generate.api.RequestGenerator;
+import io.github.potjerodekool.openapi.common.generate.Templates;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;

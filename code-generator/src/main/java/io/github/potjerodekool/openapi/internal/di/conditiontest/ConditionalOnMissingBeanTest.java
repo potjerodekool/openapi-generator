@@ -1,8 +1,8 @@
 package io.github.potjerodekool.openapi.internal.di.conditiontest;
 
-import io.github.potjerodekool.openapi.internal.di.ApplicationContext;
-import io.github.potjerodekool.openapi.internal.di.BeanDefinition;
-import io.github.potjerodekool.openapi.internal.di.ConditionalOnMissingBean;
+import io.github.potjerodekool.openapi.common.dependency.ApplicationContext;
+import io.github.potjerodekool.openapi.internal.di.bean.BeanDefinition;
+import io.github.potjerodekool.openapi.common.dependency.ConditionalOnMissingBean;
 import io.github.potjerodekool.openapi.internal.di.DIException;
 
 public class ConditionalOnMissingBeanTest implements ConditionalTest<ConditionalOnMissingBean> {

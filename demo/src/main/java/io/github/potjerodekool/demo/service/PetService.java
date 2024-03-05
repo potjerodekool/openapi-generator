@@ -37,7 +37,7 @@ public class PetService implements PetsServiceApi {
     }
 
     @Override
-    public List<PetDto> listPets(final int limit,
+    public List<PetDto> listPets(final Integer limit,
                                  final Request request) {
         return List.of();
     }

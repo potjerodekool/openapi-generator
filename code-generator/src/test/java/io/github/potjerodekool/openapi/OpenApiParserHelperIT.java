@@ -1,9 +1,11 @@
 package io.github.potjerodekool.openapi;
 
 import io.github.potjerodekool.codegen.Language;
-import io.github.potjerodekool.openapi.dependency.Artifact;
-import io.github.potjerodekool.openapi.dependency.Dependency;
-import io.github.potjerodekool.openapi.dependency.DependencyChecker;
+import io.github.potjerodekool.openapi.common.ApiConfiguration;
+import io.github.potjerodekool.openapi.common.Project;
+import io.github.potjerodekool.openapi.common.dependency.Artifact;
+import io.github.potjerodekool.openapi.internal.di.Dependency;
+import io.github.potjerodekool.openapi.common.dependency.DependencyChecker;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
