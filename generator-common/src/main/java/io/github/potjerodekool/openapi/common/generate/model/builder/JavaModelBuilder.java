@@ -74,6 +74,26 @@ public class JavaModelBuilder {
                                final HttpMethod httpMethod,
                                final Schema<?> schema,
                                final Model model, final HashSet<String> processedProperties) {
+        addInhiredProperties(openAPI, httpMethod, schema, model, processedProperties);
+
+        if (schema.getProperties() != null) {
+            schema.getProperties()
+                    .forEach((propertyName, propertySchema) ->
+                            addProperty(
+                                    openAPI,
+                                    httpMethod,
+                                    propertyName,
+                                    propertySchema,
+                                    model,
+                                    processedProperties
+                            ));
+        }
+    }
+
+    private void addInhiredProperties(final OpenAPI openAPI,
+                                      final HttpMethod httpMethod,
+                                      final Schema<?> schema,
+                                      final Model model, final HashSet<String> processedProperties) {
         if (schema.getAllOf() != null) {
             Schema<?> ignoreSchema;
 
@@ -125,19 +145,6 @@ public class JavaModelBuilder {
                 }
             }
         }
-
-        if (schema.getProperties() != null) {
-            schema.getProperties()
-                    .forEach((propertyName, propertySchema) ->
-                            addProperty(
-                                    openAPI,
-                                    httpMethod,
-                                    propertyName,
-                                    propertySchema,
-                                    model,
-                                    processedProperties
-                            ));
-        }
     }
 
     private void collectPropertyNames(final Schema<?> schema,
@@ -159,8 +166,8 @@ public class JavaModelBuilder {
             return;
         }
 
-        final var resolvedPropertySchema = SchemaResolver.resolve(openAPI, propertySchema)
-                .schema();
+        final var resolvedSchemaResult = SchemaResolver.resolve(openAPI, propertySchema);
+        final var resolvedPropertySchema = resolvedSchemaResult.schema();
 
         if (resolvedPropertySchema != null) {
             final var isPatch = httpMethod == HttpMethod.PATCH
@@ -168,6 +175,12 @@ public class JavaModelBuilder {
                     : null;
 
             var type = resolveType(resolvedPropertySchema, isPatch, openAPI);
+
+            if ( (resolvedPropertySchema instanceof ObjectSchema || resolvedPropertySchema instanceof ComposedSchema)
+                    && type instanceof ReferenceType referenceType) {
+                referenceType.packageName(modelPackageName);
+                referenceType.name(resolvedSchemaResult.name());
+            }
 
             if (httpMethod == HttpMethod.PATCH) {
                 type = new ReferenceType()

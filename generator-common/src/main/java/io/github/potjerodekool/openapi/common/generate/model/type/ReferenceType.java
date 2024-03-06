@@ -32,6 +32,10 @@ public class ReferenceType implements Type {
         return name;
     }
 
+    public ReferenceType packageName(final String packageName) {
+        this.name = packageName + "." + getSimpleName();
+        return this;
+    }
 
     public ReferenceType name(final String name) {
         this.name = name;
