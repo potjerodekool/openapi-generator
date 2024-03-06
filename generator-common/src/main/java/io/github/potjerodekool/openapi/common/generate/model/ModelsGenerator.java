@@ -3,6 +3,7 @@ package io.github.potjerodekool.openapi.common.generate.model;
 import io.github.potjerodekool.codegen.io.Filer;
 import io.github.potjerodekool.codegen.io.Location;
 import io.github.potjerodekool.openapi.common.dependency.DependencyChecker;
+import io.github.potjerodekool.openapi.common.generate.*;
 import io.github.potjerodekool.openapi.common.generate.model.adapter.CheckerModelAdapter;
 import io.github.potjerodekool.openapi.common.generate.model.adapter.HibernateValidationModelAdapter;
 import io.github.potjerodekool.openapi.common.generate.model.adapter.ModelAdapter;
@@ -11,10 +12,6 @@ import io.github.potjerodekool.openapi.common.generate.model.element.Annotation;
 import io.github.potjerodekool.openapi.common.generate.model.element.Model;
 import io.github.potjerodekool.openapi.common.generate.model.adapter.JakartaValidationModelAdapter;
 import io.github.potjerodekool.openapi.common.OpenApiEnvironment;
-import io.github.potjerodekool.openapi.common.generate.Templates;
-import io.github.potjerodekool.openapi.common.generate.OpenApiWalker;
-import io.github.potjerodekool.openapi.common.generate.OpenApiWalkerListener;
-import io.github.potjerodekool.openapi.common.generate.SchemaResolver;
 import io.swagger.models.HttpMethod;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
@@ -138,6 +135,8 @@ public class ModelsGenerator implements OpenApiWalkerListener {
                              final HttpMethod httpMethod,
                              final String name,
                              final Schema<?> resolvedSchema) {
+        generateSuperClass(openAPI, httpMethod, name, resolvedSchema);
+
         final var model = modelBuilder.build(openAPI, httpMethod, name, resolvedSchema);
         model.packageName(this.modelPackageName);
 
@@ -154,6 +153,17 @@ public class ModelsGenerator implements OpenApiWalkerListener {
         );
 
         return model;
+    }
+
+    private void generateSuperClass(final OpenAPI openAPI,
+                                    final HttpMethod httpMethod,
+                                    final String name,
+                                    final Schema<?> resolvedSchema) {
+        if (resolvedSchema.getAllOf() != null && resolvedSchema.getAllOf().size() == 1) {
+            //Generate super class
+            final var parentSchema = resolvedSchema.getAllOf().getFirst();
+            visitSchema(openAPI, httpMethod, name, null, parentSchema);
+        }
     }
 
     private void adaptModel(final Model model,

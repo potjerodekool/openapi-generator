@@ -34,4 +34,30 @@ public final class SchemaResolver {
 
         return new ResolvedSchemaResult(schema.getName(), schema);
     }
+
+    public static ResolvedSchemaResult resolve(final OpenAPI openAPI,
+                                               final String ref) {
+        final var components = openAPI.getComponents();
+
+        if (components == null) {
+            return new ResolvedSchemaResult(
+                    null,
+                    null
+            );
+        }
+
+        final var schemas = components.getSchemas();
+
+        if (ref != null && ref.startsWith(COMPONENT_SCHEMA_PREFIX)) {
+            final var name = ref.substring(COMPONENT_SCHEMA_PREFIX.length());
+            final var resolvedSchema = schemas.get(name);
+            return new ResolvedSchemaResult(name, resolvedSchema);
+        }
+
+        return new ResolvedSchemaResult(
+                null,
+                null
+        );
+    }
+
 }

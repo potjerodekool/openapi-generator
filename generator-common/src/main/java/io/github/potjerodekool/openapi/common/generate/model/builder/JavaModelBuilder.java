@@ -1,5 +1,6 @@
 package io.github.potjerodekool.openapi.common.generate.model.builder;
 
+import io.github.potjerodekool.openapi.common.generate.ExtensionsHelper;
 import io.github.potjerodekool.openapi.common.generate.model.element.Model;
 import io.github.potjerodekool.openapi.common.generate.model.type.Type;
 import io.github.potjerodekool.openapi.common.generate.SchemaResolver;
@@ -9,6 +10,12 @@ import io.github.potjerodekool.openapi.common.generate.model.type.ReferenceType;
 import io.swagger.models.HttpMethod;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.media.*;
+
+import java.sql.Ref;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 public class JavaModelBuilder {
 
@@ -25,27 +32,92 @@ public class JavaModelBuilder {
         final var model = new Model();
         model.simpleName(name);
 
-        addProperties(openAPI, httpMethod, schema, model);
+        processModelExtensions(schema, model);
 
+        final var processedProperties = new HashSet<String>();
+        addProperties(openAPI, httpMethod, schema, model, processedProperties);
         return model;
+    }
+
+    private void processModelExtensions(final Schema<?> resolvedSchema, final Model model) {
+        final List<String> typeArgs = ExtensionsHelper.getExtension(resolvedSchema.getExtensions(), "x-type-args", List.class);
+
+        if (!typeArgs.isEmpty()) {
+            model.typeArgs(typeArgs);
+        }
     }
 
     private void addProperties(final OpenAPI openAPI,
                                final HttpMethod httpMethod,
                                final Schema<?> schema,
-                               final Model model) {
+                               final Model model, final HashSet<String> processedProperties) {
         if (schema.getAllOf() != null) {
-            schema.getAllOf().forEach(otherSchema -> {
+            Schema<?> ignoreSchema;
+
+            if (schema.getAllOf().size() == 1) {
+                ignoreSchema = SchemaResolver.resolve(openAPI, schema.getAllOf().getFirst()).schema();
+                collectPropertyNames(ignoreSchema, processedProperties);
+
+                final var parentType = resolveType(schema.getAllOf().getFirst(), httpMethod == HttpMethod.PATCH, openAPI);
+
+                if (parentType instanceof ReferenceType referenceType) {
+                    model.superType(referenceType);
+                    final List<Map<String, String>> typeArgs = ExtensionsHelper.getExtension(
+                            schema.getExtensions(),
+                            "x-super-type-args",
+                            List.class
+                    );
+
+                    if (!typeArgs.isEmpty()) {
+                        for (final Map<String, String> typeArg : typeArgs) {
+                            final var ref = typeArg.get("$ref");
+
+                            if (ref != null) {
+                                final var resolved = SchemaResolver.resolve(
+                                        openAPI,
+                                        ref
+                                );
+
+                                if (resolved.schema() != null) {
+                                    final var type = (ReferenceType) resolveType(resolved.schema(), httpMethod == HttpMethod.PATCH, openAPI);
+                                    type.name(resolved.name());
+                                    referenceType.typeArg(type);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            for (final Schema<?> otherSchema : schema.getAllOf()) {
                 final var resolved = SchemaResolver.resolve(openAPI, otherSchema);
 
                 if (resolved.schema() != null) {
-                    addProperties(openAPI, httpMethod, resolved.schema(), model);
+                    addProperties(openAPI, httpMethod, resolved.schema(), model, processedProperties);
                 }
-            });
+            }
         }
 
         if (schema.getProperties() != null) {
-            schema.getProperties().forEach((propertyName, propertySchema) -> addProperty(openAPI, httpMethod, propertyName, propertySchema, model));
+            schema.getProperties()
+                    .forEach((propertyName, propertySchema) ->
+                            addProperty(
+                                    openAPI,
+                                    httpMethod,
+                                    propertyName,
+                                    propertySchema,
+                                    model,
+                                    processedProperties
+                            ));
+        }
+    }
+
+    private void collectPropertyNames(final Schema<?> schema,
+                                      final HashSet<String> processedProperties) {
+        final var properties = schema.getProperties();
+
+        if (properties != null) {
+            processedProperties.addAll(properties.keySet());
         }
     }
 
@@ -53,7 +125,12 @@ public class JavaModelBuilder {
     private void addProperty(final OpenAPI openAPI,
                              final HttpMethod httpMethod,
                              final String propertyName,
-                             final Schema<?> propertySchema, final Model model) {
+                             final Schema<?> propertySchema, final Model model, final HashSet<String> processedProperties) {
+        if (model.getProperty(propertyName).isPresent()
+            || processedProperties.contains(propertyName)) {
+            return;
+        }
+
         final var resolvedPropertySchema = SchemaResolver.resolve(openAPI, propertySchema)
                 .schema();
 
@@ -74,6 +151,7 @@ public class JavaModelBuilder {
                     .simpleName(propertyName)
                     .type(type);
             model.enclosedElement(property);
+            processedProperties.add(propertyName);
         }
     }
 
@@ -92,7 +170,19 @@ public class JavaModelBuilder {
             case ArraySchema arraySchema -> resolveListType(arraySchema, openAPI, isPatch);
             case UUIDSchema ignored -> new ReferenceType().name("java.util.UUID");
             case BooleanSchema booleanSchema -> resolveBooleanType(booleanSchema);
-            case ObjectSchema ignored -> new ReferenceType().name("java.lang.Object");
+            case ObjectSchema objectSchema -> {
+                final var typeArg = ExtensionsHelper.getExtension(
+                        objectSchema.getExtensions(),
+                        "x-type-arg",
+                        String.class
+                );
+
+                if (typeArg == null) {
+                    yield new ReferenceType().name("java.lang.Object");
+                } else {
+                    yield new ReferenceType().name(typeArg);
+                }
+            }
             default -> {
                 if (schema.get$ref() != null) {
                     final var result = SchemaResolver.resolve(openAPI, schema);
