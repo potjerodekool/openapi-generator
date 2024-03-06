@@ -2,16 +2,21 @@ package io.github.potjerodekool.openapi.spring.web.generate;
 
 import io.github.potjerodekool.codegen.model.type.TypeKind;
 import io.github.potjerodekool.codegen.template.model.type.*;
+import io.github.potjerodekool.openapi.common.generate.ExtensionsHelper;
 import io.github.potjerodekool.openapi.common.generate.OpenApiTypeUtils;
 import io.github.potjerodekool.openapi.common.generate.ResolvedSchemaResult;
 import io.github.potjerodekool.openapi.common.generate.SchemaResolver;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.media.*;
 
+import java.util.List;
+import java.util.Map;
+
 public class TypeUtilsSpringImpl implements OpenApiTypeUtils {
     @Override
     public TypeExpr createType(final OpenAPI openAPI,
                                final Schema<?> schema,
+                               final Map<String, Object> extensions,
                                final String packageName,
                                final String mediaType,
                                final Boolean isRequired) {
@@ -28,11 +33,21 @@ public class TypeUtilsSpringImpl implements OpenApiTypeUtils {
             case JsonSchema ignored -> throw new UnsupportedOperationException();
             case MapSchema mapSchema -> createMapType(openAPI, mapSchema, packageName, mediaType, isRequired);
             case NumberSchema numberSchema -> createNumberType(numberSchema, isRequired);
-            case ObjectSchema ignored -> new ClassOrInterfaceTypeExpr("java.lang.Object");
+            case ObjectSchema ignored -> {
+                final var type = new ClassOrInterfaceTypeExpr("java.lang.Object");
+                processExtensions(openAPI, type, packageName, extensions);
+                yield type;
+            }
             case PasswordSchema ignored -> createStringTypeExpr();
             case StringSchema ignored -> createStringTypeExpr();
             case UUIDSchema ignored -> createUuidTypeExpr();
-            default -> createTypeDefault(openAPI, schema, packageName, mediaType, isRequired);
+            default -> createTypeDefault(
+                    openAPI,
+                    schema,
+                    extensions,
+                    packageName,
+                    mediaType,
+                    isRequired);
         };
     }
 
@@ -92,6 +107,7 @@ public class TypeUtilsSpringImpl implements OpenApiTypeUtils {
 
     private TypeExpr createTypeDefault(final OpenAPI openAPI,
                                        final Schema<?> schema,
+                                       final Map<String, Object> extensions,
                                        final String packageName,
                                        final String mediaType,
                                        final Boolean isRequired) {
@@ -100,8 +116,8 @@ public class TypeUtilsSpringImpl implements OpenApiTypeUtils {
 
         return switch (resolvedSchema) {
             case null -> throw new NullPointerException("Resolved schema is null");
-            case ObjectSchema ignored -> createObjectOrComposedType(resolved, packageName);
-            case ComposedSchema ignored -> createObjectOrComposedType(resolved, packageName);
+            case ObjectSchema ignored -> createObjectOrComposedType(openAPI, resolved, extensions, packageName);
+            case ComposedSchema ignored -> createObjectOrComposedType(openAPI, resolved, extensions, packageName);
             default -> {
                 if (resolvedSchema.getClass() == Schema.class) {
                     throw new UnsupportedOperationException();
@@ -109,6 +125,7 @@ public class TypeUtilsSpringImpl implements OpenApiTypeUtils {
                     yield createType(
                             openAPI,
                             resolved.schema(),
+                            extensions,
                             packageName,
                             mediaType,
                             isRequired
@@ -118,12 +135,54 @@ public class TypeUtilsSpringImpl implements OpenApiTypeUtils {
         };
     }
 
-    private TypeExpr createObjectOrComposedType(final ResolvedSchemaResult resolved, final String packageName){
+    private TypeExpr createObjectOrComposedType(final OpenAPI openAPI,
+                                                final ResolvedSchemaResult resolved,
+                                                final Map<String, Object> extensions,
+                                                final String packageName) {
         final var name = resolved.name();
         if (name != null) {
-            return new ClassOrInterfaceTypeExpr(packageName + "." + resolved.name());
+            final var type = new ClassOrInterfaceTypeExpr(packageName + "." + resolved.name());
+            processExtensions(openAPI, type, packageName, extensions);
+            return type;
         } else {
             return new ClassOrInterfaceTypeExpr("java.lang.Object");
+        }
+    }
+
+    private void processExtensions(final OpenAPI openAPI,
+                                   final ClassOrInterfaceTypeExpr type,
+                                   final String packageName,
+                                   final Map<String, Object> extensions) {
+        final var typeArgs = ExtensionsHelper.getExtension(extensions, "x-type-args", List.class);
+
+        if (typeArgs != null) {
+            for (final Object typeArg : typeArgs) {
+                if (typeArg instanceof String className) {
+                    final var typeArgType = new ClassOrInterfaceTypeExpr(className);
+                    type.typeArgument(typeArgType);
+                } else if (typeArg instanceof Map<?, ?> map) {
+                    final var ref = (String) map.get("$ref");
+
+                    if (ref != null) {
+                        final var resolvedSchema = SchemaResolver.resolve(openAPI, ref);
+
+                        final var typeArgType = createType(
+                                openAPI,
+                                resolvedSchema.schema(),
+                                null,
+                                packageName,
+                                null,
+                                true
+                        );
+
+                        if (typeArgType instanceof ClassOrInterfaceTypeExpr classOrInterfaceTypeExpr) {
+                            classOrInterfaceTypeExpr.name(packageName + "." + resolvedSchema.name());
+                        }
+
+                        type.typeArgument(typeArgType);
+                    }
+                }
+            }
         }
     }
 
@@ -134,6 +193,7 @@ public class TypeUtilsSpringImpl implements OpenApiTypeUtils {
         final var componentType = createType(
                 openAPI,
                 arraySchema.getItems(),
+                null,
                 packageName,
                 mediaType,
                 false
@@ -156,6 +216,7 @@ public class TypeUtilsSpringImpl implements OpenApiTypeUtils {
         final var valueType = createType(
                 openAPI,
                 (Schema<?>) mapSchema.getAdditionalProperties(),
+                null,
                 packageName,
                 mediaType,
                 isRequired

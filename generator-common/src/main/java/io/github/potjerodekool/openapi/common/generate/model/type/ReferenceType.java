@@ -82,4 +82,9 @@ public class ReferenceType implements Type {
         this.annotations.add(annotation);
         return this;
     }
+
+    @Override
+    public TypeKind getKind() {
+        return TypeKind.REFERENCE;
+    }
 }

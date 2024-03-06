@@ -202,7 +202,7 @@ public abstract class AbstractGenerator implements OpenApiWalkerListener {
             final TypeExpr bodyType;
 
             if (bodyMediaType != null) {
-                final var resolved = SchemaResolver.resolve(api, bodyMediaType);
+                final var resolved = SchemaResolver.resolve(api, bodyMediaType.schema());
 
                 if (httpMethod == HttpMethod.PATCH) {
                     final var schemaName = resolved.name();
@@ -212,6 +212,7 @@ public abstract class AbstractGenerator implements OpenApiWalkerListener {
                         bodyType = typeUtils.createType(
                                 api,
                                 bodyObjectSchema,
+                                null,
                                 modelPackageName,
                                 ContentTypes.JSON,
                                 requestBody.getRequired()
@@ -220,6 +221,7 @@ public abstract class AbstractGenerator implements OpenApiWalkerListener {
                         final var type = (ClassOrInterfaceTypeExpr) typeUtils.createType(
                                 api,
                                 bodyObjectSchema,
+                                null,
                                 modelPackageName,
                                 ContentTypes.JSON,
                                 requestBody.getRequired()
@@ -232,7 +234,8 @@ public abstract class AbstractGenerator implements OpenApiWalkerListener {
                 } else {
                     bodyType = typeUtils.createType(
                             api,
-                            bodyMediaType,
+                            bodyMediaType.schema(),
+                            null,
                             modelPackageName,
                             ContentTypes.JSON,
                             requestBody.getRequired()
@@ -263,6 +266,7 @@ public abstract class AbstractGenerator implements OpenApiWalkerListener {
         var type = typeUtils.createType(
                 openAPI,
                 openApiParameter.getSchema(),
+                null,
                 modelPackageName,
                 null,
                 openApiParameter.getRequired()

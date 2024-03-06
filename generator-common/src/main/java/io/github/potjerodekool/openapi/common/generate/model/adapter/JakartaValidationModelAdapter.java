@@ -26,10 +26,14 @@ public class JakartaValidationModelAdapter implements ModelAdapter {
 
     @Override
     public void adapt(final Model model, final ObjectSchema schema) {
-        schema.getProperties().forEach((propertyName, propertySchema) -> {
-            final var propertyOptional = model.getProperty(propertyName);
-            propertyOptional.ifPresent(property -> adaptProperty(propertySchema, property));
-        });
+        final var properties = schema.getProperties();
+
+        if (properties != null) {
+            properties.forEach((propertyName, propertySchema) -> {
+                final var propertyOptional = model.getProperty(propertyName);
+                propertyOptional.ifPresent(property -> adaptProperty(propertySchema, property));
+            });
+        }
     }
 
     protected void adaptProperty(final Schema<?> propertySchema,

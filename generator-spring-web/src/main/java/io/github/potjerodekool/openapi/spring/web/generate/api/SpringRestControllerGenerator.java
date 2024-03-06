@@ -152,6 +152,7 @@ public class SpringRestControllerGenerator extends AbstractApiGenerator {
                     ? getTypeUtils().createType(
                     openAPI,
                     jsonContent.getSchema(),
+                    null,
                     getModelPackageName(),
                     ContentTypes.JSON,
                     requestBody.getRequired())

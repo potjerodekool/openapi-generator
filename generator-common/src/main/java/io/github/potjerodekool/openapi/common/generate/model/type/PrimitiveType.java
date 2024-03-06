@@ -12,4 +12,9 @@ public class PrimitiveType implements Type {
         this.name = name;
         return this;
     }
+
+    @Override
+    public TypeKind getKind() {
+        return TypeKind.PRIMITIVE;
+    }
 }

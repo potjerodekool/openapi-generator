@@ -2,20 +2,18 @@ package io.github.potjerodekool.openapi.common.generate.model.builder;
 
 import io.github.potjerodekool.openapi.common.generate.ExtensionsHelper;
 import io.github.potjerodekool.openapi.common.generate.model.element.Model;
+import io.github.potjerodekool.openapi.common.generate.model.type.TypeVariable;
 import io.github.potjerodekool.openapi.common.generate.model.type.Type;
 import io.github.potjerodekool.openapi.common.generate.SchemaResolver;
 import io.github.potjerodekool.openapi.common.generate.model.element.ModelProperty;
 import io.github.potjerodekool.openapi.common.generate.model.type.PrimitiveType;
 import io.github.potjerodekool.openapi.common.generate.model.type.ReferenceType;
+import io.github.potjerodekool.openapi.common.generate.model.type.WildCardType;
 import io.swagger.models.HttpMethod;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.media.*;
 
-import java.sql.Ref;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 public class JavaModelBuilder {
 
@@ -27,15 +25,16 @@ public class JavaModelBuilder {
 
     public Model build(final OpenAPI openAPI,
                        final HttpMethod httpMethod,
+                       final String packageName,
                        final String name,
                        final Schema<?> schema) {
         final var model = new Model();
         model.simpleName(name);
-
-        processModelExtensions(schema, model);
-
+        model.packageName(packageName);
         final var processedProperties = new HashSet<String>();
         addProperties(openAPI, httpMethod, schema, model, processedProperties);
+
+        processModelExtensions(schema, model);
         return model;
     }
 
@@ -43,7 +42,31 @@ public class JavaModelBuilder {
         final List<String> typeArgs = ExtensionsHelper.getExtension(resolvedSchema.getExtensions(), "x-type-args", List.class);
 
         if (!typeArgs.isEmpty()) {
-            model.typeArgs(typeArgs);
+            final var typeArguments = new ArrayList<TypeVariable>();
+            final var className = model.getPackageName() + "." + model.getSimpleName();
+
+            final var selfTypeArgs = new ArrayList<Type>();
+            selfTypeArgs.add(new TypeVariable().name("SELF"));
+            selfTypeArgs.addAll(typeArgs.stream()
+                    .map(name -> new TypeVariable().name(name))
+                    .toList());
+
+            typeArguments.add(new TypeVariable()
+                    .name("SELF")
+                    .bounds(new WildCardType().extendsBound(
+                            new ReferenceType()
+                                    .name(className)
+                                    .typeArgs(selfTypeArgs)
+                    ))
+            );
+
+            typeArguments.addAll(
+                    typeArgs.stream()
+                            .map(name -> new TypeVariable().name(name))
+                            .toList()
+            );
+
+            model.typeArguments(typeArguments);
         }
     }
 
@@ -69,6 +92,11 @@ public class JavaModelBuilder {
                     );
 
                     if (!typeArgs.isEmpty()) {
+                        referenceType.typeArg(
+                                new ReferenceType()
+                                        .name(model.getPackageName() + "." + model.getSimpleName())
+                        );
+
                         for (final Map<String, String> typeArg : typeArgs) {
                             final var ref = typeArg.get("$ref");
 
@@ -127,7 +155,7 @@ public class JavaModelBuilder {
                              final String propertyName,
                              final Schema<?> propertySchema, final Model model, final HashSet<String> processedProperties) {
         if (model.getProperty(propertyName).isPresent()
-            || processedProperties.contains(propertyName)) {
+                || processedProperties.contains(propertyName)) {
             return;
         }
 

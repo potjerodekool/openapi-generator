@@ -16,7 +16,9 @@ public class CheckerModelAdapter implements ModelAdapter {
                                  final ObjectSchema schema) {
         model.getProperties().forEach(modelProperty -> {
             final var name = modelProperty.getSimpleName();
-            final var propertySchema = schema.getProperties().get(name);
+            final var propertySchema = schema.getProperties() != null
+                    ? schema.getProperties().get(name)
+                    : null;
 
             if (propertySchema == null
                     || Boolean.FALSE.equals(propertySchema.getNullable())) {

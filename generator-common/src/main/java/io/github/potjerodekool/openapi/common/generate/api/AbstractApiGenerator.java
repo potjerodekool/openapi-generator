@@ -74,9 +74,12 @@ public abstract class AbstractApiGenerator extends AbstractGenerator {
         if (responseTypes.isEmpty()) {
             responseType = new ClassOrInterfaceTypeExpr("java.lang.Void");
         } else if (responseTypes.size() == 1) {
+            final var schemaAndExtensions = responseTypes.getFirst();
+
             responseType = getTypeUtils().createType(
                     api,
-                    responseTypes.getFirst(),
+                    schemaAndExtensions.schema(),
+                    schemaAndExtensions.extensions(),
                     getModelPackageName(),
                     null,
                     null

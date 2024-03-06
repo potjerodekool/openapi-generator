@@ -1,6 +1,7 @@
 setterBuilder(property, model)::= <<
-public <model.simpleName> <property.builderSetterName>(final <type(property.type)> <property.simpleName>) {
+public
+ <if(model.typeArguments)>SELF<else><model.simpleName><endif> <property.builderSetterName>(final <type(property.type)> <property.simpleName>) {
     this.<property.simpleName> = <property.simpleName>;
-    return this;
+    return <if(model.typeArguments)>(SELF)<endif> this;
 }
 >>

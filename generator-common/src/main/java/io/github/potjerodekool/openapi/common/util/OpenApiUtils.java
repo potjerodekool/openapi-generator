@@ -55,7 +55,7 @@ public final class OpenApiUtils {
                 : Map.of();
     }
 
-    public static List<? extends Schema<?>> resolveResponseTypes(final Operation operation) {
+    public static List<SchemaAndExtensions> resolveResponseTypes(final Operation operation) {
         if (operation.getResponses() == null) {
             return List.of();
         }
@@ -75,29 +75,38 @@ public final class OpenApiUtils {
                 .toList();
     }
 
-    public static @Nullable Schema<?> resolveResponseMediaType(final Content contentMediaType) {
-        final var jsonMediaType = findJsonMediaType(contentMediaType);
+    public static @Nullable SchemaAndExtensions resolveResponseMediaType(final Content contentMediaType) {
+        final var jsonSchemaAndExtensions = findJsonMediaType(contentMediaType);
 
-        if (jsonMediaType != null) {
-            return jsonMediaType;
+        if (jsonSchemaAndExtensions != null) {
+            return jsonSchemaAndExtensions;
         } else {
             //Not returning json, maybe image/jpg or */*
             if (contentMediaType != null && contentMediaType.size() == 1) {
                 final var content = contentMediaType.values().iterator().next();
                 if (content != null) {
-                    return content.getSchema();
+                    content.getExtensions();
+
+                    return content.getSchema() != null
+                            ? new SchemaAndExtensions(content.getSchema(), content.getExtensions())
+                            : null;
                 }
             }
             return null;
         }
     }
 
-    public static @Nullable Schema<?> findJsonMediaType(final Content contentMediaType) {
+    public static @Nullable SchemaAndExtensions findJsonMediaType(final Content contentMediaType) {
         if (contentMediaType == null) {
             return null;
         } else {
             final var content = contentMediaType.get(ContentTypes.JSON);
-            return content != null ? content.getSchema() : null;
+
+            if (content == null || content.getSchema() == null) {
+                return null;
+            }
+
+            return new SchemaAndExtensions(content.getSchema(), content.getExtensions());
         }
     }
 

@@ -1,6 +1,7 @@
 package io.github.potjerodekool.openapi.common.generate.model.element;
 
 import io.github.potjerodekool.openapi.common.generate.model.type.ReferenceType;
+import io.github.potjerodekool.openapi.common.generate.model.type.TypeVariable;
 
 import java.util.List;
 import java.util.Optional;
@@ -11,7 +12,7 @@ public class Model extends AbstractElement<Model> {
 
     private ReferenceType superType;
 
-    private List<String> typeArgs;
+    private List<TypeVariable> typeArguments;
 
     public String getPackageName() {
         return packageName;
@@ -21,8 +22,8 @@ public class Model extends AbstractElement<Model> {
         return superType;
     }
 
-    public List<String> getTypeArgs() {
-        return typeArgs;
+    public List<TypeVariable> getTypeArguments() {
+        return typeArguments;
     }
 
     public Model packageName(final String packageName) {
@@ -35,8 +36,8 @@ public class Model extends AbstractElement<Model> {
         return this;
     }
 
-    public Model typeArgs(final List<String> typeArgs) {
-        this.typeArgs = typeArgs;
+    public Model typeArguments(final List<TypeVariable> typeArguments) {
+        this.typeArguments = typeArguments;
         return this;
     }
 

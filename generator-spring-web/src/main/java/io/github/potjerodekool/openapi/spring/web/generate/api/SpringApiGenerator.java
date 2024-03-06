@@ -111,6 +111,7 @@ public class SpringApiGenerator extends AbstractApiGenerator {
             final var schemaType = getTypeUtils().createType(
                     openAPI,
                     schema,
+                    null,
                     getModelPackageName(),
                     mediaType,
                     null);
@@ -246,6 +247,7 @@ public class SpringApiGenerator extends AbstractApiGenerator {
                             ? getTypeUtils().createType(
                             openAPI,
                             headerSchema,
+                            null,
                             getModelPackageName(),
                             null,
                             required

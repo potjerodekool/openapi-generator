@@ -4,7 +4,7 @@ package <model.packageName>;
 <endif>
 
 <model.annotations:{annotation | <annotation(annotation)>};separator="\n">
-public class <model.simpleName><typeArgs(model.typeArgs)><if(model.superType)> extends <type(model.superType)> <endif>{
+public class <model.simpleName><typeArguments(model.typeArguments)><if(model.superType)> extends <type(model.superType)> <endif>{
 
     <model.properties:{property | <field(property)>};separator="\n">
     <model.properties:{property | <getter(property)>};separator="\n">

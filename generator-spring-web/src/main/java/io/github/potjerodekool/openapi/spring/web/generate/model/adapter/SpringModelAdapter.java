@@ -13,12 +13,15 @@ import io.swagger.v3.oas.models.media.ObjectSchema;
 public class SpringModelAdapter implements ModelAdapter {
     @Override
     public void adapt(final Model model, final ObjectSchema schema) {
+        final var properties = schema.getProperties();
 
-        schema.getProperties().forEach((propertyName, propertySchema) -> {
-            if (propertySchema instanceof DateSchema) {
-                adaptDateProperty(propertyName, model);
-            }
-        });
+        if (properties != null) {
+            properties.forEach((propertyName, propertySchema) -> {
+                if (propertySchema instanceof DateSchema) {
+                    adaptDateProperty(propertyName, model);
+                }
+            });
+        }
     }
 
     private void adaptDateProperty(final String propertyName, final Model model) {

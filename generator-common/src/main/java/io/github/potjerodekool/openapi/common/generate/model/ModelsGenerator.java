@@ -122,11 +122,14 @@ public class ModelsGenerator implements OpenApiWalkerListener {
                                    final String path,
                                    final Operation operation,
                                    final Schema<?> resolvedSchema) {
-        if (resolvedSchema instanceof ObjectSchema objectSchema) {
-            objectSchema.getProperties().values().forEach(propertySchema ->
-                    visitSchema(openAPI, httpMethod, path, operation, propertySchema));
-        } else if (resolvedSchema instanceof ComposedSchema composedSchema) {
-            resolvedSchema.getProperties().values().forEach(propertySchema ->
+        final Map<String, Schema> properties = Objects.requireNonNullElse(
+                resolvedSchema.getProperties(),
+                Map.of()
+        );
+
+        if (resolvedSchema instanceof ObjectSchema
+            || resolvedSchema instanceof ComposedSchema) {
+            properties.values().forEach(propertySchema ->
                     visitSchema(openAPI, httpMethod, path, operation, propertySchema));
         }
     }
@@ -137,8 +140,7 @@ public class ModelsGenerator implements OpenApiWalkerListener {
                              final Schema<?> resolvedSchema) {
         generateSuperClass(openAPI, httpMethod, name, resolvedSchema);
 
-        final var model = modelBuilder.build(openAPI, httpMethod, name, resolvedSchema);
-        model.packageName(this.modelPackageName);
+        final var model = modelBuilder.build(openAPI, httpMethod,  modelPackageName, name, resolvedSchema);
 
         if (model.getSimpleName() == null) {
             throw new UnsupportedOperationException();

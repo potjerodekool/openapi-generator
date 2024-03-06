@@ -23,8 +23,6 @@ import io.github.potjerodekool.openapi.common.util.OpenApiUtils;
 import io.swagger.models.HttpMethod;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
-import io.swagger.v3.oas.models.media.ComposedSchema;
-import io.swagger.v3.oas.models.media.ObjectSchema;
 import io.swagger.v3.oas.models.responses.ApiResponse;
 
 import java.util.ArrayList;
@@ -109,8 +107,8 @@ public class ServiceApiGenerator extends AbstractGenerator {
             final var okResponseType = OpenApiUtils.resolveResponseMediaType(okResponse.getValue().getContent());
 
             if (okResponseType != null) {
-                final var resolved = SchemaResolver.resolve(api, okResponseType);
-                final var type = createType(api, resolved);
+                final var resolved = SchemaResolver.resolve(api, okResponseType.schema());
+                final var type = createType(api, resolved, okResponseType.extensions());
                 responseType = type instanceof WildCardTypeExpr wildCardTypeExpr
                         ? (TypeExpr) wildCardTypeExpr.getExpr()
                         : type;
@@ -126,6 +124,7 @@ public class ServiceApiGenerator extends AbstractGenerator {
                 responseType = getTypeUtils().createType(
                         api,
                         jsonContent.getSchema(),
+                        null,
                         getModelPackageName(),
                         ContentTypes.JSON,
                         requestBody.getRequired()
@@ -141,20 +140,24 @@ public class ServiceApiGenerator extends AbstractGenerator {
     }
 
     private TypeExpr createType(final OpenAPI openAPI,
-                                final ResolvedSchemaResult resolved) {
+                                final ResolvedSchemaResult resolved,
+                                final Map<String, Object> extensions) {
         final var schema = resolved.schema();
 
-        if (schema instanceof ObjectSchema || schema instanceof ComposedSchema) {
-            return new ClassOrInterfaceTypeExpr(getModelPackageName() + "." + resolved.name());
-        } else {
-            return getTypeUtils().createType(
-                    openAPI,
-                    schema,
-                    getModelPackageName(),
-                    ContentTypes.JSON,
-                    null
-            );
+        final var typeExpr = getTypeUtils().createType(
+                openAPI,
+                schema,
+                extensions,
+                getModelPackageName(),
+                ContentTypes.JSON,
+                null
+        );
+
+        if (typeExpr instanceof ClassOrInterfaceTypeExpr classOrInterfaceTypeExpr) {
+            classOrInterfaceTypeExpr.name(getModelPackageName() + "." + resolved.name());
         }
+
+        return typeExpr;
     }
 
     @Override
