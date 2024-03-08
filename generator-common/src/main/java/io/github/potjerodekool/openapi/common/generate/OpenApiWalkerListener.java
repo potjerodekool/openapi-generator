@@ -17,7 +17,8 @@ public interface OpenApiWalkerListener {
                              HttpMethod httpMethod,
                              String path,
                              Operation operation,
-                             Schema<?> schema) {
+                             Schema<?> schema,
+                             String schemaName) {
     }
 
 }

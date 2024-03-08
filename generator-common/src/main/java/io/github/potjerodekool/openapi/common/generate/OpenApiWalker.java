@@ -79,7 +79,7 @@ public final class OpenApiWalker {
                                     final Operation operation,
                                     final Schema<?> schema,
                                     final OpenApiWalkerListener listener) {
-        listener.visitSchema(openAPI, httpMethod, path, operation, schema);
+        listener.visitSchema(openAPI, httpMethod, path, operation, schema, null);
     }
 
 }

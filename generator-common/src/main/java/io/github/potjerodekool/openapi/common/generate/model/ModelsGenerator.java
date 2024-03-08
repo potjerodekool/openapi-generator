@@ -76,9 +76,10 @@ public class ModelsGenerator implements OpenApiWalkerListener {
                             final HttpMethod httpMethod,
                             final String path,
                             final Operation operation,
-                            final Schema<?> schema) {
+                            final Schema<?> schema,
+                            final String schemaName) {
         if (schema instanceof ArraySchema arraySchema) {
-            visitSchema(openAPI, httpMethod, path, operation, arraySchema.getItems());
+            visitSchema(openAPI, httpMethod, path, operation, arraySchema.getItems(), null);
             return;
         }
 
@@ -88,9 +89,13 @@ public class ModelsGenerator implements OpenApiWalkerListener {
             return;
         }
 
-        final var name = httpMethod == HttpMethod.PATCH
-                ? "Patch" + resolvedSchemaResult.name()
-                : resolvedSchemaResult.name();
+        var name = (resolvedSchemaResult.name() != null
+                ? resolvedSchemaResult.name()
+                : schemaName);
+
+        if (httpMethod == HttpMethod.PATCH) {
+            name = "Patch" + name;
+        }
 
         if (processed.contains(name)) {
             return;
@@ -128,9 +133,9 @@ public class ModelsGenerator implements OpenApiWalkerListener {
         );
 
         if (resolvedSchema instanceof ObjectSchema
-            || resolvedSchema instanceof ComposedSchema) {
+                || resolvedSchema instanceof ComposedSchema) {
             properties.values().forEach(propertySchema ->
-                    visitSchema(openAPI, httpMethod, path, operation, propertySchema));
+                    visitSchema(openAPI, httpMethod, path, operation, propertySchema, null));
         }
     }
 
@@ -140,7 +145,7 @@ public class ModelsGenerator implements OpenApiWalkerListener {
                              final Schema<?> resolvedSchema) {
         generateSuperClass(openAPI, httpMethod, name, resolvedSchema);
 
-        final var model = modelBuilder.build(openAPI, httpMethod,  modelPackageName, name, resolvedSchema);
+        final var model = modelBuilder.build(openAPI, httpMethod, modelPackageName, name, resolvedSchema);
 
         if (model.getSimpleName() == null) {
             throw new UnsupportedOperationException();
@@ -154,6 +159,8 @@ public class ModelsGenerator implements OpenApiWalkerListener {
                 .attribute("date", date)
         );
 
+        processExtensions(openAPI, httpMethod, resolvedSchema);
+
         return model;
     }
 
@@ -164,7 +171,26 @@ public class ModelsGenerator implements OpenApiWalkerListener {
         if (resolvedSchema.getAllOf() != null && resolvedSchema.getAllOf().size() == 1) {
             //Generate super class
             final var parentSchema = resolvedSchema.getAllOf().getFirst();
-            visitSchema(openAPI, httpMethod, name, null, parentSchema);
+            visitSchema(openAPI, httpMethod, name, null, parentSchema, null);
+        }
+    }
+
+    private void processExtensions(final OpenAPI openAPI,
+                                   final HttpMethod httpMethod,
+                                   final Schema<?> resolvedSchema) {
+        final List<Map<String, Object>> superTypeArgs = ExtensionsHelper.getExtension(resolvedSchema.getExtensions(), "x-super-type-args", List.class);
+
+        if (superTypeArgs != null) {
+            superTypeArgs.stream()
+                    .map(typeArg -> (String) typeArg.get("$ref"))
+                    .filter(Objects::nonNull)
+                    .forEach(ref -> {
+                        final var resolved = SchemaResolver.resolve(openAPI, ref);
+
+                        if (resolved.schema() != null) {
+                            visitSchema(openAPI, httpMethod, resolved.name(), null, resolved.schema(), resolved.name());
+                        }
+                    });
         }
     }
 
