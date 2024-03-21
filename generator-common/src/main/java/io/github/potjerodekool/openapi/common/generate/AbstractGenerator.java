@@ -205,32 +205,31 @@ public abstract class AbstractGenerator implements OpenApiWalkerListener {
                 final var resolved = SchemaResolver.resolve(api, bodyMediaType.schema());
 
                 if (httpMethod == HttpMethod.PATCH) {
-                    final var schemaName = resolved.name();
+                    var schemaName = resolved.name();
                     final var bodyObjectSchema = resolved.schema();
 
-                    if (schemaName.toLowerCase().contains("patch")) {
-                        bodyType = typeUtils.createType(
-                                api,
-                                bodyObjectSchema,
-                                null,
-                                modelPackageName,
-                                ContentTypes.JSON,
-                                requestBody.getRequired()
-                        );
-                    } else {
-                        final var type = (ClassOrInterfaceTypeExpr) typeUtils.createType(
-                                api,
-                                bodyObjectSchema,
-                                null,
-                                modelPackageName,
-                                ContentTypes.JSON,
-                                requestBody.getRequired()
-                        );
+                    final var type = (ClassOrInterfaceTypeExpr) typeUtils.createType(
+                            api,
+                            bodyObjectSchema,
+                            null,
+                            modelPackageName,
+                            ContentTypes.JSON,
+                            requestBody.getRequired()
+                    );
+                    bodyType = type;
 
-                        final var simpleName = "Patch" + schemaName;
-                        type.name(modelPackageName + "." + simpleName);
-                        bodyType = type;
+                    var patchType = type;
+
+                    if (patchType.getTypeArguments() != null && patchType.getTypeArguments().size() == 1) {
+                        final var resolvedItem = SchemaResolver.resolve(api, resolved.schema().getItems());
+                        schemaName = resolvedItem.name();
+                        patchType = (ClassOrInterfaceTypeExpr) type.getTypeArguments().getFirst();
                     }
+
+                    final var simpleName = !schemaName.toLowerCase().contains("patch")
+                            ? "Patch" + schemaName
+                            : schemaName;
+                    patchType.name(modelPackageName + "." + simpleName);
                 } else {
                     bodyType = typeUtils.createType(
                             api,

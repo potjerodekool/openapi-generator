@@ -1,9 +1,9 @@
 type(type)::= <%
-<if(type.kind.isWILDCARD)>
+<if(type.typeKind.isWILDCARD)>
     <if(type.extendsBound)>
     extends <type(type.extendsBound)>
     <endif>
-<elseif(type.kind.isTYPEVAR)>
+<elseif(type.typeKind.isTYPEVAR)>
  <type.name> <type(type.bounds)>
 <else>
  <if(type.annotations)>
@@ -16,8 +16,8 @@ type(type)::= <%
 <else>
 <type.name>
 <endif>
-<if(type.typeArgs)>
-<typeArguments(type.typeArgs)>
+<if(type.typeArguments)>
+<typeArguments(type.typeArguments)>
 <endif>
 <endif>
 %>

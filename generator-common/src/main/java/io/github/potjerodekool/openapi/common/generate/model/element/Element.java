@@ -14,4 +14,13 @@ public interface Element {
     List<Element> getEnclosedElements();
 
     Set<Modifier> getModifiers();
+
+    Kind getKind();
+
+    enum Kind {
+        CLASS,
+        PROPERTY,
+        ENUM,
+        ENUM_CONSTANT
+    }
 }

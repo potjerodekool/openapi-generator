@@ -1,5 +1,8 @@
 package io.github.potjerodekool.openapi.common.generate.model.element;
 
+import io.github.potjerodekool.codegen.template.model.annotation.Annot;
+import io.github.potjerodekool.codegen.template.model.annotation.AnnotTarget;
+
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -15,7 +18,7 @@ public abstract class AbstractElement<E extends Element> implements Element {
 
     private final Set<Modifier> modifiers = new LinkedHashSet<>();
 
-    private List<Annotation> annotations;
+    private List<Annot> annotations;
 
     @Override
     public String getSimpleName() {
@@ -74,22 +77,22 @@ public abstract class AbstractElement<E extends Element> implements Element {
         return self();
     }
 
-    public List<Annotation> getFieldAnnotations() {
+    public List<Annot> getFieldAnnotations() {
         return annotations.stream()
-                .filter(annotation -> annotation.getAnnotationTarget() == AnnotationTarget.FIELD)
+                .filter(annotation -> annotation.getTarget() == AnnotTarget.FIELD)
                 .toList();
     }
 
-    public List<Annotation> getAnnotations() {
+    public List<Annot> getAnnotations() {
         return annotations;
     }
 
-    public E annotations(final List<Annotation> annotations) {
+    public E annotations(final List<Annot> annotations) {
         this.annotations = annotations;
         return self();
     }
 
-    public E annotation(final Annotation annotation) {
+    public E annotation(final Annot annotation) {
         if (annotations == null) {
             annotations = new ArrayList<>();
         }

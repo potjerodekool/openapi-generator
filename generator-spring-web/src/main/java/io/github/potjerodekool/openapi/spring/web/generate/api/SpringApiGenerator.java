@@ -3,6 +3,7 @@ package io.github.potjerodekool.openapi.spring.web.generate.api;
 import io.github.potjerodekool.codegen.Environment;
 import io.github.potjerodekool.codegen.model.element.ElementKind;
 import io.github.potjerodekool.codegen.model.element.Modifier;
+import io.github.potjerodekool.codegen.model.util.QualifiedName;
 import io.github.potjerodekool.codegen.template.model.annotation.Annot;
 import io.github.potjerodekool.codegen.template.model.element.MethodElem;
 import io.github.potjerodekool.codegen.template.model.element.TypeElem;
@@ -84,12 +85,12 @@ public class SpringApiGenerator extends AbstractApiGenerator {
 
         final List<Expr> contentList = response.getContent() != null
                 ? new ArrayList<>(response.getContent().entrySet().stream()
-                .map(contentMediaType -> (Expr) createContentAnnotation(openAPI, contentMediaType.getKey(), contentMediaType.getValue()))
+                .map(contentMediaType -> (Expr) createContentAnnotation(openAPI, null, contentMediaType.getKey(), contentMediaType.getValue()))
                 .toList())
                 : new ArrayList<>();
 
         if (contentList.isEmpty()) {
-            contentList.add(createContentAnnotation(openAPI, "", null));
+            contentList.add(createContentAnnotation(openAPI, null,"", null));
         }
 
         return new ApiResponseAnnotationBuilder()
@@ -101,6 +102,7 @@ public class SpringApiGenerator extends AbstractApiGenerator {
     }
 
     private Annot createContentAnnotation(final OpenAPI openAPI,
+                                          final HttpMethod httpMethod,
                                           final String mediaType,
                                           final MediaType content) {
         final var contentAnnotationBuilder = new ContentAnnotationBuilder();
@@ -115,6 +117,23 @@ public class SpringApiGenerator extends AbstractApiGenerator {
                     getModelPackageName(),
                     mediaType,
                     null);
+
+            if (httpMethod == HttpMethod.PATCH) {
+                var classType = (ClassOrInterfaceTypeExpr) schemaType;
+
+                if (classType.getTypeArguments() != null && classType.getTypeArguments().size() == 1) {
+                    classType = (ClassOrInterfaceTypeExpr) classType.getTypeArguments().getFirst();
+                }
+
+                final var qualifiedName = QualifiedName.from(classType.getName());
+                var simpleName = qualifiedName.simpleName().toString();
+                final var packageName = qualifiedName.packageName().toString();
+
+                if (!simpleName.contains("Patch")) {
+                    simpleName = "Patch" + simpleName;
+                }
+                classType.name(packageName + "." + simpleName);
+            }
 
             final List<Expr> examples = new ArrayList<>();
 
@@ -321,7 +340,7 @@ public class SpringApiGenerator extends AbstractApiGenerator {
                         .summary(operation.getSummary())
                         .operationId(operation.getOperationId())
                         .tags(operation.getTags())
-                        .requestBody(createRequestBody(openAPI, operation.getRequestBody()))
+                        .requestBody(createRequestBody(openAPI, httpMethod, operation.getRequestBody()))
                         .build()
         );
 
@@ -356,6 +375,7 @@ public class SpringApiGenerator extends AbstractApiGenerator {
     }
 
     private Annot createRequestBody(final OpenAPI openAPI,
+                                    final HttpMethod httpMethod,
                                     final RequestBody openApiRequestBody) {
         if (openApiRequestBody == null) {
             return null;
@@ -364,7 +384,7 @@ public class SpringApiGenerator extends AbstractApiGenerator {
         final var requestBodyBuilder = new RequestBodyAnnotationBuilder();
 
         final var contentList = openApiRequestBody.getContent().entrySet().stream()
-                .map(entry -> createContentAnnotation(openAPI, entry.getKey(), entry.getValue()))
+                .map(entry -> createContentAnnotation(openAPI, httpMethod, entry.getKey(), entry.getValue()))
                 .toList();
 
         requestBodyBuilder.content(contentList);

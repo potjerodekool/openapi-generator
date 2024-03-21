@@ -3,6 +3,7 @@ package io.github.potjerodekool.openapi.common.generate.api;
 import io.github.potjerodekool.codegen.Environment;
 import io.github.potjerodekool.openapi.common.ApiConfiguration;
 import io.github.potjerodekool.openapi.common.GeneratorConfig;
+import io.github.potjerodekool.openapi.common.generate.StandardOpenApiTypeUtils;
 import io.github.potjerodekool.openapi.common.generate.config.ConfigGenerator;
 import io.github.potjerodekool.openapi.common.generate.model.ModelsGenerator;
 import io.github.potjerodekool.openapi.common.OpenApiEnvironment;
@@ -72,7 +73,8 @@ public abstract class AbstractCodeGenerator implements CodeGenerator {
             final var generator = new ModelsGenerator(
                     templates,
                     apiConfiguration.modelPackageName(),
-                    openApiEnvironment
+                    openApiEnvironment,
+                    getTypeUtils()
             );
             generator.generateModels(openApi);
         }
@@ -99,7 +101,9 @@ public abstract class AbstractCodeGenerator implements CodeGenerator {
         }
     }
 
-    protected abstract OpenApiTypeUtils getTypeUtils();
+    protected OpenApiTypeUtils getTypeUtils() {
+        return new StandardOpenApiTypeUtils();
+    }
 
     protected abstract void generateApiConfigs(final OpenAPI openApi,
                                                final OpenApiEnvironment openApiEnvironment);

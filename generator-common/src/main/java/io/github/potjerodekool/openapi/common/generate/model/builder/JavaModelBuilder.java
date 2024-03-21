@@ -1,26 +1,35 @@
 package io.github.potjerodekool.openapi.common.generate.model.builder;
 
+import io.github.potjerodekool.codegen.model.tree.type.BoundKind;
+import io.github.potjerodekool.codegen.model.type.TypeKind;
+import io.github.potjerodekool.codegen.model.util.StringUtils;
+import io.github.potjerodekool.codegen.template.model.type.*;
+import io.github.potjerodekool.openapi.common.generate.Extensions;
 import io.github.potjerodekool.openapi.common.generate.ExtensionsHelper;
-import io.github.potjerodekool.openapi.common.generate.model.element.Model;
-import io.github.potjerodekool.openapi.common.generate.model.type.TypeVariable;
-import io.github.potjerodekool.openapi.common.generate.model.type.Type;
+import io.github.potjerodekool.openapi.common.generate.OpenApiTypeUtils;
 import io.github.potjerodekool.openapi.common.generate.SchemaResolver;
+import io.github.potjerodekool.openapi.common.generate.model.element.Element;
+import io.github.potjerodekool.openapi.common.generate.model.element.JavaModifier;
+import io.github.potjerodekool.openapi.common.generate.model.element.Model;
 import io.github.potjerodekool.openapi.common.generate.model.element.ModelProperty;
-import io.github.potjerodekool.openapi.common.generate.model.type.PrimitiveType;
-import io.github.potjerodekool.openapi.common.generate.model.type.ReferenceType;
-import io.github.potjerodekool.openapi.common.generate.model.type.WildCardType;
 import io.swagger.models.HttpMethod;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.media.*;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 
 public class JavaModelBuilder {
 
     private final String modelPackageName;
+    private final OpenApiTypeUtils typeUtils;
 
-    public JavaModelBuilder(final String modelPackageName) {
+    public JavaModelBuilder(final String modelPackageName,
+                            final OpenApiTypeUtils typeUtils) {
         this.modelPackageName = modelPackageName;
+        this.typeUtils = typeUtils;
     }
 
     public Model build(final OpenAPI openAPI,
@@ -33,36 +42,67 @@ public class JavaModelBuilder {
         model.packageName(packageName);
         final var processedProperties = new HashSet<String>();
         addProperties(openAPI, httpMethod, schema, model, processedProperties);
-
+        postProcessProperties(schema, model);
         processModelExtensions(schema, model);
         return model;
     }
 
+    private void postProcessProperties(final Schema<?> schema, final Model model) {
+        if (schema.getProperties() == null) {
+            return;
+        }
+
+        schema.getProperties().entrySet().stream()
+                .filter(entry -> entry.getValue() instanceof StringSchema)
+                .filter(entry -> entry.getValue().getEnum() != null)
+                .forEach(entry -> {
+                    final var enumName = StringUtils.firstUpper(entry.getKey()) + "Enum";
+                    final var enumElementOptional = model.getEnclosedElements().stream()
+                            .filter(it -> it.getSimpleName().equals(enumName))
+                            .findFirst();
+
+                    if (enumElementOptional.isEmpty()) {
+                        final var enumModel = new Model()
+                                .simpleName(enumName)
+                                .kind(Element.Kind.ENUM)
+                                .modifiers(JavaModifier.PUBLIC);
+                        final List<String> enumValues = entry.getValue().getEnum();
+                        enumValues.forEach(enumValue -> enumModel.enclosedElement(
+                                new ModelProperty()
+                                        .simpleName(enumValue)
+                                        .kind(Element.Kind.ENUM_CONSTANT)
+                                        .type(new ClassOrInterfaceTypeExpr().simpleName(enumName))
+                        ));
+                        model.enclosedElement(enumModel);
+                    }
+                });
+    }
+
     private void processModelExtensions(final Schema<?> resolvedSchema, final Model model) {
-        final List<String> typeArgs = ExtensionsHelper.getExtension(resolvedSchema.getExtensions(), "x-type-args", List.class);
+        final List<String> typeArgs = ExtensionsHelper.getExtension(resolvedSchema.getExtensions(), Extensions.TYPE_ARGS, List.class);
 
         if (!typeArgs.isEmpty()) {
-            final var typeArguments = new ArrayList<TypeVariable>();
-            final var className = model.getPackageName() + "." + model.getSimpleName();
+            final var typeArguments = new ArrayList<TypeVarExpr>();
 
-            final var selfTypeArgs = new ArrayList<Type>();
-            selfTypeArgs.add(new TypeVariable().name("SELF"));
+            final var selfTypeArgs = new ArrayList<TypeExpr>();
+            selfTypeArgs.add(new TypeVarExpr().name("SELF"));
             selfTypeArgs.addAll(typeArgs.stream()
-                    .map(name -> new TypeVariable().name(name))
+                    .map(name -> new TypeVarExpr().name(name))
                     .toList());
 
-            typeArguments.add(new TypeVariable()
+            typeArguments.add(new TypeVarExpr()
                     .name("SELF")
-                    .bounds(new WildCardType().extendsBound(
-                            new ReferenceType()
-                                    .name(className)
-                                    .typeArgs(selfTypeArgs)
-                    ))
+                    .bounds(new WildCardTypeExpr().expr(
+                            new ClassOrInterfaceTypeExpr()
+                                    .packageName(model.getPackageName())
+                                    .simpleName(model.getSimpleName())
+                                    .typeArguments(selfTypeArgs)
+                    ).boundKind(BoundKind.EXTENDS))
             );
 
             typeArguments.addAll(
                     typeArgs.stream()
-                            .map(name -> new TypeVariable().name(name))
+                            .map(name -> new TypeVarExpr().name(name))
                             .toList()
             );
 
@@ -74,7 +114,7 @@ public class JavaModelBuilder {
                                final HttpMethod httpMethod,
                                final Schema<?> schema,
                                final Model model, final HashSet<String> processedProperties) {
-        addInhiredProperties(openAPI, httpMethod, schema, model, processedProperties);
+        addInheredProperties(openAPI, httpMethod, schema, model, processedProperties);
 
         if (schema.getProperties() != null) {
             schema.getProperties()
@@ -90,7 +130,7 @@ public class JavaModelBuilder {
         }
     }
 
-    private void addInhiredProperties(final OpenAPI openAPI,
+    private void addInheredProperties(final OpenAPI openAPI,
                                       final HttpMethod httpMethod,
                                       final Schema<?> schema,
                                       final Model model, final HashSet<String> processedProperties) {
@@ -101,20 +141,25 @@ public class JavaModelBuilder {
                 ignoreSchema = SchemaResolver.resolve(openAPI, schema.getAllOf().getFirst()).schema();
                 collectPropertyNames(ignoreSchema, processedProperties);
 
-                final var parentType = resolveType(schema.getAllOf().getFirst(), httpMethod == HttpMethod.PATCH, openAPI);
+                final var parentType = resolveType(
+                        schema.getAllOf().getFirst(),
+                        httpMethod == HttpMethod.PATCH,
+                        openAPI,
+                        false);
 
-                if (parentType instanceof ReferenceType referenceType) {
+                if (parentType instanceof ClassOrInterfaceTypeExpr referenceType) {
                     model.superType(referenceType);
                     final List<Map<String, String>> typeArgs = ExtensionsHelper.getExtension(
                             schema.getExtensions(),
-                            "x-super-type-args",
+                            Extensions.SUPER_TYPE_ARGS,
                             List.class
                     );
 
                     if (!typeArgs.isEmpty()) {
-                        referenceType.typeArg(
-                                new ReferenceType()
-                                        .name(model.getPackageName() + "." + model.getSimpleName())
+                        referenceType.typeArgument(
+                                new ClassOrInterfaceTypeExpr()
+                                        .packageName(model.getPackageName())
+                                        .simpleName(model.getSimpleName())
                         );
 
                         for (final Map<String, String> typeArg : typeArgs) {
@@ -127,9 +172,15 @@ public class JavaModelBuilder {
                                 );
 
                                 if (resolved.schema() != null) {
-                                    final var type = (ReferenceType) resolveType(resolved.schema(), httpMethod == HttpMethod.PATCH, openAPI);
-                                    type.name(resolved.name());
-                                    referenceType.typeArg(type);
+                                    final var type = (ClassOrInterfaceTypeExpr) resolveType(
+                                            resolved.schema(),
+                                            httpMethod == HttpMethod.PATCH,
+                                            openAPI,
+                                            true
+                                    );
+                                    type.packageName(modelPackageName);
+                                    type.simpleName(resolved.name());
+                                    referenceType.typeArgument(type);
                                 }
                             }
                         }
@@ -174,18 +225,39 @@ public class JavaModelBuilder {
                     ? true
                     : null;
 
-            var type = resolveType(resolvedPropertySchema, isPatch, openAPI);
+            var type = resolveType(resolvedPropertySchema, isPatch, openAPI, false);
 
-            if ( (resolvedPropertySchema instanceof ObjectSchema || resolvedPropertySchema instanceof ComposedSchema)
-                    && type instanceof ReferenceType referenceType) {
+            if (resolvedPropertySchema instanceof StringSchema stringSchema
+                    && stringSchema.getEnum() != null) {
+                final var enumName = StringUtils.firstUpper(propertyName) + "Enum";
+                type = new ClassOrInterfaceTypeExpr()
+                        .simpleName(enumName);
+            }
+
+            if (resolvedPropertySchema instanceof MapSchema mapSchema) {
+                final var keyType = typeUtils.createStringType(null);
+                final TypeExpr valueType;
+
+                if (mapSchema.getAdditionalProperties() instanceof Schema<?> additionalSchema) {
+                    valueType = resolveType(additionalSchema, false, openAPI, false);
+                } else {
+                    valueType = new ClassOrInterfaceTypeExpr().packageName("java.lang").simpleName("Object");
+                }
+
+                ((ClassOrInterfaceTypeExpr) type).typeArguments(keyType, valueType);
+            }
+
+            if ((resolvedPropertySchema instanceof ObjectSchema || resolvedPropertySchema instanceof ComposedSchema)
+                    && type instanceof ClassOrInterfaceTypeExpr referenceType) {
                 referenceType.packageName(modelPackageName);
-                referenceType.name(resolvedSchemaResult.name());
+                referenceType.simpleName(resolvedSchemaResult.name());
             }
 
             if (httpMethod == HttpMethod.PATCH) {
-                type = new ReferenceType()
-                        .name("org.openapitools.jackson.nullable.JsonNullable")
-                        .typeArg(type);
+                type = new ClassOrInterfaceTypeExpr()
+                        .packageName("org.openapitools.jackson.nullable")
+                        .simpleName("JsonNullable")
+                        .typeArgument(type);
             }
 
             final var property = new ModelProperty()
@@ -196,39 +268,40 @@ public class JavaModelBuilder {
         }
     }
 
-    private Type resolveType(final Schema<?> schema,
-                             final Boolean isPatch,
-                             final OpenAPI openAPI) {
+    private TypeExpr resolveType(final Schema<?> schema,
+                                 final Boolean isPatch,
+                                 final OpenAPI openAPI,
+                                 final boolean isRequired) {
         return switch (schema) {
             case IntegerSchema integerSchema -> resolveIntegerType(integerSchema, isPatch);
-            case NumberSchema ignored -> new ReferenceType().name("java.math.BigDecimal");
-            case StringSchema ignored -> resolveStringType();
-            case EmailSchema ignored -> resolveStringType();
-            case PasswordSchema ignored -> resolveStringType();
-            case DateSchema ignored -> resolveDateType();
-            case DateTimeSchema ignored -> new ReferenceType().name("java.time.OffsetDateTime");
-            case MapSchema ignored -> new ReferenceType().name("java.util.Map");
-            case ArraySchema arraySchema -> resolveListType(arraySchema, openAPI, isPatch);
-            case UUIDSchema ignored -> new ReferenceType().name("java.util.UUID");
-            case BooleanSchema booleanSchema -> resolveBooleanType(booleanSchema);
+            case NumberSchema numberSchema -> typeUtils.createNumberType(numberSchema, isRequired);
+            case StringSchema stringSchema -> typeUtils.createStringType(stringSchema);
+            case EmailSchema ignored -> typeUtils.createStringType(null);
+            case PasswordSchema ignored -> typeUtils.createStringType(null);
+            case DateSchema ignored -> typeUtils.createDateType();
+            case DateTimeSchema ignored -> typeUtils.createDateTimeType();
+            case MapSchema ignored -> typeUtils.createMapType(openAPI, null, modelPackageName, null, isRequired);
+            case ArraySchema arraySchema -> typeUtils.createArrayType(openAPI, arraySchema, modelPackageName, null);
+            case UUIDSchema ignored -> typeUtils.createUuidType();
+            case BooleanSchema booleanSchema -> typeUtils.createBooleanType(booleanSchema, isRequired);
             case ObjectSchema objectSchema -> {
                 final var typeArg = ExtensionsHelper.getExtension(
                         objectSchema.getExtensions(),
-                        "x-type-arg",
+                        Extensions.TYPE_ARG,
                         String.class
                 );
 
                 if (typeArg == null) {
-                    yield new ReferenceType().name("java.lang.Object");
+                    yield new ClassOrInterfaceTypeExpr().packageName("java.lang").simpleName("Object");
                 } else {
-                    yield new ReferenceType().name(typeArg);
+                    yield new ClassOrInterfaceTypeExpr().simpleName(typeArg);
                 }
             }
             default -> {
                 if (schema.get$ref() != null) {
                     final var result = SchemaResolver.resolve(openAPI, schema);
                     if (result.schema() instanceof ObjectSchema) {
-                        yield new ReferenceType().name(this.modelPackageName + "." + result.name());
+                        yield new ClassOrInterfaceTypeExpr().packageName(this.modelPackageName).simpleName(result.name());
                     }
                 }
 
@@ -237,48 +310,19 @@ public class JavaModelBuilder {
         };
     }
 
-    private Type resolveIntegerType(final IntegerSchema schema,
-                                    final Boolean isPatch) {
+    private TypeExpr resolveIntegerType(final IntegerSchema schema,
+                                        final Boolean isPatch) {
         final var format = schema.getFormat();
 
         if (Boolean.TRUE.equals(schema.getNullable()) || Boolean.TRUE.equals(isPatch)) {
             return "int64".equals(format)
-                    ? new ReferenceType().name("java.lang.Long")
-                    : new ReferenceType().name("java.lang.Integer");
+                    ? new ClassOrInterfaceTypeExpr().packageName("java.lang").simpleName("Long")
+                    : new ClassOrInterfaceTypeExpr().packageName("java.lang").simpleName("Integer");
         } else {
             return "int64".equals(format)
-                    ? new PrimitiveType().name("long")
-                    : new PrimitiveType().name("int");
+                    ? new PrimitiveTypeExpr(TypeKind.LONG)
+                    : new PrimitiveTypeExpr(TypeKind.INT);
         }
     }
 
-    private Type resolveStringType() {
-        return new ReferenceType().name("java.lang.String");
-    }
-
-    private Type resolveDateType() {
-        return new ReferenceType().name("java.time.LocalDate");
-    }
-
-    private Type resolveBooleanType(final BooleanSchema booleanSchema) {
-        return Boolean.FALSE.equals(booleanSchema.getNullable())
-                ? new PrimitiveType().name("boolean")
-                : new ReferenceType().name("java.lang.Boolean");
-    }
-
-    private Type resolveListType(final ArraySchema arraySchema,
-                                 final OpenAPI openAPI,
-                                 final Boolean isPatch) {
-        final var listType = new ReferenceType().name("java.util.List");
-
-        final var componentType = resolveType(
-                arraySchema.getItems(),
-                isPatch,
-                openAPI
-        );
-
-        listType.typeArg(componentType);
-
-        return listType;
-    }
 }

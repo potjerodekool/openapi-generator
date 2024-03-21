@@ -23,6 +23,7 @@ import io.github.potjerodekool.openapi.common.generate.OpenApiTypeUtils;
 import io.swagger.models.HttpMethod;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
+import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.responses.ApiResponse;
 
 import java.util.ArrayList;
@@ -169,6 +170,14 @@ public class SpringRestControllerGenerator extends AbstractApiGenerator {
         final var isCreateRequest = httpMethod == HttpMethod.POST
                 && StatusCodes.CREATED.equals(okResponse.getKey());
 
+        final var jsonResponse =
+                response.getContent() != null
+                        ? response.getContent().get(ContentTypes.JSON)
+                        : null;
+
+        //Check if the response has an id property
+        final boolean responseWithId = jsonResponse != null && hasIdProperty(jsonResponse.getSchema());
+
         if (hasContent || isCreateRequest) {
             final var variable = new VariableDeclarationStm()
                     .modifier(Modifier.FINAL)
@@ -183,7 +192,8 @@ public class SpringRestControllerGenerator extends AbstractApiGenerator {
 
         MethodInvocationExpr methodCall;
 
-        if (StatusCodes.CREATED.equals(statusCode)) {
+        //Only call created method if response has a single id property
+        if (StatusCodes.CREATED.equals(statusCode) && responseWithId) {
             final Expr idExpression = requestBodyType != null
                     ? new MethodInvocationExpr()
                     .target(new IdentifierExpr("result"))
@@ -234,6 +244,17 @@ public class SpringRestControllerGenerator extends AbstractApiGenerator {
 
         body.statement(new ReturnStm(methodCall));
         return body;
+    }
+
+    private boolean hasIdProperty(final Schema<?> schema) {
+        if (schema.getAllOf() != null) {
+            if (schema.getAllOf().stream()
+                    .anyMatch(this::hasIdProperty)) {
+                return true;
+            }
+        }
+
+        return schema.getProperties() != null && schema.getProperties().containsKey("id");
     }
 
     private BlockStm generateNotImplemented() {

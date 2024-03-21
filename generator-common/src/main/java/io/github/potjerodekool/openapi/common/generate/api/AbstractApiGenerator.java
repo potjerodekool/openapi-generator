@@ -33,6 +33,7 @@ import io.swagger.v3.oas.models.parameters.RequestBody;
 import java.util.List;
 import java.util.Map;
 
+import static io.github.potjerodekool.openapi.common.util.OpenApiUtils.findOkResponse;
 import static io.github.potjerodekool.openapi.common.util.OpenApiUtils.resolveResponseTypes;
 
 public abstract class AbstractApiGenerator extends AbstractGenerator {
@@ -72,7 +73,23 @@ public abstract class AbstractApiGenerator extends AbstractGenerator {
         final TypeExpr responseType;
 
         if (responseTypes.isEmpty()) {
-            responseType = new ClassOrInterfaceTypeExpr("java.lang.Void");
+            final var okResponseOptional = findOkResponse(operation.getResponses())
+                    .filter(okResponse -> !"201".equals(okResponse.getKey()))
+                    .filter(okResponse ->
+                            okResponse.getValue().getContent() != null
+                                    && okResponse.getValue().getContent().containsKey("application/octet-stream")
+                    );
+
+            responseType = okResponseOptional.map(
+                    okResponse -> getTypeUtils().createType(
+                            api,
+                            null,
+                            null,
+                            null,
+                            "application/octet-stream",
+                            true
+                    )
+            ).orElseGet(() -> new ClassOrInterfaceTypeExpr("java.lang.Void"));
         } else if (responseTypes.size() == 1) {
             final var schemaAndExtensions = responseTypes.getFirst();
 

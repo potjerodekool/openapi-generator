@@ -113,7 +113,19 @@ public class ServiceApiGenerator extends AbstractGenerator {
                         ? (TypeExpr) wildCardTypeExpr.getExpr()
                         : type;
             } else {
-                responseType = NoTypeExpr.createVoidType();
+                if (okResponse.getValue().getContent()
+                        .containsKey("application/octet-stream")) {
+                    responseType = getTypeUtils().createType(
+                            api,
+                            null,
+                            null,
+                            null,
+                            "application/octet-stream",
+                            true
+                    );
+                } else {
+                    responseType = NoTypeExpr.createVoidType();
+                }
             }
         } else if (httpMethod == HttpMethod.POST
                 && StatusCodes.CREATED.equals(okResponse.getKey())) {

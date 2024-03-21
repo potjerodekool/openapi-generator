@@ -1,12 +1,12 @@
 package io.github.potjerodekool.openapi.spring.web.generate.model.adapter;
 
+import io.github.potjerodekool.codegen.template.model.annotation.Annot;
+import io.github.potjerodekool.codegen.template.model.annotation.AnnotTarget;
+import io.github.potjerodekool.codegen.template.model.expression.FieldAccessExpr;
+import io.github.potjerodekool.codegen.template.model.expression.IdentifierExpr;
+import io.github.potjerodekool.codegen.template.model.type.ClassOrInterfaceTypeExpr;
 import io.github.potjerodekool.openapi.common.generate.model.adapter.ModelAdapter;
-import io.github.potjerodekool.openapi.common.generate.model.element.Annotation;
-import io.github.potjerodekool.openapi.common.generate.model.element.AnnotationTarget;
 import io.github.potjerodekool.openapi.common.generate.model.element.Model;
-import io.github.potjerodekool.openapi.common.generate.model.expresion.ClassOrInterfaceTypeExpression;
-import io.github.potjerodekool.openapi.common.generate.model.expresion.FieldAccessExpression;
-import io.github.potjerodekool.openapi.common.generate.model.expresion.IdentifierExpression;
 import io.swagger.v3.oas.models.media.DateSchema;
 import io.swagger.v3.oas.models.media.ObjectSchema;
 
@@ -28,25 +28,23 @@ public class SpringModelAdapter implements ModelAdapter {
         final var propertyOptional = model.getProperties().stream().filter(property -> property.getSimpleName().equals(propertyName)).findFirst();
 
         propertyOptional.ifPresent(property -> {
-            final var expr = new FieldAccessExpression()
-                    .target(new ClassOrInterfaceTypeExpression()
-                            .name("org.springframework.format.annotation.DateTimeFormat"))
-                    .field(
-                            new FieldAccessExpression()
-                                    .target(new ClassOrInterfaceTypeExpression()
-                                            .name("ISO")
-                                    )
-                                    .field(new IdentifierExpression()
-                                            .name("DATE")
-                                    )
-                    );
+                    final var expr = new FieldAccessExpr()
+                            .target(new ClassOrInterfaceTypeExpr()
+                                    .name("org.springframework.format.annotation.DateTimeFormat"))
+                            .field(
+                                    new FieldAccessExpr()
+                                            .target(new ClassOrInterfaceTypeExpr()
+                                                    .name("ISO")
+                                            )
+                                            .field(new IdentifierExpr("DATE"))
+                            );
 
-                    property.annotation(new Annotation()
+                    property.annotation(new Annot()
                             .name("org.springframework.format.annotation.DateTimeFormat")
                             .attribute("iso",
                                     expr
                             )
-                            .annotationTarget(AnnotationTarget.FIELD)
+                            .target(AnnotTarget.FIELD)
                     );
                 }
         );

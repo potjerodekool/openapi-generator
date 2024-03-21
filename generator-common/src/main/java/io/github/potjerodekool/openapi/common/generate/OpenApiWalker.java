@@ -61,6 +61,14 @@ public final class OpenApiWalker {
                                      final Content content,
                                      final OpenApiWalkerListener listener) {
         if (content != null) {
+            listener.visitContent(
+                    openAPI,
+                    httpMethod,
+                    path,
+                    operation,
+                    content
+            );
+
             final var mediaType = content.get(ContentTypes.JSON);
 
             if (mediaType != null) {

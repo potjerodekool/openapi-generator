@@ -1,17 +1,19 @@
 package io.github.potjerodekool.openapi.common.generate.model.element;
 
 import io.github.potjerodekool.codegen.model.util.StringUtils;
-import io.github.potjerodekool.openapi.common.generate.model.type.Type;
+import io.github.potjerodekool.codegen.template.model.type.TypeExpr;
 
 public class ModelProperty extends AbstractElement<ModelProperty> {
 
-    private Type type;
+    private TypeExpr type;
 
-    public Type getType() {
+    private Kind kind = Kind.PROPERTY;
+
+    public TypeExpr getType() {
         return type;
     }
 
-    public ModelProperty type(final Type type) {
+    public ModelProperty type(final TypeExpr type) {
         this.type = type;
         return this;
     }
@@ -31,5 +33,15 @@ public class ModelProperty extends AbstractElement<ModelProperty> {
 
     public String getBuilderSetterName() {
         return getSimpleName();
+    }
+
+    @Override
+    public Kind getKind() {
+        return kind;
+    }
+
+    public ModelProperty kind(final Kind kind) {
+        this.kind = kind;
+        return this;
     }
 }

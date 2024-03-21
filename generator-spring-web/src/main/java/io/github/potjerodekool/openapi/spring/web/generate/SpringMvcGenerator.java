@@ -90,6 +90,6 @@ public class SpringMvcGenerator extends AbstractCodeGenerator {
 
     @Override
     protected OpenApiTypeUtils getTypeUtils() {
-        return new TypeUtilsSpringImpl();
+        return new TypeUtilsSpringImpl(super.getTypeUtils());
     }
 }

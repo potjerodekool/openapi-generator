@@ -3,6 +3,7 @@ package io.github.potjerodekool.openapi.spring.web.generate.api;
 import io.github.potjerodekool.codegen.Environment;
 import io.github.potjerodekool.codegen.template.model.annotation.Annot;
 import io.github.potjerodekool.codegen.template.model.element.VariableElem;
+import io.github.potjerodekool.codegen.template.model.expression.SimpleLiteralExpr;
 import io.github.potjerodekool.openapi.common.ApiConfiguration;
 import io.github.potjerodekool.openapi.common.GeneratorConfig;
 import io.github.potjerodekool.openapi.common.ParameterLocation;
@@ -34,6 +35,19 @@ public abstract class AbstractApiGenerator extends io.github.potjerodekool.opena
             case QUERY -> parameter.annotation(createSpringRequestParamAnnotation(openApiParameter));
             case HEADER -> parameter.annotation(createSpringRequestHeaderAnnotation(openApiParameter));
             case COOKIE -> parameter.annotation(createSpringCookieValueAnnotation(openApiParameter));
+        }
+
+        final var defaultValue = openApiParameter.getSchema().getDefault();
+
+        if (defaultValue != null) {
+            parameter.findAnnotationByName("io.swagger.v3.oas.annotations.Parameter")
+                    .ifPresent(paramAnnotation -> {
+                        final var schemaAnnotation = (Annot) paramAnnotation.getValues().get("schema");
+
+                        if (schemaAnnotation != null) {
+                            schemaAnnotation.value("defaultValue", new SimpleLiteralExpr(defaultValue.toString()));
+                        }
+                    });
         }
 
         return parameter;

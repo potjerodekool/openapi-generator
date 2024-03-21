@@ -4,12 +4,12 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 public class LazySingletonScopeManager<T> implements ScopeManager<T> {
 
-    private final Class<T> beanClass;
+    private final BeanDefinition beanDefinition;
     private @Nullable T instance = null;
     private boolean isInit = false;
 
-    public LazySingletonScopeManager(final Class<T> beanClass) {
-        this.beanClass = beanClass;
+    public LazySingletonScopeManager(final BeanDefinition beanDefinition) {
+        this.beanDefinition = beanDefinition;
     }
 
     @Override
@@ -17,12 +17,12 @@ public class LazySingletonScopeManager<T> implements ScopeManager<T> {
         synchronized (this) {
             if (!isInit) {
                 isInit = true;
-                instance = applicationContext.createBean(beanClass);
+                instance = applicationContext.createBean(beanDefinition);
             }
         }
 
         if (instance == null) {
-            throw new IllegalStateException(String.format("Failed to get instance of %s", beanClass.getName()));
+            throw new IllegalStateException(String.format("Failed to get instance of %s", getBeanType().getName()));
         }
 
         return instance;
@@ -30,6 +30,6 @@ public class LazySingletonScopeManager<T> implements ScopeManager<T> {
 
     @Override
     public Class<T> getBeanType() {
-        return beanClass;
+        return (Class<T>) beanDefinition.getBeanType();
     }
 }

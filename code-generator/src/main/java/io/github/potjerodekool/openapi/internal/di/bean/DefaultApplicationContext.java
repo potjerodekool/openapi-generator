@@ -52,25 +52,20 @@ public class DefaultApplicationContext implements ApplicationContext {
     }
 
     private void doRegister(final BeanDefinition beanDefinition) {
-        final var sm = createLazySingletonScopeManager(beanDefinition.className());
+        final var sm = createLazySingletonScopeManager(beanDefinition);
         if (sm != null) {
             final var list = this.beansMaps.computeIfAbsent(sm.getBeanType(), (key) -> new ArrayList<>());
             list.add(sm);
         }
     }
 
-    private @Nullable LazySingletonScopeManager<?> createLazySingletonScopeManager(final String className) {
-        try {
-            final Class<?> clazz = classLoader().loadClass(className);
-            return new LazySingletonScopeManager<>(clazz);
-        } catch (final ClassNotFoundException e) {
-            return null;
-        }
+    private @Nullable LazySingletonScopeManager<?> createLazySingletonScopeManager(final BeanDefinition beanDefinition) {
+        return new LazySingletonScopeManager<>(beanDefinition);
     }
 
     private boolean testConditions(final BeanDefinition beanDefinition) {
         var result = true;
-        final var annotationIterator = beanDefinition.annotations().values().iterator();
+        final var annotationIterator = beanDefinition.getAnnotations().values().iterator();
 
         while (result && annotationIterator.hasNext()) {
             final Annotation annotation = annotationIterator.next();
@@ -90,7 +85,7 @@ public class DefaultApplicationContext implements ApplicationContext {
     }
 
     private boolean hasConditions(final BeanDefinition beanDefinition) {
-        return beanDefinition.annotations().values().stream()
+        return beanDefinition.getAnnotations().values().stream()
                 .anyMatch(annotation -> isCondition(annotation.annotationType()));
     }
 
@@ -105,14 +100,8 @@ public class DefaultApplicationContext implements ApplicationContext {
         list.add(new SingletonScopeManager<>(bean));
     }
 
-    private <T> @NonNull T getBeanOfType(final Class<T> beanType) {
-        final var bean = resolveBean(beanType);
-
-        if (bean != null) {
-            return bean;
-        }
-
-        return createBean(beanType);
+    private <T> T getBeanOfType(final Class<T> beanType) {
+        return resolveBean(beanType);
     }
 
     @Override
@@ -124,11 +113,7 @@ public class DefaultApplicationContext implements ApplicationContext {
         final var resolvedBeans = resolveBeans(beanType);
 
         if (resolvedBeans.isEmpty()) {
-            if (!Modifier.isAbstract(beanType.getModifiers())) {
-                return createBean(beanType);
-            } else {
-                throw new DIException(String.format("Failed to resolve bean of %s", beanType.getName()));
-            }
+            throw new DIException(String.format("Failed to resolve bean of %s", beanType.getName()));
         } else if (resolvedBeans.size() > 1) {
             throw new DIException(String.format("Failed to resolve unique bean of %s. Found %s beans", beanType.getName(), resolvedBeans.size()));
         } else {
@@ -166,21 +151,13 @@ public class DefaultApplicationContext implements ApplicationContext {
         return classLoader;
     }
 
-    <T> @NonNull T createBean(final Class<T> beanClass) {
-        final var constructorOptional = resolveConstructor(beanClass);
-        if (constructorOptional.isEmpty()) {
-            throw new DIException(String.format("Failed to resolve constructor for %s", beanClass.getName()));
-        }
-
-        return createBean(constructorOptional.get(), beanClass);
-    }
-
-    private <T> @NonNull T createBean(final Constructor<T> constructor,
-                                      final Class<T> beanClass) {
-        final Object[] arguments = resolveArguments(constructor);
+    <T> @NonNull T createBean(final BeanDefinition beanDefinition) {
+        final Object[] arguments = resolveArguments(beanDefinition.getBeanMethod());
         try {
-            T bean = constructor.newInstance(arguments);
-            registerBean(beanClass, bean);
+            final var instance = beanDefinition.getAutoConfigInstance();
+            final var method = beanDefinition.getBeanMethod();
+            T bean = (T) method.invoke(instance, arguments);
+            registerBean(bean.getClass(), bean);
             return bean;
         } catch (final Exception e) {
             throw new RuntimeException(e);

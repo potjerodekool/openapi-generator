@@ -1,22 +1,14 @@
 package io.github.potjerodekool.openapi.internal.di;
 
-import io.github.potjerodekool.openapi.common.util.StreamUtils;
 import io.github.potjerodekool.openapi.internal.di.bean.BeanDefinition;
-import org.checkerframework.checker.nullness.qual.Nullable;
 import org.objectweb.asm.ClassReader;
 
-import java.io.File;
 import java.io.IOException;
-import java.net.URL;
 import java.nio.file.FileSystems;
-import java.nio.file.Files;
 import java.nio.file.PathMatcher;
-import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
-import java.util.zip.ZipFile;
-
-import static io.github.potjerodekool.openapi.common.util.StreamUtils.tryAction;
 
 public class ClassPathScanner {
 
@@ -26,76 +18,49 @@ public class ClassPathScanner {
     }
 
     public static List<BeanDefinition> scan() {
-        final var codeSource = ClassPathScanner.class.getProtectionDomain().getCodeSource();
-
-        if (codeSource == null) {
-            return List.of();
-        }
-
-        final var location = codeSource.getLocation();
         final var beanDefinitions = new ArrayList<BeanDefinition>();
+        try {
+            final var resources = ClassPathScanner.getClassLoader()
+                    .getResources("META-INF/io.github.potjerodekool.openapi.common.autoconfig.AutoConfiguration");
 
-        if ("file".equals(location.getProtocol())) {
-            final var file = location.getFile();
-            beanDefinitions.addAll(file.endsWith(".jar")
-                    ? scanArchive(location)
-                    : scanDirectory(location)
-            );
-        }
-        return beanDefinitions;
-    }
+            final var iterator = resources.asIterator();
 
-    private static List<BeanDefinition> scanArchive(final URL location) {
-        final var beanDefinitions = new ArrayList<BeanDefinition>();
+            while (iterator.hasNext()) {
+                final var resource = iterator.next();
 
-        try (final ZipFile zipFile = new ZipFile(new File(location.toURI()))) {
-            StreamUtils.of(zipFile.entries().asIterator())
-                    .filter(it -> it.getName().endsWith(".class"))
-                    .forEach(entry -> tryAction(() -> {
-                        final var inputStream = zipFile.getInputStream(entry);
-                        final var beanDefinition = read(inputStream.readAllBytes());
+                try (final var inputStream = resource.openStream()) {
+                    final var lines = new String(inputStream.readAllBytes()).split("\n");
 
-                        if (beanDefinition != null) {
-                            beanDefinitions.add(beanDefinition);
-                        }
-                    }));
-        } catch (final Exception e) {
-            //Ignore exceptions
-        }
+                    Arrays.stream(lines)
+                            .filter(line -> !line.trim().startsWith("#"))
+                            .forEach(className -> {
+                                beanDefinitions.addAll(loadConfiguration(className));
+                            });
+                }
+            }
 
-        return beanDefinitions;
-    }
-
-    private static List<BeanDefinition> scanDirectory(final URL location) {
-        final var beanDefinitions = new ArrayList<BeanDefinition>();
-
-        try (final var stream = Files.walk(Paths.get(location.toURI()))) {
-            stream
-                    .filter(CLASS_FILE_PATH_MATCHER::matches)
-                    .forEach(classFile -> {
-                        try {
-                            final var bytes = Files.readAllBytes(classFile);
-                            final var beanDefinition = read(bytes);
-
-                            if (beanDefinition != null) {
-                                beanDefinitions.add(beanDefinition);
-                            }
-                        } catch (final IOException e) {
-                            throw new RuntimeException(e);
-                        }
-                    });
-        } catch (final Exception e) {
+        } catch (final IOException e) {
             throw new RuntimeException(e);
         }
 
         return beanDefinitions;
     }
 
-    private static @Nullable BeanDefinition read(final byte[] data) {
-        final var classReader = new ClassReader(data);
-        final var classVisitor = new SimpleClassVisitor();
-        classReader.accept(classVisitor, 0);
-        return classVisitor.getBeanDefinition();
+    private static List<BeanDefinition> loadConfiguration(final String className) {
+        try (final var inputStream = getClassLoader().getResourceAsStream(
+                className.replace('.', '/') + ".class"
+        )) {
+            final var instance = getClassLoader().loadClass(className).getDeclaredConstructor().newInstance();
+            final var data = inputStream.readAllBytes();
+            final var classReader = new ClassReader(data);
+            final var reader = new AutoConfigReader(instance);
+            classReader.accept(reader, 0);
+            return reader.getBeanDefinitions();
+        } catch (final Exception e) {
+            //Ignore
+            e.printStackTrace();
+        }
+        return List.of();
     }
 
     protected static ClassLoader getClassLoader() {

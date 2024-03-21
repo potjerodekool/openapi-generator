@@ -1,8 +1,8 @@
 package io.github.potjerodekool.openapi;
 
+import io.github.potjerodekool.codegen.template.model.annotation.Annot;
+import io.github.potjerodekool.codegen.template.model.type.ClassOrInterfaceTypeExpr;
 import io.github.potjerodekool.openapi.common.generate.Templates;
-import io.github.potjerodekool.openapi.common.generate.model.element.Annotation;
-import io.github.potjerodekool.openapi.common.generate.model.type.ReferenceType;
 import org.junit.jupiter.api.Test;
 
 public class FieldTest {
@@ -12,11 +12,12 @@ public class FieldTest {
         final Templates templates = new Templates();
         final var typeTemplate = templates.getInstanceOf("type");
 
-        final var type = new ReferenceType()
-                .name("java.lang.String");
+        final var type = new ClassOrInterfaceTypeExpr()
+                .packageName("java.lang")
+                .simpleName("String");
 
         type.annotation(
-                new Annotation()
+                new Annot()
                         .name("org.checkerframework.checker.nullness.qual.Nullable")
         );
 

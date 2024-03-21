@@ -1,10 +1,10 @@
 package io.github.potjerodekool.openapi.common.generate.model.adapter;
 
-import io.github.potjerodekool.openapi.common.generate.model.element.Annotation;
-import io.github.potjerodekool.openapi.common.generate.model.element.AnnotationTarget;
+import io.github.potjerodekool.codegen.template.model.annotation.Annot;
+import io.github.potjerodekool.codegen.template.model.annotation.AnnotTarget;
+import io.github.potjerodekool.codegen.template.model.expression.SimpleLiteralExpr;
 import io.github.potjerodekool.openapi.common.generate.model.element.Model;
 import io.github.potjerodekool.openapi.common.generate.model.element.ModelProperty;
-import io.github.potjerodekool.openapi.common.generate.model.expresion.LiteralExpression;
 import io.github.potjerodekool.openapi.common.generate.ValidationExtensions;
 import io.swagger.v3.oas.models.media.BooleanSchema;
 import io.swagger.v3.oas.models.media.ObjectSchema;
@@ -15,7 +15,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.math.BigDecimal;
 import java.util.Map;
 
-public class JakartaValidationModelAdapter implements ModelAdapter {
+public class JakartaValidationModelAdapter implements ValidationModelAdapter {
 
     private final String constraintsPackage;
 
@@ -72,12 +72,12 @@ public class JakartaValidationModelAdapter implements ModelAdapter {
                     : constraintsPackage + ".DecimalMin";
 
             property.annotation(
-                    new Annotation()
+                    new Annot()
                             .name(annotationName)
-                            .attribute("value", new LiteralExpression(
+                            .attribute("value", new SimpleLiteralExpr(
                                     minimum
                             ))
-                            .annotationTarget(AnnotationTarget.FIELD)
+                            .target(AnnotTarget.FIELD)
             );
         }
 
@@ -89,10 +89,10 @@ public class JakartaValidationModelAdapter implements ModelAdapter {
                     : constraintsPackage + ".DecimalMax";
 
             property.annotation(
-                    new Annotation()
+                    new Annot()
                             .name(annotationName)
-                            .attribute("value", new LiteralExpression(maximum))
-                            .annotationTarget(AnnotationTarget.FIELD)
+                            .value("value", new SimpleLiteralExpr(maximum))
+                            .target(AnnotTarget.FIELD)
             );
         }
     }
@@ -111,18 +111,18 @@ public class JakartaValidationModelAdapter implements ModelAdapter {
         }
 
         if (min != null || max != null) {
-            final var sizeAnnotation = new Annotation()
+            final var sizeAnnotation = new Annot()
                     .name(constraintsPackage + ".Size")
-                    .annotationTarget(AnnotationTarget.FIELD);
+                    .target(AnnotTarget.FIELD);
 
             if (min != null
                     && min > 0) {
-                sizeAnnotation.attribute("min", new LiteralExpression(min));
+                sizeAnnotation.attribute("min", new SimpleLiteralExpr(min));
             }
 
             if (max != null
                     && max < Integer.MAX_VALUE) {
-                sizeAnnotation.attribute("max", max);
+                sizeAnnotation.attribute("max", new SimpleLiteralExpr(max));
             }
 
             property.annotation(sizeAnnotation);
@@ -135,10 +135,10 @@ public class JakartaValidationModelAdapter implements ModelAdapter {
 
         if (pattern != null) {
             property.annotation(
-                    new Annotation()
+                    new Annot()
                             .name(constraintsPackage + ".Pattern")
-                            .attribute("regexp", new LiteralExpression(pattern))
-                            .annotationTarget(AnnotationTarget.FIELD)
+                            .attribute("regexp", new SimpleLiteralExpr(pattern))
+                            .target(AnnotTarget.FIELD)
             );
         }
     }
@@ -146,14 +146,14 @@ public class JakartaValidationModelAdapter implements ModelAdapter {
     private void addEmailConstraint(final Schema<?> schema,
                                     final ModelProperty property) {
         if ("email".equals(schema.getFormat())) {
-            final var emailAnnotation = new Annotation()
+            final var emailAnnotation = new Annot()
                     .name(constraintsPackage + ".Email")
-                    .annotationTarget(AnnotationTarget.FIELD);
+                    .target(AnnotTarget.FIELD);
 
             final var pattern = schema.getPattern();
 
             if (pattern != null) {
-                emailAnnotation.attribute("regexp", new LiteralExpression(pattern));
+                emailAnnotation.attribute("regexp", new SimpleLiteralExpr(pattern));
             }
 
             property.annotation(emailAnnotation);
@@ -168,16 +168,16 @@ public class JakartaValidationModelAdapter implements ModelAdapter {
 
             if (Boolean.TRUE.equals(xAssert)) {
                 property.annotation(
-                        new Annotation()
+                        new Annot()
                                 .name(constraintsPackage + ".AssertTrue")
-                                .annotationTarget(AnnotationTarget.FIELD)
+                                .target(AnnotTarget.FIELD)
                 );
 
             } else if (Boolean.FALSE.equals(xAssert)) {
                 property.annotation(
-                        new Annotation()
+                        new Annot()
                                 .name(constraintsPackage + ".AssertFalse")
-                                .annotationTarget(AnnotationTarget.FIELD)
+                                .target(AnnotTarget.FIELD)
                 );
             }
         }
@@ -188,11 +188,11 @@ public class JakartaValidationModelAdapter implements ModelAdapter {
         final var digitsOptional = ValidationExtensions.digits(schema.getExtensions());
 
         digitsOptional.ifPresent(digits -> {
-            final var annotation = new Annotation()
+            final var annotation = new Annot()
                     .name(constraintsPackage + ".Digits")
-                    .attribute("integer", new LiteralExpression(digits.integer()))
-                    .attribute("fraction", new LiteralExpression(digits.fraction()))
-                    .annotationTarget(AnnotationTarget.FIELD);
+                    .attribute("integer", new SimpleLiteralExpr(digits.integer()))
+                    .attribute("fraction", new SimpleLiteralExpr(digits.fraction()))
+                    .target(AnnotTarget.FIELD);
             property.annotation(annotation);
         });
     }
@@ -202,9 +202,9 @@ public class JakartaValidationModelAdapter implements ModelAdapter {
         final var allowedValue = ValidationExtensions.allowedValue(schema.getExtensions());
 
         if ("past".equals(allowedValue)) {
-            property.annotation(new Annotation()
+            property.annotation(new Annot()
                     .name(constraintsPackage + ".Past")
-                    .annotationTarget(AnnotationTarget.FIELD)
+                    .target(AnnotTarget.FIELD)
             );
         }
     }
@@ -215,9 +215,9 @@ public class JakartaValidationModelAdapter implements ModelAdapter {
 
         if ("pastOrPresent".equals(allowedValue)) {
             property.annotation(
-                    new Annotation()
+                    new Annot()
                             .name(constraintsPackage + ".PastOrPresent")
-                            .annotationTarget(AnnotationTarget.FIELD)
+                            .target(AnnotTarget.FIELD)
             );
         }
     }
@@ -228,9 +228,9 @@ public class JakartaValidationModelAdapter implements ModelAdapter {
 
         if ("future".equals(allowedValue)) {
             property.annotation(
-                    new Annotation()
+                    new Annot()
                             .name(constraintsPackage + ".FutureOrPresent")
-                            .annotationTarget(AnnotationTarget.FIELD)
+                            .target(AnnotTarget.FIELD)
             );
         }
     }
@@ -239,9 +239,9 @@ public class JakartaValidationModelAdapter implements ModelAdapter {
                                      final ModelProperty property) {
         final var allowedValue = ValidationExtensions.allowedValue(schema.getExtensions());
         if ("future".equals(allowedValue)) {
-            property.annotation(new Annotation()
+            property.annotation(new Annot()
                     .name(constraintsPackage + ".Future")
-                    .annotationTarget(AnnotationTarget.FIELD)
+                    .target(AnnotTarget.FIELD)
             );
         }
     }
@@ -252,9 +252,9 @@ public class JakartaValidationModelAdapter implements ModelAdapter {
 
         if (extensions.containsKey(ValidationExtensions.ASSERT)
                 && extensions.get(ValidationExtensions.ASSERT) == null) {
-            property.annotation(new Annotation()
+            property.annotation(new Annot()
                     .name(constraintsPackage + ".Null")
-                    .annotationTarget(AnnotationTarget.FIELD)
+                    .target(AnnotTarget.FIELD)
             );
         }
     }
@@ -262,9 +262,9 @@ public class JakartaValidationModelAdapter implements ModelAdapter {
     private void addNotNullConstraint(final Schema<?> schema,
                                       final ModelProperty property) {
         if (Boolean.FALSE.equals(schema.getNullable())) {
-            property.annotation(new Annotation()
+            property.annotation(new Annot()
                     .name(constraintsPackage + ".NotNull")
-                    .annotationTarget(AnnotationTarget.FIELD)
+                    .target(AnnotTarget.FIELD)
             );
         }
     }
@@ -273,9 +273,9 @@ public class JakartaValidationModelAdapter implements ModelAdapter {
                                        final ModelProperty property) {
         final var extensions = nonNull(schema.getExtensions());
         if ("negative".equals(extensions.get(ValidationExtensions.ASSERT))) {
-            property.annotation(new Annotation()
+            property.annotation(new Annot()
                     .name(constraintsPackage + ".Negative")
-                    .annotationTarget(AnnotationTarget.FIELD)
+                    .target(AnnotTarget.FIELD)
             );
         }
     }
@@ -284,9 +284,9 @@ public class JakartaValidationModelAdapter implements ModelAdapter {
                                              final ModelProperty property) {
         final var extensions = nonNull(schema.getExtensions());
         if ("negativeOrZero".equals(extensions.get(ValidationExtensions.ASSERT))) {
-            property.annotation(new Annotation()
+            property.annotation(new Annot()
                     .name(constraintsPackage + ".NegativeOrZero")
-                    .annotationTarget(AnnotationTarget.FIELD)
+                    .target(AnnotTarget.FIELD)
             );
         }
     }
@@ -295,9 +295,9 @@ public class JakartaValidationModelAdapter implements ModelAdapter {
                                        final ModelProperty property) {
         final var extensions = nonNull(schema.getExtensions());
         if ("positive".equals(extensions.get(ValidationExtensions.ASSERT))) {
-            property.annotation(new Annotation()
+            property.annotation(new Annot()
                     .name(constraintsPackage + ".Positive")
-                    .annotationTarget(AnnotationTarget.FIELD)
+                    .target(AnnotTarget.FIELD)
             );
         }
     }
@@ -306,9 +306,9 @@ public class JakartaValidationModelAdapter implements ModelAdapter {
                                              final ModelProperty property) {
         final var extensions = nonNull(schema.getExtensions());
         if ("positiveOrZero".equals(extensions.get(ValidationExtensions.ASSERT))) {
-            property.annotation(new Annotation()
+            property.annotation(new Annot()
                     .name(constraintsPackage + ".PositiveOrZero")
-                    .annotationTarget(AnnotationTarget.FIELD)
+                    .target(AnnotTarget.FIELD)
             );
         }
     }
@@ -325,8 +325,6 @@ public class JakartaValidationModelAdapter implements ModelAdapter {
                         (Map<String, Object>) extensionValue,
                         property
                 );
-            } else {
-                throw new UnsupportedOperationException(extensionName);
             }
         });
     }
@@ -336,9 +334,9 @@ public class JakartaValidationModelAdapter implements ModelAdapter {
         final var allowedValue = extensionValue.get("allowed-value");
 
         if ("pastOrPresent".equals(allowedValue)) {
-            property.annotation(new Annotation()
+            property.annotation(new Annot()
                     .name(constraintsPackage + ".PastOrPresent")
-                    .annotationTarget(AnnotationTarget.FIELD)
+                    .target(AnnotTarget.FIELD)
             );
         }
     }

@@ -6,7 +6,6 @@ import java.util.Map;
 public final class ExtensionsHelper {
 
     private ExtensionsHelper() {
-
     }
 
     public static <T> T getExtension(final Map<String, Object> extensions, final String name, final Class<T> resultClass) {

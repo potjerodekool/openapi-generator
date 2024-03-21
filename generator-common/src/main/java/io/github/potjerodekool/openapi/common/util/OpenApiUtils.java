@@ -85,8 +85,6 @@ public final class OpenApiUtils {
             if (contentMediaType != null && contentMediaType.size() == 1) {
                 final var content = contentMediaType.values().iterator().next();
                 if (content != null) {
-                    content.getExtensions();
-
                     return content.getSchema() != null
                             ? new SchemaAndExtensions(content.getSchema(), content.getExtensions())
                             : null;
