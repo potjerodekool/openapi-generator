@@ -159,7 +159,7 @@ public class SpringOpenApiConfigGenerator implements ApiConfigGenerator {
 
     private Expression createServer(final Server server) {
         final var url = server.getUrl();
-        final var description = server.getDescription();
+        var description = server.getDescription();
 
         var expression = new MethodCallExpression(
                 new NewClassExpression(
@@ -170,6 +170,9 @@ public class SpringOpenApiConfigGenerator implements ApiConfigGenerator {
         );
 
         if (description != null) {
+            description = description.replace("\n", " ")
+                    .replace("\r", " ");
+
             expression = new MethodCallExpression(
                     expression,
                     "description",

@@ -28,8 +28,8 @@ public class CodeGenTest {
                 .modifier(Modifier.PUBLIC)
                 .annotation(
                         new Annot("javax.annotation.processing.Generated")
-                                .value(new SimpleLiteralExpr(getClass().getName()))
-                                .value("date", new SimpleLiteralExpr(date))
+                                .attribute(new SimpleLiteralExpr(getClass().getName()))
+                                .attribute("date", new SimpleLiteralExpr(date))
                 )
                 .simpleName("MyServiceApi");
 

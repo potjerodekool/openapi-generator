@@ -1,6 +1,7 @@
 package io.github.potjerodekool.openapi.common.generate.annotation.openapi.media;
 
 import io.github.potjerodekool.codegen.template.model.expression.ClassLiteralExpr;
+import io.github.potjerodekool.codegen.template.model.expression.Expr;
 import io.github.potjerodekool.codegen.template.model.expression.LiteralExpr;
 import io.github.potjerodekool.codegen.template.model.expression.SimpleLiteralExpr;
 import io.github.potjerodekool.codegen.template.model.type.ArrayTypeExpr;
@@ -10,6 +11,7 @@ import io.github.potjerodekool.codegen.template.model.type.TypeExpr;
 import io.github.potjerodekool.openapi.common.generate.annotation.AbstractAnnotationBuilder;
 
 import java.util.List;
+import java.util.Objects;
 
 public class SchemaAnnotationBuilder extends AbstractAnnotationBuilder<SchemaAnnotationBuilder> {
 
@@ -22,13 +24,13 @@ public class SchemaAnnotationBuilder extends AbstractAnnotationBuilder<SchemaAnn
             return this;
         }
 
-        final var className = switch (implementationClass) {
-            case ClassOrInterfaceTypeExpr classOrInterfaceTypeExpr -> classOrInterfaceTypeExpr.getName();
-            case PrimitiveTypeExpr primitiveTypeExpr -> primitiveTypeExpr.getName();
+        final var implemetationType = switch (implementationClass) {
+            case ClassOrInterfaceTypeExpr classOrInterfaceTypeExpr -> new ClassLiteralExpr(classOrInterfaceTypeExpr.getName());
+            case PrimitiveTypeExpr primitiveTypeExpr -> new ClassLiteralExpr(primitiveTypeExpr.getName());
             default -> throw new UnsupportedOperationException(implementationClass.getClass().getName());
         };
 
-        return add("implementation", new ClassLiteralExpr(className));
+        return add("implementation", implemetationType);
     }
 
     public SchemaAnnotationBuilder requiredMode(final Boolean required) {
@@ -44,6 +46,9 @@ public class SchemaAnnotationBuilder extends AbstractAnnotationBuilder<SchemaAnn
     }
 
     public SchemaAnnotationBuilder type(final String type) {
+        if (type == null) {
+            return this;
+        }
         return add("type", new SimpleLiteralExpr(type));
     }
 

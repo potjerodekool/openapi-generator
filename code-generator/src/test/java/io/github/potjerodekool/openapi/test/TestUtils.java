@@ -39,29 +39,10 @@ public final class TestUtils {
                 .thenAnswer(answer -> artifacts.stream());
 
         final var project = mock(Project.class);
-        when(project.dependencyChecker())
+        when(project.getDependencyChecker())
                 .thenReturn(dependencyChecker);
 
         return project;
-    }
-
-    public static Environment createEnvironment(final Project project,
-                                                final FileManager fileManager) {
-        final var classPath = ClassPath.getFullClassPath(project);
-        final var symbolTable = new SymbolTable();
-        final var javaTypes = new JavaTypes(symbolTable);
-        final var types = new KotlinTypes(javaTypes);
-        final var javaElements = new JavaElements(symbolTable, classPath, javaTypes);
-        final var elements = new KotlinElements(symbolTable, classPath, javaElements);
-        final var filer = new FilerImpl(elements, types, fileManager);
-
-        final var environmentMock = mock(Environment.class);
-        when(environmentMock.getSymbolTable()).thenReturn(symbolTable);
-        when(environmentMock.getJavaElements()).thenReturn(javaElements);
-        when(environmentMock.getJavaTypes()).thenReturn(javaTypes);
-        when(environmentMock.getFiler()).thenReturn(filer);
-
-        return environmentMock;
     }
 
 }

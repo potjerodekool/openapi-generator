@@ -13,8 +13,6 @@ import java.util.zip.ZipFile;
 
 public class MavenDependencyChecker implements DependencyChecker {
 
-    private static final Logger LOGGER = Logger.getLogger(MavenDependencyChecker.class.getName());
-
     private static final Set<String> SCOPES = Set.of("compile", "runtime");
 
     private final MavenProject project;

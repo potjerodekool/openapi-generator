@@ -13,7 +13,7 @@ public interface OpenApiTypeUtils {
                         Schema<?> schema,
                         Map<String, Object> extensions,
                         String packageName,
-                        String mediaType,
+                        ContentType mediaType,
                         Boolean isRequired);
 
     TypeExpr asNonNull(TypeExpr typeExpr);
@@ -39,11 +39,16 @@ public interface OpenApiTypeUtils {
     ClassOrInterfaceTypeExpr createMapType(OpenAPI openAPI,
                                            MapSchema mapSchema,
                                            String packageName,
-                                           String mediaType,
+                                           ContentType mediaType,
                                            Boolean isRequired);
+
+    ClassOrInterfaceTypeExpr createBindingType(OpenAPI openAPI);
 
     TypeExpr createArrayType(OpenAPI openAPI,
                              ArraySchema arraySchema,
                              String packageName,
-                             String mediaType);
+                             ContentType mediaType);
+
+    boolean isCollectionType(TypeExpr typeExpr);
+
 }

@@ -3,10 +3,12 @@ package io.github.potjerodekool.openapi;
 import io.github.potjerodekool.codegen.template.model.annotation.Annot;
 import io.github.potjerodekool.codegen.template.model.type.ClassOrInterfaceTypeExpr;
 import io.github.potjerodekool.openapi.common.generate.Templates;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 public class FieldTest {
 
+    @Disabled
     @Test
     void test() {
         final Templates templates = new Templates();

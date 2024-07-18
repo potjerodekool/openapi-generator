@@ -54,8 +54,7 @@ class OpenApiParserHelperIT {
                 "org.some",
                 true,
                 true,
-                true,
-                new HashMap<>()
+                true
         );
 
         final var project = new Project(

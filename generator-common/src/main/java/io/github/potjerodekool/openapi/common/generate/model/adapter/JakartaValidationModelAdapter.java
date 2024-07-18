@@ -3,6 +3,7 @@ package io.github.potjerodekool.openapi.common.generate.model.adapter;
 import io.github.potjerodekool.codegen.template.model.annotation.Annot;
 import io.github.potjerodekool.codegen.template.model.annotation.AnnotTarget;
 import io.github.potjerodekool.codegen.template.model.expression.SimpleLiteralExpr;
+import io.github.potjerodekool.openapi.common.ApiConfiguration;
 import io.github.potjerodekool.openapi.common.generate.model.element.Model;
 import io.github.potjerodekool.openapi.common.generate.model.element.ModelProperty;
 import io.github.potjerodekool.openapi.common.generate.ValidationExtensions;
@@ -25,7 +26,9 @@ public class JakartaValidationModelAdapter implements ValidationModelAdapter {
     }
 
     @Override
-    public void adapt(final Model model, final ObjectSchema schema) {
+    public void adapt(final Model model,
+                      final ObjectSchema schema,
+                      final ApiConfiguration apiConfiguration) {
         final var properties = schema.getProperties();
 
         if (properties != null) {
@@ -91,7 +94,7 @@ public class JakartaValidationModelAdapter implements ValidationModelAdapter {
             property.annotation(
                     new Annot()
                             .name(annotationName)
-                            .value("value", new SimpleLiteralExpr(maximum))
+                            .attribute("value", new SimpleLiteralExpr(maximum))
                             .target(AnnotTarget.FIELD)
             );
         }

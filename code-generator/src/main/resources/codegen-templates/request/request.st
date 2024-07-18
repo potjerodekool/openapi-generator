@@ -18,6 +18,8 @@ public interface Request {
 
 	int getRemotePort();
 
+	Object getNativeRequest();
+
 }
 
 >>

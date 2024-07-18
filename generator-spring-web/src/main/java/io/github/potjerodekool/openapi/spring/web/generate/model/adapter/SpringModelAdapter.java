@@ -5,14 +5,19 @@ import io.github.potjerodekool.codegen.template.model.annotation.AnnotTarget;
 import io.github.potjerodekool.codegen.template.model.expression.FieldAccessExpr;
 import io.github.potjerodekool.codegen.template.model.expression.IdentifierExpr;
 import io.github.potjerodekool.codegen.template.model.type.ClassOrInterfaceTypeExpr;
+import io.github.potjerodekool.openapi.common.ApiConfiguration;
 import io.github.potjerodekool.openapi.common.generate.model.adapter.ModelAdapter;
 import io.github.potjerodekool.openapi.common.generate.model.element.Model;
 import io.swagger.v3.oas.models.media.DateSchema;
 import io.swagger.v3.oas.models.media.ObjectSchema;
 
+import java.util.Map;
+
 public class SpringModelAdapter implements ModelAdapter {
     @Override
-    public void adapt(final Model model, final ObjectSchema schema) {
+    public void adapt(final Model model,
+                      final ObjectSchema schema,
+                      final ApiConfiguration apiConfiguration) {
         final var properties = schema.getProperties();
 
         if (properties != null) {

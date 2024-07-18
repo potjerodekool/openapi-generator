@@ -45,6 +45,10 @@ public class HttpServletRequestWrapper implements <packageName>.Request  {
 		return this.request.getRemotePort();
 	}
 
+    @Override()
+    public HttpServletRequest getNativeRequest() {
+        return this.request;
+    }
 }
 
 >>

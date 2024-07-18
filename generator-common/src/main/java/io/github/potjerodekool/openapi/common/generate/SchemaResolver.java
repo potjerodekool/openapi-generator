@@ -12,6 +12,10 @@ public final class SchemaResolver {
 
     public static ResolvedSchemaResult resolve(final OpenAPI openAPI,
                                                final Schema<?> schema) {
+        if (schema == null) {
+            return new ResolvedSchemaResult(null, null);
+        }
+
         final var components = openAPI.getComponents();
 
         if (components == null) {

@@ -4,10 +4,7 @@ import io.github.potjerodekool.codegen.model.tree.type.BoundKind;
 import io.github.potjerodekool.codegen.model.type.TypeKind;
 import io.github.potjerodekool.codegen.model.util.StringUtils;
 import io.github.potjerodekool.codegen.template.model.type.*;
-import io.github.potjerodekool.openapi.common.generate.Extensions;
-import io.github.potjerodekool.openapi.common.generate.ExtensionsHelper;
-import io.github.potjerodekool.openapi.common.generate.OpenApiTypeUtils;
-import io.github.potjerodekool.openapi.common.generate.SchemaResolver;
+import io.github.potjerodekool.openapi.common.generate.*;
 import io.github.potjerodekool.openapi.common.generate.model.element.Element;
 import io.github.potjerodekool.openapi.common.generate.model.element.JavaModifier;
 import io.github.potjerodekool.openapi.common.generate.model.element.Model;
@@ -36,12 +33,20 @@ public class JavaModelBuilder {
                        final HttpMethod httpMethod,
                        final String packageName,
                        final String name,
-                       final Schema<?> schema) {
+                       final Schema<?> schema,
+                       final ContentType contentType) {
         final var model = new Model();
         model.simpleName(name);
         model.packageName(packageName);
         final var processedProperties = new HashSet<String>();
-        addProperties(openAPI, httpMethod, schema, model, processedProperties);
+        addProperties(
+                openAPI,
+                httpMethod,
+                schema,
+                contentType,
+                model,
+                processedProperties
+        );
         postProcessProperties(schema, model);
         processModelExtensions(schema, model);
         return model;
@@ -113,8 +118,17 @@ public class JavaModelBuilder {
     private void addProperties(final OpenAPI openAPI,
                                final HttpMethod httpMethod,
                                final Schema<?> schema,
-                               final Model model, final HashSet<String> processedProperties) {
-        addInheredProperties(openAPI, httpMethod, schema, model, processedProperties);
+                               final ContentType contentType,
+                               final Model model,
+                               final HashSet<String> processedProperties) {
+        addInheredProperties(
+                openAPI,
+                httpMethod,
+                schema,
+                contentType,
+                model,
+                processedProperties
+        );
 
         if (schema.getProperties() != null) {
             schema.getProperties()
@@ -124,6 +138,7 @@ public class JavaModelBuilder {
                                     httpMethod,
                                     propertyName,
                                     propertySchema,
+                                    contentType,
                                     model,
                                     processedProperties
                             ));
@@ -133,6 +148,7 @@ public class JavaModelBuilder {
     private void addInheredProperties(final OpenAPI openAPI,
                                       final HttpMethod httpMethod,
                                       final Schema<?> schema,
+                                      final ContentType contentType,
                                       final Model model, final HashSet<String> processedProperties) {
         if (schema.getAllOf() != null) {
             Schema<?> ignoreSchema;
@@ -192,7 +208,14 @@ public class JavaModelBuilder {
                 final var resolved = SchemaResolver.resolve(openAPI, otherSchema);
 
                 if (resolved.schema() != null) {
-                    addProperties(openAPI, httpMethod, resolved.schema(), model, processedProperties);
+                    addProperties(
+                            openAPI,
+                            httpMethod,
+                            resolved.schema(),
+                            contentType,
+                            model,
+                            processedProperties
+                    );
                 }
             }
         }
@@ -211,7 +234,10 @@ public class JavaModelBuilder {
     private void addProperty(final OpenAPI openAPI,
                              final HttpMethod httpMethod,
                              final String propertyName,
-                             final Schema<?> propertySchema, final Model model, final HashSet<String> processedProperties) {
+                             final Schema<?> propertySchema,
+                             final ContentType contentType,
+                             final Model model,
+                             final HashSet<String> processedProperties) {
         if (model.getProperty(propertyName).isPresent()
                 || processedProperties.contains(propertyName)) {
             return;
@@ -234,26 +260,15 @@ public class JavaModelBuilder {
                         .simpleName(enumName);
             }
 
-            if (resolvedPropertySchema instanceof MapSchema mapSchema) {
-                final var keyType = typeUtils.createStringType(null);
-                final TypeExpr valueType;
-
-                if (mapSchema.getAdditionalProperties() instanceof Schema<?> additionalSchema) {
-                    valueType = resolveType(additionalSchema, false, openAPI, false);
-                } else {
-                    valueType = new ClassOrInterfaceTypeExpr().packageName("java.lang").simpleName("Object");
-                }
-
-                ((ClassOrInterfaceTypeExpr) type).typeArguments(keyType, valueType);
-            }
-
-            if ((resolvedPropertySchema instanceof ObjectSchema || resolvedPropertySchema instanceof ComposedSchema)
+            if (resolvedSchemaResult.name() != null
+                    && (resolvedPropertySchema instanceof ObjectSchema || resolvedPropertySchema instanceof ComposedSchema)
                     && type instanceof ClassOrInterfaceTypeExpr referenceType) {
                 referenceType.packageName(modelPackageName);
                 referenceType.simpleName(resolvedSchemaResult.name());
             }
 
-            if (httpMethod == HttpMethod.PATCH) {
+            if (httpMethod == HttpMethod.PATCH
+                    && !ContentType.JSON_PATCH_JSON.equals(contentType)) {
                 type = new ClassOrInterfaceTypeExpr()
                         .packageName("org.openapitools.jackson.nullable")
                         .simpleName("JsonNullable")
@@ -264,6 +279,8 @@ public class JavaModelBuilder {
                     .simpleName(propertyName)
                     .type(type);
             model.enclosedElement(property);
+            property.enclosingElement(model);
+
             processedProperties.add(propertyName);
         }
     }
@@ -280,7 +297,7 @@ public class JavaModelBuilder {
             case PasswordSchema ignored -> typeUtils.createStringType(null);
             case DateSchema ignored -> typeUtils.createDateType();
             case DateTimeSchema ignored -> typeUtils.createDateTimeType();
-            case MapSchema ignored -> typeUtils.createMapType(openAPI, null, modelPackageName, null, isRequired);
+            case MapSchema mapSchema -> typeUtils.createMapType(openAPI, mapSchema, modelPackageName, null, isRequired);
             case ArraySchema arraySchema -> typeUtils.createArrayType(openAPI, arraySchema, modelPackageName, null);
             case UUIDSchema ignored -> typeUtils.createUuidType();
             case BooleanSchema booleanSchema -> typeUtils.createBooleanType(booleanSchema, isRequired);
@@ -297,6 +314,7 @@ public class JavaModelBuilder {
                     yield new ClassOrInterfaceTypeExpr().simpleName(typeArg);
                 }
             }
+            case BinarySchema ignored -> typeUtils.createMultipartTypeExpression(openAPI);
             default -> {
                 if (schema.get$ref() != null) {
                     final var result = SchemaResolver.resolve(openAPI, schema);

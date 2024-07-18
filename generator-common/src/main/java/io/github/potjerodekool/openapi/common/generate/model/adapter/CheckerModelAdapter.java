@@ -3,16 +3,21 @@ package io.github.potjerodekool.openapi.common.generate.model.adapter;
 import io.github.potjerodekool.codegen.template.model.annotation.Annot;
 import io.github.potjerodekool.codegen.template.model.annotation.AnnotTarget;
 import io.github.potjerodekool.codegen.template.model.type.ClassOrInterfaceTypeExpr;
+import io.github.potjerodekool.openapi.common.ApiConfiguration;
 import io.github.potjerodekool.openapi.common.dependency.Bean;
 import io.github.potjerodekool.openapi.common.dependency.ConditionalOnDependency;
 import io.github.potjerodekool.openapi.common.generate.model.element.Model;
 import io.swagger.v3.oas.models.media.ObjectSchema;
 
+import java.util.Map;
+
 @Bean
 @ConditionalOnDependency(groupId = "org.checkerframework", artifactId = "checker-qual")
 public class CheckerModelAdapter implements ModelAdapter {
     @Override
-    public void adapt(final Model model, final ObjectSchema schema) {
+    public void adapt(final Model model,
+                      final ObjectSchema schema,
+                      final ApiConfiguration apiConfiguration) {
         adaptProperties(model, schema);
     }
 
