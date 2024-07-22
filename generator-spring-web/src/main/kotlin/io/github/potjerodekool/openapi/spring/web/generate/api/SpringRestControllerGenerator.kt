@@ -93,7 +93,7 @@ class SpringRestControllerGenerator(
     }
 
     override fun postProcessOperation(
-        openAPI: OpenAPI?,
+        openAPI: OpenAPI,
         httpMethod: HttpMethod?,
         path: String?,
         operation: Operation?,
@@ -156,7 +156,7 @@ class SpringRestControllerGenerator(
     }
 
     private fun generateOkResponse(
-        openAPI: OpenAPI?, httpMethod: HttpMethod?,
+        openAPI: OpenAPI, httpMethod: HttpMethod?,
         operation: Operation?,
         okResponse: Map.Entry<String, ApiResponse>,
         arguments: List<Expr>

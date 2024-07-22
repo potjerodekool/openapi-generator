@@ -1,56 +1,39 @@
 package io.github.potjerodekool.openapi.common.generate
 
 import io.github.potjerodekool.codegen.model.type.TypeKind
-import io.github.potjerodekool.codegen.template.model.type.ArrayTypeExpr
-import io.github.potjerodekool.codegen.template.model.type.ClassOrInterfaceTypeExpr
-import io.github.potjerodekool.codegen.template.model.type.PrimitiveTypeExpr
-import io.github.potjerodekool.codegen.template.model.type.TypeExpr
-import io.github.potjerodekool.codegen.template.model.type.WildCardTypeExpr
+import io.github.potjerodekool.codegen.template.model.type.*
+import io.github.potjerodekool.openapi.common.SchemaType
+import io.github.potjerodekool.openapi.common.SchemaTypeResolver
 import io.swagger.v3.oas.models.OpenAPI
-import io.swagger.v3.oas.models.media.ArraySchema
-import io.swagger.v3.oas.models.media.BinarySchema
-import io.swagger.v3.oas.models.media.BooleanSchema
-import io.swagger.v3.oas.models.media.ByteArraySchema
-import io.swagger.v3.oas.models.media.ComposedSchema
-import io.swagger.v3.oas.models.media.DateSchema
-import io.swagger.v3.oas.models.media.DateTimeSchema
-import io.swagger.v3.oas.models.media.EmailSchema
-import io.swagger.v3.oas.models.media.FileSchema
-import io.swagger.v3.oas.models.media.IntegerSchema
-import io.swagger.v3.oas.models.media.JsonSchema
-import io.swagger.v3.oas.models.media.MapSchema
-import io.swagger.v3.oas.models.media.NumberSchema
-import io.swagger.v3.oas.models.media.ObjectSchema
-import io.swagger.v3.oas.models.media.PasswordSchema
-import io.swagger.v3.oas.models.media.Schema
-import io.swagger.v3.oas.models.media.StringSchema
-import io.swagger.v3.oas.models.media.UUIDSchema
+import io.swagger.v3.oas.models.media.*
 
 open class StandardOpenApiTypeUtils : OpenApiTypeUtils {
 
     override fun createType(
         openAPI: OpenAPI,
         schema: Schema<*>?,
-        extensions: MutableMap<String, Any?>,
+        extensions: MutableMap<String, Any?>?,
         packageName: String,
         mediaType: ContentType?,
         isRequired: Boolean?
     ): TypeExpr {
-        return when (schema) {
-            null -> ClassOrInterfaceTypeExpr("java.lang.Object")
-            is ArraySchema -> createArrayType(openAPI, schema, packageName, mediaType)
-            is BinarySchema -> createMultipartTypeExpression(openAPI)
-            is BooleanSchema -> createBooleanType(schema, isRequired)
-            is ByteArraySchema -> throw UnsupportedOperationException()
-            is DateSchema -> createDateType()
-            is DateTimeSchema -> createDateTimeType()
-            is EmailSchema -> createStringType(null)
-            is FileSchema -> throw UnsupportedOperationException()
-            is IntegerSchema -> createIntegerType(schema, isRequired)
-            is JsonSchema -> throw UnsupportedOperationException()
-            is MapSchema -> createMapType(openAPI, schema, packageName, mediaType, isRequired)
-            is NumberSchema -> createNumberType(schema, isRequired)
-            is ObjectSchema -> {
+        if (schema == null) {
+            return ClassOrInterfaceTypeExpr("java.lang.Object")
+        }
+
+        val schemaType = SchemaTypeResolver.resolveSchemaType(schema)
+
+        return when (schemaType) {
+            SchemaType.ARRAY -> createArrayType(openAPI, schema, packageName, mediaType)
+            SchemaType.BINARY -> createMultipartTypeExpression(openAPI)
+            SchemaType.BOOLEAN -> createBooleanType(schema, isRequired)
+            SchemaType.DATE -> createDateType()
+            SchemaType.DATE_TIME -> createDateTimeType()
+            SchemaType.EMAIL -> createStringType(null)
+            SchemaType.INT32, SchemaType.INT64 -> createIntegerType(schema, isRequired)
+            SchemaType.MAP -> createMapType(openAPI, schema, packageName, mediaType, isRequired)
+            SchemaType.FLOAT, SchemaType.DOUBLE -> createNumberType(schema, isRequired)
+            SchemaType.OBJECT -> {
                 val typeArg = ExtensionsHelper.getExtension(
                     schema.extensions,
                     Extensions.TYPE_ARG,
@@ -66,18 +49,23 @@ open class StandardOpenApiTypeUtils : OpenApiTypeUtils {
                 processExtensions(openAPI, type, packageName, extensions)
                 type
             }
-
-            is PasswordSchema -> createStringType(null)
-            is StringSchema -> createStringType(schema)
-            is UUIDSchema -> createUuidType()
-            else -> createTypeDefault(
-                openAPI,
-                schema,
-                extensions,
-                packageName,
-                mediaType,
-                isRequired
-            )
+            SchemaType.PASSWORD -> createStringType(null)
+            SchemaType.STRING -> createStringType(schema)
+            SchemaType.UUID -> createUuidType()
+            else -> {
+                when (schema) {
+                    is ByteArraySchema -> throw UnsupportedOperationException()
+                    is FileSchema -> throw UnsupportedOperationException()
+                    else -> createTypeDefault(
+                        openAPI,
+                        schema,
+                        extensions,
+                        packageName,
+                        mediaType,
+                        isRequired
+                    )
+                }
+            }
         }
     }
 
@@ -85,7 +73,7 @@ open class StandardOpenApiTypeUtils : OpenApiTypeUtils {
         if (typeExpr is PrimitiveTypeExpr) {
             return typeExpr
         } else if (typeExpr is ClassOrInterfaceTypeExpr) {
-            val name = typeExpr.getName()
+            val name = typeExpr.name
             return when (name) {
                 "java.lang.Boolean" -> ClassOrInterfaceTypeExpr("java.lang.Boolean")
                 "java.lang.Integer" -> ClassOrInterfaceTypeExpr("java.lang.Integer")
@@ -100,7 +88,7 @@ open class StandardOpenApiTypeUtils : OpenApiTypeUtils {
     }
 
     private fun asNullable(typeExpr: TypeExpr): TypeExpr {
-        return when (typeExpr.getTypeKind()) {
+        return when (typeExpr.typeKind) {
             TypeKind.BOOLEAN -> ClassOrInterfaceTypeExpr("java.lang.Boolean")
             TypeKind.INT -> ClassOrInterfaceTypeExpr("java.lang.Integer")
             TypeKind.LONG -> ClassOrInterfaceTypeExpr("java.lang.Long")
@@ -113,25 +101,25 @@ open class StandardOpenApiTypeUtils : OpenApiTypeUtils {
         }
     }
 
-    override fun createMultipartTypeExpression(api: OpenAPI?): TypeExpr {
+    override fun createMultipartTypeExpression(api: OpenAPI): TypeExpr {
         throw UnsupportedOperationException()
     }
 
-    override fun resolveImplementationType(openAPI: OpenAPI?, type: TypeExpr?): TypeExpr? {
+    override fun resolveImplementationType(openAPI: OpenAPI, type: TypeExpr?): TypeExpr? {
         return if (type is WildCardTypeExpr) {
-            type.getExpr() as TypeExpr
+            type.expr as TypeExpr
         } else {
             type
         }
     }
 
-    override fun createNumberType(numberSchema: NumberSchema, isRequired: Boolean?): TypeExpr {
-        val isNullable = true == numberSchema.getNullable()
+    override fun createNumberType(numberSchema: Schema<*>, isRequired: Boolean?): TypeExpr {
+        val isNullable = true == numberSchema.nullable
 
-        return if ("double".equals(numberSchema.getFormat())) {
+        return if ("double" == numberSchema.format) {
             if (isNullable || false == isRequired) ClassOrInterfaceTypeExpr("java.lang.Double")
             else PrimitiveTypeExpr(TypeKind.DOUBLE)
-        } else if ("float".equals(numberSchema.getFormat())) {
+        } else if ("float" == numberSchema.format) {
             if (isNullable || false == isRequired) ClassOrInterfaceTypeExpr("java.lang.Float")
             else PrimitiveTypeExpr(TypeKind.FLOAT)
         } else {
@@ -139,8 +127,8 @@ open class StandardOpenApiTypeUtils : OpenApiTypeUtils {
         }
     }
 
-    override fun createStringType(schema: StringSchema?): TypeExpr {
-        return if (schema != null && schema.getEnum() != null) {
+    override fun createStringType(schema: Schema<*>?): TypeExpr {
+        return if (schema?.enum != null) {
             ClassOrInterfaceTypeExpr().packageName("java.lang").simpleName("Enum")
         } else {
             ClassOrInterfaceTypeExpr().packageName("java.lang").simpleName("String")
@@ -155,8 +143,8 @@ open class StandardOpenApiTypeUtils : OpenApiTypeUtils {
         return ClassOrInterfaceTypeExpr("java.time.OffsetDateTime")
     }
 
-    override fun createBooleanType(booleanSchema: BooleanSchema, isRequired: Boolean?): TypeExpr {
-        val isNullable = true == booleanSchema.getNullable()
+    override fun createBooleanType(booleanSchema: Schema<*>, isRequired: Boolean?): TypeExpr {
+        val isNullable = true == booleanSchema.nullable
         return if (isNullable || false == isRequired) ClassOrInterfaceTypeExpr("java.lang.Boolean")
         else PrimitiveTypeExpr(TypeKind.BOOLEAN)
     }
@@ -167,7 +155,7 @@ open class StandardOpenApiTypeUtils : OpenApiTypeUtils {
 
     override fun createMapType(
         openAPI: OpenAPI,
-        mapSchema: MapSchema,
+        mapSchema: Schema<*>,
         packageName: String,
         mediaType: ContentType?,
         isRequired: Boolean?
@@ -176,7 +164,7 @@ open class StandardOpenApiTypeUtils : OpenApiTypeUtils {
         val valueType = asNullable(
             createType(
                 openAPI,
-                mapSchema.getAdditionalProperties() as Schema<*>,
+                mapSchema.additionalProperties as Schema<*>,
                 mutableMapOf(),
                 packageName,
                 mediaType,
@@ -193,13 +181,13 @@ open class StandardOpenApiTypeUtils : OpenApiTypeUtils {
 
     override fun createArrayType(
         openAPI: OpenAPI,
-        arraySchema: ArraySchema,
+        arraySchema: Schema<*>,
         packageName: String,
         mediaType: ContentType?
     ): TypeExpr {
         val componentType = createType(
             openAPI,
-            arraySchema.getItems(),
+            arraySchema.items,
             mutableMapOf(),
             packageName,
             mediaType,
@@ -210,7 +198,7 @@ open class StandardOpenApiTypeUtils : OpenApiTypeUtils {
             return createArrayType(componentType)
         } else {
             val className =
-                if (true == arraySchema.getItems().getUniqueItems()) "java.util.Set"
+                if (true == arraySchema.items.uniqueItems) "java.util.Set"
                 else "java.util.List"
 
             return ClassOrInterfaceTypeExpr(className)
@@ -224,23 +212,23 @@ open class StandardOpenApiTypeUtils : OpenApiTypeUtils {
 
     override fun isCollectionType(typeExpr: TypeExpr?): Boolean {
         if (typeExpr is ClassOrInterfaceTypeExpr) {
-            return "java.util.Set" == typeExpr.getName()
-                    || "java.util.List" == typeExpr.getName()
+            return "java.util.Set" == typeExpr.name
+                    || "java.util.List" == typeExpr.name
         }
         return false
     }
 
     private fun createIntegerType(
-        integerSchema: IntegerSchema,
+        integerSchema: Schema<*>,
         isRequired: Boolean?
     ): TypeExpr {
-        val isNullable = true == integerSchema.getNullable()
+        val isNullable = true == integerSchema.nullable
 
-        if ("int64".equals(integerSchema.getFormat())) {
-            return if (isNullable || false == isRequired) ClassOrInterfaceTypeExpr("java.lang.Long")
+        return if ("int64" == integerSchema.format) {
+            if (isNullable || false == isRequired) ClassOrInterfaceTypeExpr("java.lang.Long")
             else PrimitiveTypeExpr(TypeKind.LONG)
         } else {
-            return if (isNullable || false == isRequired) ClassOrInterfaceTypeExpr("java.lang.Integer")
+            if (isNullable || false == isRequired) ClassOrInterfaceTypeExpr("java.lang.Integer")
             else PrimitiveTypeExpr(TypeKind.INT)
         }
     }
@@ -248,7 +236,7 @@ open class StandardOpenApiTypeUtils : OpenApiTypeUtils {
     private fun processExtensions(
         openAPI: OpenAPI, type: ClassOrInterfaceTypeExpr,
         packageName: String,
-        extensions: MutableMap<String, Any?>
+        extensions: MutableMap<String, Any?>?
     ) {
         val typeArgs = ExtensionsHelper.getExtension(extensions, Extensions.TYPE_ARGS, List::class.java)
 
@@ -286,15 +274,13 @@ open class StandardOpenApiTypeUtils : OpenApiTypeUtils {
     private fun createTypeDefault(
         openAPI: OpenAPI,
         schema: Schema<*>,
-        extensions: MutableMap<String, Any?>,
+        extensions: MutableMap<String, Any?>?,
         packageName: String,
         mediaType: ContentType?,
         isRequired: Boolean?
     ): TypeExpr {
         val resolved = SchemaResolver.resolve(openAPI, schema)
-        val resolvedSchema = resolved.schema()
-
-        return when (resolvedSchema) {
+        return when (val resolvedSchema = resolved.schema()) {
             null -> throw NullPointerException("Resolved schema is null")
             is ObjectSchema -> createObjectOrComposedType(openAPI, resolved, extensions, packageName)
             is ComposedSchema -> createObjectOrComposedType(openAPI, resolved, extensions, packageName)
@@ -318,7 +304,7 @@ open class StandardOpenApiTypeUtils : OpenApiTypeUtils {
     private fun createObjectOrComposedType(
         openAPI: OpenAPI,
         resolved: ResolvedSchemaResult,
-        extensions: MutableMap<String, Any?>,
+        extensions: MutableMap<String, Any?>?,
         packageName: String
     ): TypeExpr {
         val name = resolved.name()
@@ -329,9 +315,5 @@ open class StandardOpenApiTypeUtils : OpenApiTypeUtils {
         } else {
             return ClassOrInterfaceTypeExpr ("java.lang.Object")
         }
-    }
-
-    override fun createBindingType(openAPI: OpenAPI): ClassOrInterfaceTypeExpr? {
-        return null
     }
 }

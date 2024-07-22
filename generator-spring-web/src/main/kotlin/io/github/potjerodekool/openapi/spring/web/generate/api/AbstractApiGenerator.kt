@@ -187,7 +187,7 @@ abstract class AbstractApiGenerator protected constructor(
     }
 
     protected fun addMethodAnnotations(
-        openAPI: OpenAPI?,
+        openAPI: OpenAPI,
         httpMethod: HttpMethod?,
         path: String,
         operation: Operation,
@@ -218,7 +218,7 @@ abstract class AbstractApiGenerator protected constructor(
     }
 
     private fun createRequestBody(
-        openAPI: OpenAPI?,
+        openAPI: OpenAPI,
         httpMethod: HttpMethod?,
         openApiRequestBody: RequestBody?
     ): Annot? {
@@ -243,7 +243,7 @@ abstract class AbstractApiGenerator protected constructor(
     }
 
     private fun createContentAnnotation(
-        openAPI: OpenAPI?,
+        openAPI: OpenAPI,
         httpMethod: HttpMethod?,
         mediaType: ContentType?,
         content: MediaType?
@@ -389,7 +389,7 @@ abstract class AbstractApiGenerator protected constructor(
     }
 
     private fun createArrayAnnotation(
-        openAPI: OpenAPI?,
+        openAPI: OpenAPI,
         schema: Schema<*>,
         elementType: TypeExpr?
     ): Annot {
@@ -441,7 +441,7 @@ abstract class AbstractApiGenerator protected constructor(
     }
 
     private fun createApiResponsesAnnotation(
-        openAPI: OpenAPI?,
+        openAPI: OpenAPI,
         operation: Operation
     ): Annot {
         val responses = if (operation.responses != null) {
@@ -495,7 +495,7 @@ abstract class AbstractApiGenerator protected constructor(
     }
 
     private fun createApiResponse(
-        openAPI: OpenAPI?,
+        openAPI: OpenAPI,
         entry: Map.Entry<String, ApiResponse>
     ): Annot {
         val response = entry.value
@@ -527,10 +527,14 @@ abstract class AbstractApiGenerator protected constructor(
     }
 
     private fun headers(
-        openAPI: OpenAPI?,
-        headersMap: Map<String, Header>
-    ): ArrayExpr {
-        val headers = nonNull(headersMap).entries.stream()
+        openAPI: OpenAPI,
+        headersMap: Map<String, Header>?
+    ): ArrayExpr? {
+        if (headersMap == null) {
+            return null
+        }
+
+        val headers = headersMap.entries.stream()
             .map { entry: Map.Entry<String?, Header> ->
                 val header = entry.value
                 val description = header.description

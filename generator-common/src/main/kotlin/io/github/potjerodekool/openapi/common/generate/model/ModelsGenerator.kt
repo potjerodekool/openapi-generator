@@ -57,7 +57,7 @@ class ModelsGenerator(
     }
 
     fun generateModels(
-        openAPI: OpenAPI?,
+        openAPI: OpenAPI,
         apiConfiguration: ApiConfiguration?
     ) {
         OpenApiWalker(openAPI!!, apiConfiguration!!).walk(this)
@@ -151,7 +151,7 @@ class ModelsGenerator(
 
         val resolvedSchema = resolvedSchemaResult.schema
 
-        if (!shouldProcess(resolvedSchema)) {
+        if (!shouldProcess(resolvedSchema, schema)) {
             return
         }
 
@@ -345,8 +345,10 @@ class ModelsGenerator(
         resource.writeToOutputStream(code.toByteArray())
     }
 
-    private fun shouldProcess(schema: Schema<*>): Boolean {
+    private fun shouldProcess(schema: Schema<*>,
+                              originalSchema: Schema<*>?): Boolean {
         return (schema is ObjectSchema
-                || schema is ComposedSchema)
+                || schema is ComposedSchema
+                || originalSchema != null && originalSchema.`$ref` != null)
     }
 }

@@ -88,7 +88,7 @@ abstract class AbstractCodeGenerator : CodeGenerator {
     }
 
     protected abstract fun generateApiDefinition(
-        openApi: OpenAPI?,
+        openApi: OpenAPI,
         apiConfiguration: ApiConfiguration?,
         openApiEnvironment: OpenApiEnvironment?
     )

@@ -12,7 +12,7 @@ class TypeUtilsSpringImpl : StandardOpenApiTypeUtils(), OpenApiTypeUtils {
     override fun createType(
         openAPI: OpenAPI,
         schema: Schema<*>?,
-        extensions: MutableMap<String, Any?>,
+        extensions: MutableMap<String, Any?>?,
         packageName: String,
         mediaType: ContentType?,
         isRequired: Boolean?
@@ -24,11 +24,7 @@ class TypeUtilsSpringImpl : StandardOpenApiTypeUtils(), OpenApiTypeUtils {
         }
     }
 
-    override fun createMultipartTypeExpression(api: OpenAPI?): TypeExpr {
-        return ClassOrInterfaceTypeExpr("org.springframework.web.multipart.MultipartFile")
-    }
-
-    override fun createBindingType(openAPI: OpenAPI): ClassOrInterfaceTypeExpr {
+    override fun createMultipartTypeExpression(api: OpenAPI): TypeExpr {
         return ClassOrInterfaceTypeExpr("org.springframework.web.multipart.MultipartFile")
     }
 }

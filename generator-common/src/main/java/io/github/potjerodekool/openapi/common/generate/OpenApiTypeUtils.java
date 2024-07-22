@@ -22,30 +22,28 @@ public interface OpenApiTypeUtils {
 
     TypeExpr resolveImplementationType(OpenAPI openAPI, TypeExpr type);
 
-    TypeExpr createNumberType(NumberSchema numberSchema,
+    TypeExpr createNumberType(Schema<?> numberSchema,
                               Boolean isRequired);
 
-    TypeExpr createStringType(StringSchema schema);
+    TypeExpr createStringType(Schema<?> schema);
 
     TypeExpr createDateType();
 
     TypeExpr createDateTimeType();
 
-    TypeExpr createBooleanType(BooleanSchema booleanSchema,
+    TypeExpr createBooleanType(Schema<?> booleanSchema,
                                Boolean isRequired);
 
     TypeExpr createUuidType();
 
     ClassOrInterfaceTypeExpr createMapType(OpenAPI openAPI,
-                                           MapSchema mapSchema,
+                                           Schema<?> mapSchema,
                                            String packageName,
                                            ContentType mediaType,
                                            Boolean isRequired);
 
-    ClassOrInterfaceTypeExpr createBindingType(OpenAPI openAPI);
-
     TypeExpr createArrayType(OpenAPI openAPI,
-                             ArraySchema arraySchema,
+                             Schema<?> arraySchema,
                              String packageName,
                              ContentType mediaType);
 

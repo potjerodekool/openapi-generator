@@ -7,16 +7,16 @@ object ValidationExtensions {
     const val ASSERT: String = "x-assert"
 
     @JvmStatic
-    fun digits(extensions: Map<String?, Any>?): Optional<Digits> {
+    fun digits(extensions: MutableMap<String?, Any>?): Optional<Digits> {
         if (extensions == null) {
             return Optional.empty()
         }
 
         val validation = getValidation(extensions)
-        val digits = validation["digits"] as? Map<*, *>
+        val digits = validation["digits"] as? MutableMap<*, *>
             ?: return Optional.empty()
 
-        val digitsMap = digits as Map<String, Any>
+        val digitsMap = digits as MutableMap<String, Any>
 
         val integer = digitsMap["integer"] as Int?
         val fraction = digitsMap["fraction"] as Int?
@@ -28,13 +28,13 @@ object ValidationExtensions {
     }
 
     @JvmStatic
-    fun allowedValue(extensions: Map<String?, Any>?): Any? {
+    fun allowedValue(extensions: MutableMap<String?, Any>?): Any? {
         val validation = getValidation(extensions)
         return validation["allowed-value"]
     }
 
     @JvmStatic
-    fun getValidation(extensions: Map<String?, Any>?): Map<String, Any> {
+    fun getValidation(extensions: MutableMap<String?, Any>?): Map<String, Any> {
         return if (extensions != null
         ) extensions.getOrDefault("x-validation", java.util.Map.of<Any, Any>()) as Map<String, Any>
         else java.util.Map.of()

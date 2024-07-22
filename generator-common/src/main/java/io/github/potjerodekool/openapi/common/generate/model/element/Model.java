@@ -46,6 +46,14 @@ public class Model extends AbstractElement<Model> {
     public List<ModelProperty> getProperties() {
         return getEnclosedElements().stream()
                 .filter(ModelProperty.class::isInstance)
+                .filter(property -> property.getKind() == Kind.PROPERTY)
+                .map(ModelProperty.class::cast).toList();
+    }
+
+    public List<ModelProperty> getEnumConstants() {
+        return getEnclosedElements().stream()
+                .filter(ModelProperty.class::isInstance)
+                .filter(property -> property.getKind() == Kind.ENUM_CONSTANT)
                 .map(ModelProperty.class::cast).toList();
     }
 
@@ -57,6 +65,14 @@ public class Model extends AbstractElement<Model> {
 
     public Optional<ModelProperty> getProperty(final String name) {
         return getProperties().stream()
+                .filter(it -> it.getKind() == Kind.PROPERTY)
+                .filter(it -> it.getSimpleName().equals(name))
+                .findFirst();
+    }
+
+    public Optional<ModelProperty> getEnumConstant(final String name) {
+        return getProperties().stream()
+                .filter(it -> it.getKind() == Kind.ENUM_CONSTANT)
                 .filter(it -> it.getSimpleName().equals(name))
                 .findFirst();
     }

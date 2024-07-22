@@ -1,0 +1,3 @@
+enumConstant(enumConstant)::= <<
+<enumConstant.simpleName>
+>>

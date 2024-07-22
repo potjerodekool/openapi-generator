@@ -15,9 +15,9 @@ import java.io.IOException
 import java.util.function.Consumer
 
 class CustomAnnotationsModelAdapter : AbstractModelAdapter() {
-    private val apiConfigurations: MutableMap<String, Map<String, Any>> = HashMap()
+    private val apiConfigurations: MutableMap<String, MutableMap<String, Any?>> = HashMap()
 
-    private fun resolveConfigMap(apiConfiguration: ApiConfiguration): Map<String, Any> {
+    private fun resolveConfigMap(apiConfiguration: ApiConfiguration): MutableMap<String, Any?> {
         val apiFile = apiConfiguration.apiFile
         val path = apiFile.absolutePath
 
@@ -30,10 +30,10 @@ class CustomAnnotationsModelAdapter : AbstractModelAdapter() {
         }
     }
 
-    private fun readConfigFile(configFile: File): MutableMap<String, Any> {
+    private fun readConfigFile(configFile: File): MutableMap<String, Any?> {
         if (configFile.exists()) {
             try {
-                return ObjectMapper().readValue(configFile,    object: TypeReference<MutableMap<String, Any>>(){})
+                return ObjectMapper().readValue(configFile, object: TypeReference<MutableMap<String, Any?>>(){})
             } catch (ignored: IOException) {
                 // ignore
             }
@@ -73,8 +73,8 @@ class CustomAnnotationsModelAdapter : AbstractModelAdapter() {
     private fun resolveExtensions(
         schema: Schema<*>,
         modelProperty: ModelProperty,
-        configMap: Map<String, Any>
-    ): Map<String?, Any?> {
+        configMap: MutableMap<String, Any?>
+    ): MutableMap<String, Any?>{
         if (schema.extensions != null) {
             return schema.extensions
         } else {
@@ -82,18 +82,18 @@ class CustomAnnotationsModelAdapter : AbstractModelAdapter() {
             val modelName = model.simpleName
             val schemaConfig = resolveSchemaConfig(modelName, configMap)
             val propertiesConfig =
-                schemaConfig.getOrDefault("properties", java.util.Map.of<Any, Any>()) as Map<String, Any>
+                schemaConfig.getOrDefault("properties", mutableMapOf<String, Any?>()) as MutableMap<String, Any?>
             val map = propertiesConfig.getOrDefault(
                 modelProperty.simpleName,
-                java.util.Map.of<Any, Any>()
-            ) as Map<String, Any>
+                mutableMapOf<String, Any?>()
+            ) as MutableMap<String, Any?>
 
-            val extensionsMap = HashMap<String?, Any?>()
+            val extensionsMap = mutableMapOf<String, Any?>()
 
             map.entries.stream()
-                .filter { entry: Map.Entry<String, Any> -> entry.key.startsWith("x-") }
-                .map { entry: Map.Entry<String, Any> -> java.util.Map.entry(entry.key, entry.value) }
-                .forEach { entry: Map.Entry<String, Any> -> extensionsMap[entry.key] = entry.value }
+                .filter { entry: MutableMap.MutableEntry<String, Any?> -> entry.key.startsWith("x-") }
+                .map { entry: MutableMap.MutableEntry<String, Any?> -> java.util.Map.entry(entry.key, entry.value) }
+                .forEach { entry: MutableMap.MutableEntry<String, Any?> -> extensionsMap[entry.key] = entry.value }
 
             return extensionsMap
         }
@@ -101,8 +101,8 @@ class CustomAnnotationsModelAdapter : AbstractModelAdapter() {
 
     private fun resolveSchemaConfig(
         name: String,
-        configMap: Map<String, Any>
-    ): Map<String, Any> {
+        configMap: MutableMap<String, Any?>
+    ): MutableMap<String, Any?> {
         val keys = "components.schemas.$name".split("\\.".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
         return resolveSubMap(keys, 0, configMap)
     }
@@ -110,10 +110,10 @@ class CustomAnnotationsModelAdapter : AbstractModelAdapter() {
     private fun resolveSubMap(
         keys: Array<String>,
         index: Int,
-        map: Map<String, Any>
-    ): Map<String, Any> {
+        map: MutableMap<String, Any?>
+    ): MutableMap<String, Any?> {
         val key = keys[index]
-        val subMap = map.getOrDefault(key, java.util.Map.of<Any, Any>()) as Map<String, Any>
+        val subMap = map.getOrDefault(key, mutableMapOf<Any, Any>()) as MutableMap<String, Any?>
 
         return if (index < keys.size - 1) {
             resolveSubMap(keys, index + 1, subMap)

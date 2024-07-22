@@ -140,7 +140,7 @@ abstract class AbstractApiGenerator protected constructor(
     }
 
     protected abstract fun postProcessOperation(
-        openAPI: OpenAPI?,
+        openAPI: OpenAPI,
         httpMethod: HttpMethod?,
         path: String?,
         operation: Operation?,

@@ -1,0 +1,59 @@
+{
+  "openapi": "3.0.2",
+  "info": {
+    "title": "API Title",
+    "version": "1.0"
+  },
+  "servers": [
+    {
+      "url": "https://api.server.test/v1"
+    }
+  ],
+  "paths": {
+  },
+  "components": {
+	  "schemas": {
+		  "Person": {
+			  "type": "object",
+			  "properties": {
+				  "id": {
+					  "type": "string",
+					  "format": "uuid"
+				  },
+				  "firstName": {
+					  "type": "string"
+				  },
+				  "birthDay": {
+					  "type": "string",
+					  "format": "date"
+				  },
+				  "someInteger": {
+					  "type": "integer"
+				  },
+				  "someLong": {
+					  "type": "integer",
+					  "format": "int64"
+				  },
+				  "someFloat": {
+					  "type": "number",
+					  "format": "float"
+				  },
+				  "someDouble": {
+					  "type": "number",
+					  "format": "double"
+				  },
+				  "someBoolean": {
+					  "type": "boolean"
+				  },
+				  "gender": {
+					  "$ref": "#/components/schemas/Gender"
+				  }
+			  }
+		  },
+		  "Gender": {
+			  "type": "string",
+			  "enum": ["MALE", "FEMALE"]
+		  }
+	  }
+  }
+}

@@ -191,7 +191,7 @@ abstract class AbstractGenerator protected constructor(
     }
 
     private fun createRequestBodyParameter(
-        api: OpenAPI?,
+        api: OpenAPI,
         operation: Operation,
         httpMethod: HttpMethod
     ): List<VariableElem> {
@@ -237,7 +237,7 @@ abstract class AbstractGenerator protected constructor(
     }
 
     private fun createMultiPartBodyParameters(
-        api: OpenAPI?,
+        api: OpenAPI,
         requestBody: RequestBody
     ): List<VariableElem> {
         val parameters = ArrayList<VariableElem>()
@@ -271,7 +271,7 @@ abstract class AbstractGenerator protected constructor(
             .simpleName(name)
     }
 
-    private fun createImageOrVideoParameter(api: OpenAPI?): VariableElem {
+    private fun createImageOrVideoParameter(api: OpenAPI): VariableElem {
         val bodyType = typeUtils.createMultipartTypeExpression(api)
         return createParameter(bodyType, "body")
     }
@@ -281,7 +281,7 @@ abstract class AbstractGenerator protected constructor(
     }
 
     private fun createRequestBodyParameterDefault(
-        api: OpenAPI?,
+        api: OpenAPI,
         operation: Operation,
         bodyMediaType: SchemaWithInfo
     ): TypeExpr {
@@ -299,7 +299,7 @@ abstract class AbstractGenerator protected constructor(
 
 
     private fun createPatchRequestBodyParameter(
-        api: OpenAPI?,
+        api: OpenAPI,
         operation: Operation,
         resolved: ResolvedSchemaResult,
         bodyMediaType: SchemaWithInfo

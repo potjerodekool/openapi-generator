@@ -4,6 +4,8 @@ import io.github.potjerodekool.codegen.model.tree.type.BoundKind;
 import io.github.potjerodekool.codegen.model.type.TypeKind;
 import io.github.potjerodekool.codegen.model.util.StringUtils;
 import io.github.potjerodekool.codegen.template.model.type.*;
+import io.github.potjerodekool.openapi.common.SchemaType;
+import io.github.potjerodekool.openapi.common.SchemaTypeResolver;
 import io.github.potjerodekool.openapi.common.generate.*;
 import io.github.potjerodekool.openapi.common.generate.model.element.Element;
 import io.github.potjerodekool.openapi.common.generate.model.element.JavaModifier;
@@ -36,6 +38,7 @@ public class JavaModelBuilder {
                        final Schema<?> schema,
                        final ContentType contentType) {
         final var model = new Model();
+        model.kind(resolveKind(schema));
         model.simpleName(name);
         model.packageName(packageName);
         final var processedProperties = new HashSet<String>();
@@ -52,16 +55,23 @@ public class JavaModelBuilder {
         return model;
     }
 
-    private void postProcessProperties(final Schema<?> schema, final Model model) {
+    private Element.Kind resolveKind(final Schema<?> schema) {
+        final var schemaKind = SchemaTypeResolver.resolveSchemaType(schema);
+        return schemaKind == SchemaType.ENUM
+                ? Element.Kind.ENUM
+                : Element.Kind.CLASS;
+    }
+
+    private void postProcessProperties(final Schema<?> schema,
+                                       final Model model) {
         if (schema.getProperties() == null) {
             return;
         }
 
         schema.getProperties().entrySet().stream()
-                .filter(entry -> entry.getValue() instanceof StringSchema)
-                .filter(entry -> entry.getValue().getEnum() != null)
+                .filter(entry -> SchemaTypeResolver.resolveSchemaType(entry.getValue()) == SchemaType.ENUM)
                 .forEach(entry -> {
-                    final var enumName = StringUtils.firstUpper(entry.getKey()) + "Enum";
+                    final var enumName = StringUtils.firstUpper(entry.getKey());
                     final var enumElementOptional = model.getEnclosedElements().stream()
                             .filter(it -> it.getSimpleName().equals(enumName))
                             .findFirst();
@@ -83,7 +93,8 @@ public class JavaModelBuilder {
                 });
     }
 
-    private void processModelExtensions(final Schema<?> resolvedSchema, final Model model) {
+    private void processModelExtensions(final Schema<?> resolvedSchema,
+                                        final Model model) {
         final List<String> typeArgs = ExtensionsHelper.getExtension(resolvedSchema.getExtensions(), Extensions.TYPE_ARGS, List.class);
 
         if (!typeArgs.isEmpty()) {
@@ -121,27 +132,41 @@ public class JavaModelBuilder {
                                final ContentType contentType,
                                final Model model,
                                final HashSet<String> processedProperties) {
-        addInheredProperties(
-                openAPI,
-                httpMethod,
-                schema,
-                contentType,
-                model,
-                processedProperties
-        );
+        if (model.getKind() == Element.Kind.ENUM) {
+            if (schema.getEnum() != null) {
+                final var enumValues = (List<String>) schema.getEnum();
 
-        if (schema.getProperties() != null) {
-            schema.getProperties()
-                    .forEach((propertyName, propertySchema) ->
-                            addProperty(
-                                    openAPI,
-                                    httpMethod,
-                                    propertyName,
-                                    propertySchema,
-                                    contentType,
-                                    model,
-                                    processedProperties
-                            ));
+                enumValues.forEach(enumValue -> {
+                    final var property = new ModelProperty();
+                    property.kind(Element.Kind.ENUM_CONSTANT);
+                    property.simpleName(enumValue);
+                    model.enclosedElement(property);
+                    property.enclosingElement(model);
+                });
+            }
+        } else {
+            addInheredProperties(
+                    openAPI,
+                    httpMethod,
+                    schema,
+                    contentType,
+                    model,
+                    processedProperties
+            );
+
+            if (schema.getProperties() != null) {
+                schema.getProperties()
+                        .forEach((propertyName, propertySchema) ->
+                                addProperty(
+                                        openAPI,
+                                        httpMethod,
+                                        propertyName,
+                                        propertySchema,
+                                        contentType,
+                                        model,
+                                        processedProperties
+                                ));
+            }
         }
     }
 
@@ -252,12 +277,19 @@ public class JavaModelBuilder {
                     : null;
 
             var type = resolveType(resolvedPropertySchema, isPatch, openAPI, false);
+            final var schemaType = SchemaTypeResolver.resolveSchemaType(resolvedPropertySchema);
 
-            if (resolvedPropertySchema instanceof StringSchema stringSchema
-                    && stringSchema.getEnum() != null) {
-                final var enumName = StringUtils.firstUpper(propertyName) + "Enum";
-                type = new ClassOrInterfaceTypeExpr()
-                        .simpleName(enumName);
+            if (schemaType == SchemaType.ENUM) {
+                if (propertySchema.get$ref() != null) {
+                    type = new ClassOrInterfaceTypeExpr()
+                            .packageName(modelPackageName)
+                            .simpleName(resolvedSchemaResult.name());
+                } else {
+                    final var enumName = StringUtils.firstUpper(propertyName);
+                    type = new ClassOrInterfaceTypeExpr()
+                            .packageName(modelPackageName + "." + model.getSimpleName())
+                            .simpleName(enumName);
+                }
             }
 
             if (resolvedSchemaResult.name() != null
@@ -289,21 +321,19 @@ public class JavaModelBuilder {
                                  final Boolean isPatch,
                                  final OpenAPI openAPI,
                                  final boolean isRequired) {
-        return switch (schema) {
-            case IntegerSchema integerSchema -> resolveIntegerType(integerSchema, isPatch);
-            case NumberSchema numberSchema -> typeUtils.createNumberType(numberSchema, isRequired);
-            case StringSchema stringSchema -> typeUtils.createStringType(stringSchema);
-            case EmailSchema ignored -> typeUtils.createStringType(null);
-            case PasswordSchema ignored -> typeUtils.createStringType(null);
-            case DateSchema ignored -> typeUtils.createDateType();
-            case DateTimeSchema ignored -> typeUtils.createDateTimeType();
-            case MapSchema mapSchema -> typeUtils.createMapType(openAPI, mapSchema, modelPackageName, null, isRequired);
-            case ArraySchema arraySchema -> typeUtils.createArrayType(openAPI, arraySchema, modelPackageName, null);
-            case UUIDSchema ignored -> typeUtils.createUuidType();
-            case BooleanSchema booleanSchema -> typeUtils.createBooleanType(booleanSchema, isRequired);
-            case ObjectSchema objectSchema -> {
+        return switch (SchemaTypeResolver.resolveSchemaType(schema)) {
+            case INT32, INT64 -> resolveIntegerType(schema, isPatch);
+            case FLOAT, DOUBLE -> typeUtils.createNumberType(schema, isRequired);
+            case STRING, EMAIL, PASSWORD -> typeUtils.createStringType(schema);
+            case DATE -> typeUtils.createDateType();
+            case DATE_TIME -> typeUtils.createDateTimeType();
+            case MAP -> typeUtils.createMapType(openAPI, schema, modelPackageName, null, isRequired);
+            case ARRAY -> typeUtils.createArrayType(openAPI, schema, modelPackageName, null);
+            case UUID -> typeUtils.createUuidType();
+            case BOOLEAN -> typeUtils.createBooleanType(schema, isRequired);
+            case OBJECT -> {
                 final var typeArg = ExtensionsHelper.getExtension(
-                        objectSchema.getExtensions(),
+                        schema.getExtensions(),
                         Extensions.TYPE_ARG,
                         String.class
                 );
@@ -314,7 +344,11 @@ public class JavaModelBuilder {
                     yield new ClassOrInterfaceTypeExpr().simpleName(typeArg);
                 }
             }
-            case BinarySchema ignored -> typeUtils.createMultipartTypeExpression(openAPI);
+            case BINARY -> typeUtils.createMultipartTypeExpression(openAPI);
+            case ENUM -> new ClassOrInterfaceTypeExpr()
+                    .packageName(modelPackageName)
+                    .simpleName("Enum");
+
             default -> {
                 if (schema.get$ref() != null) {
                     final var result = SchemaResolver.resolve(openAPI, schema);
@@ -328,7 +362,7 @@ public class JavaModelBuilder {
         };
     }
 
-    private TypeExpr resolveIntegerType(final IntegerSchema schema,
+    private TypeExpr resolveIntegerType(final Schema<?> schema,
                                         final Boolean isPatch) {
         final var format = schema.getFormat();
 

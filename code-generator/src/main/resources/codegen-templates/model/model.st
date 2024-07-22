@@ -7,6 +7,7 @@ package <model.packageName>;
 public <if(model.kind.isENUM)>enum<else>class<endif> <model.simpleName><typeArguments(model.typeArguments)><if(model.superType)> extends <type(model.superType)> <endif>{
 
     <if(model.kind.isENUM)>
+    <model.enumConstants:{property | <enumConstant(property)>};separator=",\n">
     <model.properties:{property | <field(property)>};separator=",\n">
     <else>
     <model.properties:{property | <field(property)>};separator="\n">

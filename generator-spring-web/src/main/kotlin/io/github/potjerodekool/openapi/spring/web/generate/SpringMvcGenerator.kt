@@ -50,7 +50,7 @@ class SpringMvcGenerator : AbstractCodeGenerator() {
     }
 
     override fun generateApiDefinition(
-        openApi: OpenAPI?,
+        openApi: OpenAPI,
         apiConfiguration: ApiConfiguration?,
         openApiEnvironment: OpenApiEnvironment?
     ) {
